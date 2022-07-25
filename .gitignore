@@ -1,0 +1,7 @@
+landscapes/
+models/
+results/
+src/scratch.R
+session*.vim
+**/slurm*
+
