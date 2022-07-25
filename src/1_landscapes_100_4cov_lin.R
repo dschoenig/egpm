@@ -50,33 +50,34 @@ parameters <-
              treatment.x.scale.range = list(c(0.5, 1)),
              treatment.y.scale.range = list(c(0.5, 1)),
              treatment.nuc.eff.range =  list(c(1,2)),
-             z1.fbm.alpha = runif(n, 0.5, 1.5),
-             z1.fbm.var = runif(n, 0.1, 1),
-             z1.fbm.scale = runif(n, 0.1, 1),
-             z1.fbm.w = 0.9,
-             z1.grad.phi = runif(n, 0, 2*pi),
-             z1.grad.w = 0.1,
+             z1.fbm1.alpha = runif(n, 0.5, 1.5),
+             z1.fbm1.var = runif(n, 0.1, 1),
+             z1.fbm1.scale = runif(n, 0.1, 1),
+             z1.fbm2.alpha = runif(n, 0.5, 1.5),
+             z1.fbm2.var = runif(n, 0.1, 1),
+             z1.fbm2.scale = runif(n, 0.1, 1),
+             z1.fbm.ratio = runif(1, 2, 5),
+             z1.grad.phi = runif(1, -pi/4, pi/4) + sample(c(0, pi), 1),
              z2.fbm.alpha = runif(n, 0.5, 1.5),
              z2.fbm.var = runif(n, 0.1, 1),
              z2.fbm.scale = runif(n, 0.1, 1),
              z2.fbm.w = 0.1,
-             z2.grad.phi = runif(n, 0, 2*pi),
+             z2.grad.phi = runif(1, -pi/4, pi/4) + sample(c(0, pi), 1),
              z2.grad.shift = runif(n, 0, 0.5),
              z2.grad.w = 0.9,
-             z3.dist.n = sample(5:25, n, replace = TRUE),
-             z3.dist.w = 0.9,
-             z3.grad.phi = runif(n, 0, 2*pi),
-             z3.grad.w = 0.1,
+             z3.dist.n = sample(10:50, n, replace = TRUE),
+             z3.grad.phi = runif(1, -pi/4, pi/4) + sample(c(0, pi), 1),
+             z3.grad.prop = 1,
              z3.acc = 0.1,
              z4.seg.n = sample(10:50, n, replace = TRUE),
-             z4.seg.nu = runif(n, 1, 2),
-             z4.seg.var = runif(n, 0.1, 1),
-             z4.seg.scale = runif(n, 0.1, 1),
-             z4.seg.w = 0.9,
-             z4.grad.phi = runif(n, 0, 2*pi),
+             z4.mat.nu = runif(n, 1, 2),
+             z4.mat.var = runif(n, 0.1, 1),
+             z4.mat.scale = runif(n, 0.1, 1),
+             z4.mat.w = 0.9,
+             z4.grad.phi = runif(1, -pi/4, pi/4) + sample(c(0, pi), 1),
              z4.grad.w = 0.1,
-             split.n = 200,
-             split.prop = 0.5,
+             split.n = 1000,
+             split.prop = runif(n, 0.4, 0.6),
              e.exp.var = 0.1,
              e.exp.scale = 100,
              e.nug.var = 0.1,
@@ -96,14 +97,18 @@ saveRDS(parameters, file = _)
 
 system.time({
 for(i in 1:nrow(parameters)) {
+
   ls.par <- 
     as.list(parameters[i,]) |>
     lapply(unlist)
+
   file.ls <- paste0(path.ls.data,
                     stri_pad_left(ls.par$id, 4, 0), ".rds")
   file.ls.plot <- paste0(path.ls.plots,
                          stri_pad_left(ls.par$id, 4, 0), ".tif")
+
   ls <- do.call(generate_landscape_4cov_lin, ls.par)
+
   ls.plot <- plot_landscape_4cov_lin(ls)
   saveRDS(ls, file.ls)
   # tiff("test", width = 6.7, height = 12, unit = "in", res = 300)
@@ -112,5 +117,26 @@ for(i in 1:nrow(parameters)) {
   dev.off()
   }
 })
+
+i <- sample(1:25, 1)
+  ls.par <- 
+    as.list(parameters[i,]) |>
+    lapply(unlist)
+  ls <- do.call(generate_landscape_4cov_lin, ls.par)
+lm(response ~ type, data = ls)
+
+
+gam(response ~ type + s(z1) + s(z2) + s(z3) + s(z4), data = ls) |>
+summary()
+
+  ls
+
+ls[, lapply(.SD, mean), by = type, .SDcols = c(paste0("z", 1:4))]
+
+ls[, mean(response), type]
+
+colMeans(ls[,6:9])
+
+
 
 

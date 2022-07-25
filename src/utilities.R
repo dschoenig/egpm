@@ -208,11 +208,26 @@ generate_mpd <- function(x.dim,
 generate_distance <- function(x.dim,
                               y.dim,
                               n,
+                              grad.phi,
+                              grad.prop = 1,
                               dist.acc = 0.1,
                               rescale = c(0,1),
                               name = "value") {
   poly.lim <- limit_polygon(x.dim, y.dim)
   target <- st_sample(poly.lim, n) |> st_union()
+  grad.lin <- 
+    generate_linear_gradient(x.dim = x.dim,
+                             y.dim = y.dim,
+                             phi = grad.phi,
+                             rescale = c(1 - grad.prop, 1))
+  grad.lin <-
+    as.data.table(as.data.frame(grad.lin))
+  nuclei.id <- sample(1:nrow(grad.lin), size = n, prob = grad.lin$value)
+  target <-
+    grad.lin[nuclei.id, .(x, y)] |>
+    as.matrix() |>
+    st_multipoint() |>
+    st_sfc()
   x.crd <- seq(1, x.dim, 1 / dist.acc) + (1/(2*dist.acc))
   y.crd <- seq(1, y.dim, 1 / dist.acc) + (1/(2*dist.acc))
   points <-
@@ -234,41 +249,38 @@ generate_distance <- function(x.dim,
   return(dist)
 }
 
-
 generate_segments <- function(x.dim,
                               y.dim,
                               n,
-                              nu,
-                              var,
-                              scale,
                               rescale = c(0,1),
                               name = "value") {
   poly.lim <- limit_polygon(x.dim, y.dim)
   poly.sam <- st_sample(poly.lim, n)
-  poly.geom <- 
+  seg <- 
     poly.sam |>
     st_union() |>
     st_voronoi() |>
     st_cast() |>
-    st_intersection(poly.lim)
-  field <- generate_matern(x.dim = x.dim,
-                           y.dim = y.dim,
-                           nu = nu,
-                           scale = scale,
-                           var = var,
-                           rescale = c(0, 1))
-  seg <-
-    aggregate(field, poly.geom, FUN = mean) |>
+    st_intersection(poly.lim) |>
     st_as_sf() |>
-    st_rasterize(template = field)
-  seg <- generate_empty(x.dim = x.dim, y.dim = y.dim) + seg
-  seg <-
-    setNames(seg, name) |>
-    scale_int(int = rescale)
+    st_set_geometry("geometry")
+  seg$segment <- 1:n
   return(seg)
 }
 
 
+segment_field <- function(field,
+                          segments,
+                          fun = mean) {
+  x.dim <- dim(field)[1]
+  y.dim <- dim(field)[2]
+  seg <-
+    aggregate(field, segments, FUN = fun) |>
+    st_as_sf() |>
+    st_rasterize(template = field)
+  seg <- generate_empty(x.dim = x.dim, y.dim = y.dim) + seg
+  return(seg)
+}
 
 
 generate_split <- function(x.dim,
@@ -307,28 +319,37 @@ generate_split <- function(x.dim,
 }
 
 
-
 generate_z1 <- function(x.dim,
                         y.dim,
-                        fbm.alpha,
-                        fbm.var,
-                        fbm.scale,
-                        fbm.w,
+                        fbm1.alpha,
+                        fbm1.var,
+                        fbm1.scale,
+                        fbm2.alpha,
+                        fbm2.var,
+                        fbm2.scale,
+                        fbm.ratio,
                         grad.phi,
-                        grad.w,
                         rescale = c(0, 1),
                         name = "z1") {
-  fbm <- generate_fbm(x.dim = x.dim,
-                    y.dim = y.dim,
-                    alpha = fbm.alpha,
-                    var = fbm.var,
-                    scale = fbm.scale,
-                    rescale = c(0, 1))
-  grad <- generate_linear_gradient(x.dim = x.dim,
-                                   y.dim = y.dim,
-                                   phi = grad.phi,
-                                   rescale = c(0, 1))
-  z <- fbm.w * fbm + grad.w * grad
+  fbm1 <- generate_fbm(x.dim = x.dim,
+                       y.dim = y.dim,
+                       alpha = fbm1.alpha,
+                       var = fbm1.var,
+                       scale = fbm1.scale,
+                       rescale = c(0, 1))
+  fbm2 <- generate_fbm(x.dim = x.dim,
+                       y.dim = y.dim,
+                       alpha = fbm2.alpha,
+                       var = fbm2.var,
+                       scale = fbm2.scale,
+                       rescale = c(0, 1))
+  grad.lin <- generate_linear_gradient(x.dim = x.dim,
+                                       y.dim = y.dim,
+                                       phi = grad.phi,
+                                       rescale = c(0, 1))
+  z <-
+     (fbm1 * fbm.ratio * grad.lin) + 
+     (fbm2  * (1 - grad.lin))
   z <-
     scale_int(z, int = rescale) |>
     setNames(name)
@@ -362,25 +383,24 @@ generate_z2 <- function(x.dim,
     setNames(name)
 }
 
-generate_z3 <- function(x.dim,
+generate_z3 <- function(
+                        x.dim,
                         y.dim,
                         dist.n,
-                        dist.w,
                         grad.phi,
-                        grad.w,
+                        grad.prop,
                         acc = 0.1,
                         rescale = c(0,1),
-                        name = "z3") {
+                        name = "z3"
+                        ) {
   dist <- generate_distance(x.dim = x.dim,
                             y.dim = y.dim,
                             n = dist.n,
+                            grad.phi = grad.phi,
+                            grad.prop = grad.prop,
                             dist.acc = acc,
                             rescale = c(0,1))
-  grad <- generate_linear_gradient(x.dim = x.dim,
-                                   y.dim = y.dim,
-                                   phi = grad.phi,
-                                   rescale = c(0, 1))
-  z <- dist.w * dist + grad.w * grad
+  z <- dist
   z <-
     scale_int(z, int = rescale) |>
     setNames(name)
@@ -390,31 +410,40 @@ generate_z3 <- function(x.dim,
 generate_z4 <- function(x.dim,
                         y.dim,
                         seg.n,
-                        seg.nu,
-                        seg.var,
-                        seg.scale,
-                        seg.w,
+                        mat.nu,
+                        mat.var,
+                        mat.scale,
+                        mat.w,
                         grad.phi,
                         grad.w,
                         rescale = c(0,1),
                         name = "z4") {
   seg <- generate_segments(x.dim = x.dim,
                            y.dim = y.dim,
-                           n = seg.n,
-                           nu = seg.nu,
-                           var = seg.var,
-                           scale = seg.scale,
-                           rescale = c(0,1))
-  grad <- generate_linear_gradient(x.dim = x.dim,
-                                   y.dim = y.dim,
-                                   phi = grad.phi,
-                                   rescale = c(0, 1))
-  z <- seg.w * seg + grad.w * grad
+                           n = seg.n)
+  mat <-
+    generate_matern(x.dim = x.dim,
+                    y.dim = y.dim,
+                    nu = mat.nu,
+                    scale = mat.scale,
+                    var = mat.var,
+                    rescale = c(0, 1)) |>
+    segment_field(seg) |>
+    scale_int()
+  grad.lin <-
+    generate_linear_gradient(x.dim = x.dim,
+                             y.dim = y.dim,
+                             phi = grad.phi,
+                             rescale = c(0, 1)) |>
+    segment_field(seg) |>
+    scale_int()
+  z <- mat.w * mat + grad.w * grad.lin
   z <-
     scale_int(z, int = rescale) |>
     setNames(name)
   return(z)
 }
+
 
 generate_treatment <- function(x.dim,
                                y.dim,
@@ -524,12 +553,14 @@ generate_landscape_4cov_lin <-
            treatment.x.scale.range,
            treatment.y.scale.range,
            treatment.nuc.eff.range,
-           z1.fbm.alpha,
-           z1.fbm.var,
-           z1.fbm.scale,
-           z1.fbm.w,
+           z1.fbm1.alpha,
+           z1.fbm1.var,
+           z1.fbm1.scale,
+           z1.fbm2.alpha,
+           z1.fbm2.var,
+           z1.fbm2.scale,
+           z1.fbm.ratio,
            z1.grad.phi,
-           z1.grad.w,
            z2.fbm.alpha,
            z2.fbm.var,
            z2.fbm.scale,
@@ -538,15 +569,14 @@ generate_landscape_4cov_lin <-
            z2.grad.shift,
            z2.grad.w,
            z3.dist.n,
-           z3.dist.w,
            z3.grad.phi,
-           z3.grad.w,
+           z3.grad.prop,
            z3.acc,
            z4.seg.n,
-           z4.seg.nu,
-           z4.seg.var,
-           z4.seg.scale,
-           z4.seg.w,
+           z4.mat.nu,
+           z4.mat.var,
+           z4.mat.scale,
+           z4.mat.w,
            z4.grad.phi,
            z4.grad.w,
            split.n,
@@ -560,12 +590,14 @@ generate_landscape_4cov_lin <-
 
   z1 <- generate_z1(x.dim = x.dim,
                     y.dim = y.dim,
-                    fbm.alpha = z1.fbm.alpha,
-                    fbm.var = z1.fbm.var,
-                    fbm.scale = z1.fbm.scale,
-                    fbm.w = z1.fbm.w,
+                    fbm1.alpha = z1.fbm1.alpha,
+                    fbm1.var = z1.fbm1.var,
+                    fbm1.scale = z1.fbm1.scale,
+                    fbm2.alpha = z1.fbm2.alpha,
+                    fbm2.var = z1.fbm2.var,
+                    fbm2.scale = z1.fbm2.scale,
+                    fbm.ratio = z1.fbm.ratio,
                     grad.phi = z1.grad.phi,
-                    grad.w = z1.grad.w,
                     rescale = c(0,1),
                     name = "z1")
 
@@ -585,9 +617,8 @@ generate_landscape_4cov_lin <-
   z3 <- generate_z3(x.dim = x.dim,
                     y.dim = y.dim,
                     dist.n = z3.dist.n,
-                    dist.w = z3.dist.w,
                     grad.phi = z3.grad.phi,
-                    grad.w = z3.grad.w,
+                    grad.prop = z3.grad.prop,
                     acc = z3.acc,
                     rescale = c(0,1),
                     name = "z3")
@@ -595,10 +626,10 @@ generate_landscape_4cov_lin <-
   z4 <- generate_z4(x.dim = x.dim,
                     y.dim = y.dim,
                     seg.n = z4.seg.n,
-                    seg.nu = z4.seg.nu,
-                    seg.var = z4.seg.var,
-                    seg.scale = z4.seg.scale,
-                    seg.w = z4.seg.w,
+                    mat.nu = z4.mat.nu,
+                    mat.var = z4.mat.var,
+                    mat.scale = z4.mat.scale,
+                    mat.w = z4.mat.w,
                     grad.phi = z4.grad.phi,
                     grad.w = z4.grad.w,
                     rescale = c(0,1),
