@@ -62,6 +62,20 @@ matrix2stars <- function(x, res = 1, name = "value", ...) {
   return(x.stars)
 }
 
+reset_dim <- function(x, ...) {
+  UseMethod("reset_dim", x)
+}
+
+reset_dim.stars <- function(x, y = NULL, ...) {
+  if(is.null(y)) {
+    dims <- dim(x)
+    y <- generate_empty(x.dim = dims[1], y.dim = dims[2])
+  }
+  st_dimensions(x) <- st_dimensions(y)
+  return(x)
+}
+
+
 limit_polygon <- function(x.dim,
                           y.dim) {
   limit <-
@@ -268,7 +282,9 @@ generate_distance <- function(x.dim,
     st_rasterize(points) |>
     st_warp(use_gdal = TRUE, cellsize = 1,
             method = "cubicspline", no_data_value = 0)
-  dist <- generate_empty(x.dim = x.dim, y.dim = y.dim) + dist
+  dist <- reset_dim(dist)
+  # st_dimensions(dist) <-
+  #   st_dimensions(generate_empty(x.dim = x.dim, y.dim = y.dim))
   dist <-
     setNames(dist, name) |>
     scale_int(int = rescale)
@@ -304,7 +320,8 @@ segment_field <- function(field,
     aggregate(field, segments, FUN = fun) |>
     st_as_sf() |>
     st_rasterize(template = field)
-  seg <- generate_empty(x.dim = x.dim, y.dim = y.dim) + seg
+  seg <- reset_dim(seg)
+  # seg <- generate_empty(x.dim = x.dim, y.dim = y.dim) + seg
   return(seg)
 }
 
@@ -504,6 +521,19 @@ generate_z4 <- function(x.dim,
 }
 
 
+x.dim = 100
+y.dim = 100
+effect.size.sp = 1
+effect.size.bd = 0
+nuclei = 10
+poly = generate_split(100, 100, 200, 0.5)
+phi.range = c(-1, 1)
+shift.range = c(0, 0.5)
+x.scale.range = c(0.5, 1)
+y.scale.range = c(0.5, 1)
+nuc.eff.range = c(0.5, 2)
+name = "treatment"
+
 generate_treatment <- function(x.dim,
                                y.dim,
                                effect.size.sp,
@@ -591,7 +621,7 @@ generate_treatment <- function(x.dim,
     st_as_sf()
   poly.bd$eff.bd <- effect.size.bd
   treatment.bd <- st_rasterize(poly.bd, template = generate_empty(x.dim = x.dim, y.dim = y.dim))
-  treatment <- treatment + treatment.bd
+  treatment <- treatment + reset_dim(treatment.bd, treatment)
   return(treatment)
 }
 
@@ -911,7 +941,7 @@ generate_landscape_4cov_nl <-
                           prop = split.prop,
   )
   type <- st_rasterize(split, template = generate_empty(x.dim = x.dim, y.dim = y.dim))
-  type <- generate_empty(x.dim, y.dim) + type
+  type <- reset_dim(type)
   type <- setNames(type, "type")
 
   treatment <-
@@ -978,11 +1008,10 @@ generate_landscape_4cov_nl <-
     RMexp(var = e.exp.var, scale = e.exp.scale) +
     RMnugget(var = e.nug.var)
   error.sp <- RFsimulate(mod.error, x = 1:x.dim, y = 1:y.dim)
-  error.sp <-
-    generate_empty(x.dim, y.dim) + st_as_stars(error.sp)
+  error.sp <- reset_dim(st_as_stars(error.sp))
   error.sp <- setNames(error.sp, "error")
   error.rand <-
-    matrix(rnorm(prod(x.dim, y.dim), 0, e.rand.var)) |>
+    matrix(rnorm(prod(x.dim, y.dim), 0, e.rand.var), nrow = x.dim, ncol = y.dim) |>
     matrix2stars()
   error <- error.sp + error.rand
 
@@ -1180,7 +1209,7 @@ generate_landscape_4cov_lin <-
                           prop = split.prop,
   )
   type <- st_rasterize(split, template = generate_empty(x.dim = x.dim, y.dim = y.dim))
-  type <- generate_empty(x.dim, y.dim) + type
+  type <- reset_dim(type)
   type <- setNames(type, "type")
 
   treatment <-
@@ -1244,11 +1273,10 @@ generate_landscape_4cov_lin <-
     RMexp(var = e.exp.var, scale = e.exp.scale) +
     RMnugget(var = e.nug.var)
   error.sp <- RFsimulate(mod.error, x = 1:x.dim, y = 1:y.dim)
-  error.sp <-
-    generate_empty(x.dim, y.dim) + st_as_stars(error.sp)
+  error.sp <- reset_dim(st_as_stars(error.sp))
   error.sp <- setNames(error.sp, "error")
   error.rand <-
-    matrix(rnorm(prod(x.dim, y.dim), 0, e.rand.var)) |>
+    matrix(rnorm(prod(x.dim, y.dim), 0, e.rand.var), nrow = x.dim, ncol = y.dim) |>
     matrix2stars()
   error <- error.sp + error.rand
 
