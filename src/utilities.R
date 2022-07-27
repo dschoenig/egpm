@@ -39,11 +39,13 @@ scale_int <- function(x, ...) {
 }
 
 scale_int.stars <- function(x, int = c(0, 1)) {
-  n.att <- length(x)
-  for(i in 1:n.att) {
-    min.att <- min(x[[i]], na.rm = TRUE)
-    max.att <- max(x[[i]], na.rm = TRUE)
-    x[[i]] <- int[1] + (int[2] - int[1]) * (x[[i]] - min.att) / (max.att - min.att)
+  if(!is.null(int)) {
+    n.att <- length(x)
+    for(i in 1:n.att) {
+      min.att <- min(x[[i]], na.rm = TRUE)
+      max.att <- max(x[[i]], na.rm = TRUE)
+      x[[i]] <- int[1] + (int[2] - int[1]) * (x[[i]] - min.att) / (max.att - min.att)
+    }
   }
   return(x)
 }
@@ -95,19 +97,42 @@ generate_linear_gradient <- function(x.dim,
   return(grad)
 }
 
+generate_sigmoid_gradient <- function(x.dim,
+                                     y.dim,
+                                     phi,
+                                     rescale = c(0,1),
+                                     name = "value") {
+  lin.grad <-
+    generate_linear_gradient(x.dim = x.dim,
+                             y.dim = y.dim,
+                             phi = phi,
+                             rescale = c(0, 1),
+                             name = name)
+  sig.grad <- (1/ (1 + exp(-lin.grad))) |>
+    scale_int(int = rescale)
+  return(sig.grad)
+}
+
+
+
 generate_exp_gradient <- function(x.dim,
                                   y.dim,
-                                  phi,
-                                  shift,
+                                  phi = NULL,
+                                  shift = NULL,
+                                  centre = NULL,
                                   x.scale = 1,
                                   y.scale = 1,
                                   rescale = c(0,1),
                                   name = "value") {
+  if(is.null(centre)) {
+    centre <- point_on_square(phi)
+    centre <- centre - (shift * (centre - 0.5))
+  } else {
+    centre <- centre / c(x.dim, y.dim)
+  }
   scale <- pi / sqrt(x.dim^2 + y.dim^2)
   x.seq <- (1:x.dim) * scale / x.scale
   y.seq <- (y.dim:1) * scale / y.scale
-  centre <- point_on_square(phi)
-  centre <- centre - (shift * (centre - 0.5))
   centre <- centre * c(max(x.seq), max(y.seq))
   grad.mat <-
     outer(x.seq, y.seq,
@@ -142,9 +167,10 @@ generate_matern <- function(x.dim,
                             nu = 1,
                             var = 1,
                             scale = 1,
+                            mean = 0,
                             rescale = c(0,1),
                             name = "value") {
-  mod <- RMmatern(nu = nu, var = var, scale = scale)
+  mod <- RMmatern(nu = nu, var = var, scale = scale) + RMtrend(mean = mean)
   matern <- 
     RFsimulate(model = mod, x = 1:x.dim, y = 1:y.dim) |>
     as.matrix() |>
@@ -319,41 +345,70 @@ generate_split <- function(x.dim,
 }
 
 
+# generate_z1 <- function(x.dim,
+#                         y.dim,
+#                         fbm1.alpha,
+#                         fbm1.var,
+#                         fbm1.scale,
+#                         fbm2.alpha,
+#                         fbm2.var,
+#                         fbm2.scale,
+#                         fbm.ratio,
+#                         grad.phi,
+#                         rescale = c(0, 1),
+#                         name = "z1") {
+#   fbm1 <- generate_fbm(x.dim = x.dim,
+#                        y.dim = y.dim,
+#                        alpha = fbm1.alpha,
+#                        var = fbm1.var,
+#                        scale = fbm1.scale,
+#                        rescale = c(0, 1))
+#   fbm2 <- generate_fbm(x.dim = x.dim,
+#                        y.dim = y.dim,
+#                        alpha = fbm2.alpha,
+#                        var = fbm2.var,
+#                        scale = fbm2.scale,
+#                        rescale = c(0, 1))
+#   grad.lin <- generate_linear_gradient(x.dim = x.dim,
+#                                        y.dim = y.dim,
+#                                        phi = grad.phi,
+#                                        rescale = c(0, 1))
+#   z <-
+#      (fbm1 * fbm.ratio * grad.lin) + 
+#      (fbm2  * (1 - grad.lin))
+#   z <-
+#     scale_int(z, int = rescale) |>
+#     setNames(name)
+# }
+
+
 generate_z1 <- function(x.dim,
                         y.dim,
-                        fbm1.alpha,
-                        fbm1.var,
-                        fbm1.scale,
-                        fbm2.alpha,
-                        fbm2.var,
-                        fbm2.scale,
-                        fbm.ratio,
+                        fbm.alpha,
+                        fbm.var,
+                        fbm.scale,
+                        fbm.w,
                         grad.phi,
+                        grad.w,
                         rescale = c(0, 1),
                         name = "z1") {
-  fbm1 <- generate_fbm(x.dim = x.dim,
+  fbm <- generate_fbm(x.dim = x.dim,
                        y.dim = y.dim,
-                       alpha = fbm1.alpha,
-                       var = fbm1.var,
-                       scale = fbm1.scale,
-                       rescale = c(0, 1))
-  fbm2 <- generate_fbm(x.dim = x.dim,
-                       y.dim = y.dim,
-                       alpha = fbm2.alpha,
-                       var = fbm2.var,
-                       scale = fbm2.scale,
+                       alpha = fbm.alpha,
+                       var = fbm.var,
+                       scale = fbm.scale,
                        rescale = c(0, 1))
   grad.lin <- generate_linear_gradient(x.dim = x.dim,
                                        y.dim = y.dim,
                                        phi = grad.phi,
                                        rescale = c(0, 1))
-  z <-
-     (fbm1 * fbm.ratio * grad.lin) + 
-     (fbm2  * (1 - grad.lin))
+  z <- fbm.w * fbm + grad.w * grad.lin
   z <-
     scale_int(z, int = rescale) |>
     setNames(name)
 }
+
+
 
 generate_z2 <- function(x.dim,
                         y.dim,
@@ -372,11 +427,15 @@ generate_z2 <- function(x.dim,
                     var = fbm.var,
                     scale = fbm.scale,
                     rescale = c(0, 1))
+  # grad <- generate_linear_gradient(x.dim = x.dim,
+  #                                  y.dim = y.dim,
+  #                                  phi = grad.phi,
+  #                                  rescale = c(0, 1))
   grad <- generate_exp_gradient(x.dim = x.dim,
-                                y.dim = y.dim,
-                                phi = grad.phi,
-                                shift = grad.shift,
-                                rescale = c(0, 1))
+                                   y.dim = y.dim,
+                                   phi = grad.phi,
+                                   shift = grad.shift,
+                                   rescale = c(0, 1))
   z <- fbm.w * fbm + grad.w * grad
   z <-
     scale_int(z, int = rescale) |>
@@ -537,30 +596,244 @@ generate_treatment <- function(x.dim,
 }
 
 
-generate_landscape_4cov_lin <-
+# generate_treatment <- function(x.dim,
+#                                y.dim,
+#                                effect.size.sp,
+#                                effect.size.bd,
+#                                nuclei,
+#                                poly,
+#                                phi.range,
+#                                shift.range,
+#                                x.scale.range,
+#                                y.scale.range,
+#                                nuc.eff.range,
+#                                grad.prop,
+#                                mean,
+#                                name = "treatment") {
+#   treatment <- generate_empty(x.dim = x.dim,
+#                               y.dim = y.dim)
+#   centroids <-
+#     st_centroid(poly[1:2,]) |>
+#     st_coordinates() |>
+#     suppressWarnings()
+#   phi.trt <-
+#     atan2((centroids[2,2] - centroids[1,2]),
+#           (centroids[2,1] - centroids[1,1]))
+#   # prob.grad <-
+#   #   generate_linear_gradient(x.dim = x.dim,
+#   #                            y.dim = y.dim,
+#   #                            phi = phi.trt,
+#   #                            rescale = c(1-grad.prop, 1)) |>
+#   # as.data.table()
+#   prob.grad <-
+#     generate_linear_gradient(x.dim = x.dim,
+#                              y.dim = y.dim,
+#                              phi = phi.trt,
+#                              rescale = c(0, 1))
+#   prob.grad <-
+#     (1/ (1 + exp(prob.grad))) |>
+#     scale_int(int = c(0, 1)) |>
+#     as.data.table()
+#   centres.trt <-
+#     prob.grad[sample(1:nrow(prob.grad), nuclei, prob = prob.grad$value),
+#               .(x, y)]
+#   centres.ctr <-
+#     prob.grad[sample(1:nrow(prob.grad), nuclei, prob = 1 - prob.grad$value),
+#               .(x, y)]
+#   x.scale.trt <- runif(nuclei,
+#                      x.scale.range[1],
+#                      x.scale.range[2])
+#   x.scale.ctr <- runif(nuclei,
+#                      x.scale.range[1],
+#                      x.scale.range[2])
+#   y.scale.trt <- runif(nuclei,
+#                      y.scale.range[1],
+#                      y.scale.range[2])
+#   y.scale.ctr <- runif(nuclei,
+#                      y.scale.range[1],
+#                      y.scale.range[2])
+#   trt.eff <- runif(nuclei,
+#                    nuc.eff.range[1] * effect.size.sp,
+#                    nuc.eff.range[2] * effect.size.sp)
+#   ctr.eff <- runif(nuclei,
+#                    nuc.eff.range[1] * effect.size.sp,
+#                    nuc.eff.range[2] * effect.size.sp)
+#   for(i in 1:nuclei) {
+#     trt.grad <-
+#       generate_exp_gradient(x.dim = x.dim,
+#                             y.dim = y.dim,
+#                             centre = centres.trt[i, c(x, y)],
+#                             x.scale = x.scale.trt[i],
+#                             y.scale = y.scale.trt[i])
+#     ctr.grad <-
+#       generate_exp_gradient(x.dim = x.dim,
+#                             y.dim = y.dim,
+#                             centre = centres.ctr[i, c(x, y)],
+#                             x.scale = x.scale.ctr[i],
+#                             y.scale = y.scale.ctr[i])
+#     treatment <- trt.eff[i] * trt.grad - ctr.eff[i] * ctr.grad + treatment
+#   }
+#   eff.scale <-
+#     effect.size.sp /
+#     (mean(treatment[poly[2,]][[1]], na.rm = TRUE) -
+#      mean(treatment[poly[1,]][[1]], na.rm = TRUE))
+#   treatment <- treatment * eff.scale
+#   # eff.shift <- mean(treatment[poly[1,]][[1]], na.rm = TRUE)
+#   # treatment <- treatment - eff.shift
+#   poly.bd <-
+#     st_geometry(poly[2,]) |>
+#     st_as_sf()
+#   poly.bd$eff.bd <- effect.size.bd
+#   treatment.bd <- st_rasterize(poly.bd, template = generate_empty(x.dim = x.dim, y.dim = y.dim))
+#   treatment <- treatment + treatment.bd
+#   treatment <- treatment + (mean - mean(treatment[[1]], na.rm = TRUE))
+#   treatment <- setNames(treatment, name)
+#   return(treatment)
+# }
+
+
+# generate_treatment <- function(x.dim,
+#                                y.dim,
+#                                effect.size.sp,
+#                                effect.size.bd,
+#                                nuclei,
+#                                poly,
+#                                phi.range,
+#                                shift.range,
+#                                x.scale.range,
+#                                y.scale.range,
+#                                nuc.eff.range,
+#                                grad.prop,
+#                                grad.w,
+#                                mat.nu,
+#                                mat.var,
+#                                mat.scale,
+#                                mat.w,
+#                                global.mean,
+#                                name = "treatment") {
+#   treatment <- generate_empty(x.dim = x.dim,
+#                               y.dim = y.dim)
+#   centroids <-
+#     st_centroid(poly[1:2,]) |>
+#     st_coordinates() |>
+#     suppressWarnings()
+#   phi.trt <-
+#     atan2((centroids[2,2] - centroids[1,2]),
+#           (centroids[2,1] - centroids[1,1]))
+#   # prob.grad <-
+#   #   generate_linear_gradient(x.dim = x.dim,
+#   #                            y.dim = y.dim,
+#   #                            phi = phi.trt,
+#   #                            rescale = c(1-grad.prop, 1)) |>
+#   # as.data.table()
+#   grad.sig <-
+#       generate_sigmoid_gradient(x.dim = x.dim,
+#                                 y.dim = y.dim,
+#                                 phi = phi.trt,
+#                                 rescale = c(0, 1))
+#   mat <-
+#     generate_matern(x.dim = x.dim,
+#                     y.dim = y.dim,
+#                     nu = mat.nu,
+#                     var = mat.var,
+#                     scale = mat.scale,
+#                     rescale = c(0,1))
+#   treatment <- grad.w * grad.sig + mat.w * mat
+#   eff.scale <-
+#     effect.size.sp /
+#     (mean(treatment[poly[2,]][[1]], na.rm = TRUE) -
+#      mean(treatment[poly[1,]][[1]], na.rm = TRUE))
+#   treatment <- treatment * eff.scale
+#   # eff.shift <- mean(treatment[poly[1,]][[1]], na.rm = TRUE)
+#   # treatment <- treatment - eff.shift
+#   poly.bd <-
+#     st_geometry(poly[2,]) |>
+#     st_as_sf()
+#   poly.bd$eff.bd <- effect.size.bd
+#   treatment.bd <- st_rasterize(poly.bd, template = generate_empty(x.dim = x.dim, y.dim = y.dim))
+#   treatment <- treatment + treatment.bd
+#   treatment <- treatment + (global.mean - mean(treatment[[1]], na.rm = TRUE))
+#   treatment <- setNames(treatment, name)
+#   return(treatment)
+# 
+
+
+generate_nonlinear_effect <- function(field,
+                                      eff.type = "random",
+                                      eff.range = c(-1, 1),
+                                      mu = 0) {
+  field.rs <- scale_int(field, int = c(-1, 1))
+  if(eff.type == "random") {
+    eff.type <- sample(c("sigmoid", "minimum", "unimodal", "bimodal"), 1)
+  }
+  if(eff.type == "sigmoid") {
+    par <- runif(1, 1, 10)
+    fn <- function(x) 1/(1+exp(par*(-x)))
+  }
+  if(eff.type == "minimum") {
+    par <- runif(1, -3/4, -1/4) * pi
+    # par <- c(0.25, 1)
+    fn <- function(x) sin(0.5*pi * (x) + par[1])
+  }
+  if(eff.type == "unimodal") {
+    par <- c(runif(1, exp(1)/4, exp(1)), runif(1, -0.5, 0.5))
+    fn <- function(x) exp(-((par[1] * (x - par[2]))^2))
+  }
+  if(eff.type == "bimodal") {
+    par <- c(
+             runif(1, 1, 2),
+             runif(1, 1, 2),
+             runif(1, exp(1), 2*exp(1)),
+             runif(1, exp(1), 2*exp(1)),
+             runif(1, -0.75, -0.5),
+             runif(1, 0.5, 0.75),
+             runif(1, 0.5, 1) * sample(c(-1, 1), 1))
+    fn <- function(x) {
+      par[1] * exp(-((par[3] * (x - par[5]))^2)) +
+      par[2] * exp(-((par[4] * (x - par[6]))^2)) +
+      par[7] * x
+    }
+  }
+  effect <-
+    fn(field.rs) |>
+    scale_int()
+  effect <- eff.range * effect
+  effect <- effect - mean(effect[[1]], na.rm = TRUE) + mu
+  return(effect)
+}
+
+
+
+generate_landscape_4cov_nl <-
   function(seed = NULL,
            x.dim,
            y.dim,
            treatment.effect.size.sp,
            treatment.effect.size.bd,
-           z1.effect.size,
-           z2.effect.size,
-           z3.effect.size,
-           z4.effect.size,
+           z1.effect.type,
+           z1.effect.range,
+           z1.effect.mu,
+           z2.effect.type,
+           z2.effect.range,
+           z2.effect.mu,
+           z3.effect.type,
+           z3.effect.range,
+           z3.effect.mu,
+           z4.effect.type,
+           z4.effect.range,
+           z4.effect.mu,
            treatment.nuclei,
            treatment.phi.range,
            treatment.shift.range,
            treatment.x.scale.range,
            treatment.y.scale.range,
            treatment.nuc.eff.range,
-           z1.fbm1.alpha,
-           z1.fbm1.var,
-           z1.fbm1.scale,
-           z1.fbm2.alpha,
-           z1.fbm2.var,
-           z1.fbm2.scale,
-           z1.fbm.ratio,
+           z1.fbm.alpha,
+           z1.fbm.var,
+           z1.fbm.scale,
+           z1.fbm.w,
            z1.grad.phi,
+           z1.grad.w,
            z2.fbm.alpha,
            z2.fbm.var,
            z2.fbm.scale,
@@ -586,18 +859,15 @@ generate_landscape_4cov_lin <-
            e.nug.var,
            e.rand.var,
            ...) {
-    set.seed(seed)
-
+  set.seed(seed)
   z1 <- generate_z1(x.dim = x.dim,
                     y.dim = y.dim,
-                    fbm1.alpha = z1.fbm1.alpha,
-                    fbm1.var = z1.fbm1.var,
-                    fbm1.scale = z1.fbm1.scale,
-                    fbm2.alpha = z1.fbm2.alpha,
-                    fbm2.var = z1.fbm2.var,
-                    fbm2.scale = z1.fbm2.scale,
-                    fbm.ratio = z1.fbm.ratio,
+                    fbm.alpha = z1.fbm.alpha,
+                    fbm.var = z1.fbm.var,
+                    fbm.scale = z1.fbm.scale,
+                    fbm.w = z1.fbm.w,
                     grad.phi = z1.grad.phi,
+                    grad.w = z1.grad.w,
                     rescale = c(0,1),
                     name = "z1")
 
@@ -645,7 +915,8 @@ generate_landscape_4cov_lin <-
   type <- setNames(type, "type")
 
   treatment <-
-    generate_treatment(x.dim = x.dim, y.dim = y.dim,
+    generate_treatment(x.dim = x.dim,
+                       y.dim = y.dim,
                        effect.size.sp = treatment.effect.size.sp,
                        effect.size.bd = treatment.effect.size.bd,
                        nuclei = treatment.nuclei,
@@ -657,13 +928,46 @@ generate_landscape_4cov_lin <-
                        nuc.eff.range = treatment.nuc.eff.range,
                        name = "treatment")
 
+  # treatment <-
+  #   generate_treatment(x.dim = x.dim, y.dim = y.dim,
+  #                      effect.size.sp = treatment.effect.size.sp,
+  #                      effect.size.bd = treatment.effect.size.bd,
+  #                      nuclei = treatment.nuclei,
+  #                      poly = split,
+  #                      phi.range = treatment.phi.range,
+  #                      shift.range = treatment.shift.range,
+  #                      x.scale.range = treatment.x.scale.range,
+  #                      y.scale.range = treatment.y.scale.range,
+  #                      nuc.eff.range = treatment.nuc.eff.range,
+  #                      grad.prop = treatment.grad.prop,
+  #                      grad.w = treatment.grad.w,
+  #                      mat.nu = treatment.mat.nu,
+  #                      mat.var = treatment.mat.var,
+  #                      mat.scale = treatment.mat.scale,
+  #                      mat.w = treatment.mat.w,
+  #                      global.mean = treatment.global.mean,
+  #                      name = "treatment")
+
+
   covariates <- c(z1, z2, z3, z4)
 
-  cov.effect.size <- c(z1.effect.size, z2.effect.size, z3.effect.size, z4.effect.size)
+  # cov.effect.size <- c(z1.effect.size, z2.effect.size, z3.effect.size, z4.effect.size)
+  # cov.effects <- list()
+  # for(i in seq_along(cov.effect.size)){
+  #   cov.effects[[i]] <-
+  #     matrix2stars(covariates[[i]] * cov.effect.size[i])
+  # }
+
+  cov.effect.type <- ls.par[c(paste0("z", 1:4, ".effect.type"))]
+  cov.effect.range <- ls.par[c(paste0("z", 1:4, ".effect.range"))]
+  cov.effect.mu <- ls.par[c(paste0("z", 1:4, ".effect.mu"))]
   cov.effects <- list()
-  for(i in seq_along(cov.effect.size)){
+  for(i in seq_along(cov.effect.type)){
     cov.effects[[i]] <-
-      matrix2stars(covariates[[i]] * cov.effect.size[i])
+      generate_nonlinear_effect(covariates[i],
+                                eff.type = cov.effect.type[[i]],
+                                eff.range = cov.effect.range[[i]],
+                                mu = cov.effect.mu[[i]])
   }
 
   cov.effects <-
@@ -749,6 +1053,227 @@ assign_bl_som <- function(data,
   id.bl[, n.id := sum(n.bmu), by = id][, w := n.bmu/n.id]
   data.bl <- id.bl[,.(som_bmu.bl = list(som_bmu.bl), som_bmu.bl.w = list(w)), id]
   return(data.bl)
+}
+
+
+
+
+generate_landscape_4cov_lin <-
+  function(seed = NULL,
+           x.dim,
+           y.dim,
+           treatment.effect.size.sp,
+           treatment.effect.size.bd,
+           z1.slope,
+           z1.mean,
+           z2.slope,
+           z2.mean,
+           z3.slope,
+           z3.mean,
+           z4.slope,
+           z4.mean,
+           # z1.effect.size,
+           # z2.effect.size,
+           # z3.effect.size,
+           # z4.effect.size,
+           treatment.nuclei,
+           treatment.phi.range,
+           treatment.shift.range,
+           treatment.x.scale.range,
+           treatment.y.scale.range,
+           treatment.nuc.eff.range,
+           treatment.grad.prop,
+           treatment.grad.w,
+           treatment.mat.nu,
+           treatment.mat.var,
+           treatment.mat.scale,
+           treatment.mat.w,
+           treatment.global.mean,
+           z1.fbm.alpha,
+           z1.fbm.var,
+           z1.fbm.scale,
+           # z1.fbm1.alpha,
+           # z1.fbm1.var,
+           # z1.fbm1.scale,
+           # z1.fbm2.alpha,
+           # z1.fbm2.var,
+           # z1.fbm2.scale,
+           # z1.fbm.ratio,
+           z1.fbm.w,
+           z1.grad.phi,
+           z1.grad.w,
+           z2.fbm.alpha,
+           z2.fbm.var,
+           z2.fbm.scale,
+           z2.fbm.w,
+           z2.grad.phi,
+           z2.grad.shift,
+           z2.grad.w,
+           z3.dist.n,
+           z3.grad.phi,
+           z3.grad.prop,
+           z3.acc,
+           z4.seg.n,
+           z4.mat.nu,
+           z4.mat.var,
+           z4.mat.scale,
+           z4.mat.w,
+           z4.grad.phi,
+           z4.grad.w,
+           split.n,
+           split.prop,
+           e.exp.var,
+           e.exp.scale,
+           e.nug.var,
+           e.rand.var,
+           ...) {
+    set.seed(seed)
+
+  z1 <- generate_z1(x.dim = x.dim,
+                    y.dim = y.dim,
+                    fbm.alpha = z1.fbm.alpha,
+                    fbm.var = z1.fbm.var,
+                    fbm.scale = z1.fbm.scale,
+                    fbm.w = z1.fbm.w,
+                    grad.phi = z1.grad.phi,
+                    grad.w = z1.grad.w,
+                    rescale = c(0,1),
+                    name = "z1")
+
+  z2 <- generate_z2(
+                    x.dim = x.dim,
+                    y.dim = y.dim,
+                    fbm.alpha = z2.fbm.alpha,
+                    fbm.var = z2.fbm.var,
+                    fbm.scale = z2.fbm.scale,
+                    fbm.w = z2.fbm.w,
+                    grad.phi = z2.grad.phi,
+                    grad.shift = z2.grad.shift,
+                    grad.w = z2.grad.w,
+                    rescale = c(0,1),
+                    name = "z2")
+
+  z3 <- generate_z3(x.dim = x.dim,
+                    y.dim = y.dim,
+                    dist.n = z3.dist.n,
+                    grad.phi = z3.grad.phi,
+                    grad.prop = z3.grad.prop,
+                    acc = z3.acc,
+                    rescale = c(0,1),
+                    name = "z3")
+
+  z4 <- generate_z4(x.dim = x.dim,
+                    y.dim = y.dim,
+                    seg.n = z4.seg.n,
+                    mat.nu = z4.mat.nu,
+                    mat.var = z4.mat.var,
+                    mat.scale = z4.mat.scale,
+                    mat.w = z4.mat.w,
+                    grad.phi = z4.grad.phi,
+                    grad.w = z4.grad.w,
+                    rescale = c(0,1),
+                    name = "z4")
+
+  split <- generate_split(x.dim = x.dim, 
+                          y.dim = y.dim,
+                          n = split.n,
+                          prop = split.prop,
+  )
+  type <- st_rasterize(split, template = generate_empty(x.dim = x.dim, y.dim = y.dim))
+  type <- generate_empty(x.dim, y.dim) + type
+  type <- setNames(type, "type")
+
+  treatment <-
+    generate_treatment(x.dim = x.dim,
+                       y.dim = y.dim,
+                       effect.size.sp = treatment.effect.size.sp,
+                       effect.size.bd = treatment.effect.size.bd,
+                       nuclei = treatment.nuclei,
+                       poly = split,
+                       phi.range = treatment.phi.range,
+                       shift.range = treatment.shift.range,
+                       x.scale.range = treatment.x.scale.range,
+                       y.scale.range = treatment.y.scale.range,
+                       nuc.eff.range = treatment.nuc.eff.range,
+                       name = "treatment")
+
+  # treatment <-
+  #   generate_treatment(x.dim = x.dim, y.dim = y.dim,
+  #                      effect.size.sp = treatment.effect.size.sp,
+  #                      effect.size.bd = treatment.effect.size.bd,
+  #                      nuclei = treatment.nuclei,
+  #                      poly = split,
+  #                      phi.range = treatment.phi.range,
+  #                      shift.range = treatment.shift.range,
+  #                      x.scale.range = treatment.x.scale.range,
+  #                      y.scale.range = treatment.y.scale.range,
+  #                      nuc.eff.range = treatment.nuc.eff.range,
+  #                      grad.prop = treatment.grad.prop,
+  #                      grad.w = treatment.grad.w,
+  #                      mat.nu = treatment.mat.nu,
+  #                      mat.var = treatment.mat.var,
+  #                      mat.scale = treatment.mat.scale,
+  #                      mat.w = treatment.mat.w,
+  #                      global.mean = treatment.global.mean,
+  #                      name = "treatment")
+
+
+  covariates <- c(z1, z2, z3, z4)
+
+  # cov.effect.size <- c(z1.effect.size, z2.effect.size, z3.effect.size, z4.effect.size)
+  # cov.effects <- list()
+  # for(i in seq_along(cov.effect.size)){
+  #   cov.effects[[i]] <-
+  #     matrix2stars(covariates[[i]] * cov.effect.size[i])
+  # }
+
+  cov.mean <- c(z1.mean, z2.mean, z3.mean, z4.mean)
+  cov.slope <- c(z1.slope, z2.slope, z3.slope, z4.slope)
+  cov.effects <- list()
+  for(i in seq_along(cov.mean)){
+    mu <- mean(covariates[[i]], na.rm = TRUE)
+    cov.effects[[i]] <-
+      matrix2stars((covariates[[i]] * cov.slope[i]) + (cov.mean[i] - mu))
+  }
+
+  cov.effects <-
+    do.call(c, cov.effects) |>
+    setNames(paste0("f", 1:4))
+
+  mod.error <-
+    RMexp(var = e.exp.var, scale = e.exp.scale) +
+    RMnugget(var = e.nug.var)
+  error.sp <- RFsimulate(mod.error, x = 1:x.dim, y = 1:y.dim)
+  error.sp <-
+    generate_empty(x.dim, y.dim) + st_as_stars(error.sp)
+  error.sp <- setNames(error.sp, "error")
+  error.rand <-
+    matrix(rnorm(prod(x.dim, y.dim), 0, e.rand.var)) |>
+    matrix2stars()
+  error <- error.sp + error.rand
+
+  response <-
+    c(cov.effects, treatment, error) |>
+    merge() |>
+    st_apply(1:2, sum) |>
+    setNames("response")
+
+  landscape <- c(response, type, covariates, treatment, cov.effects, error)
+
+  landscape.dt <- 
+    as.data.frame(landscape)
+  setDT(landscape.dt)
+  landscape.dt[, type := factor(ifelse(type == 0, "control", "treatment"),
+                        levels = c("control", "treatment"))]
+  landscape.dt$cell <- 1:nrow(landscape.dt)
+  setcolorder(landscape.dt, c("x", "y", "cell"))
+  
+  return(landscape.dt)
+  }
+
+
+zplot <- function(z, n.colours = 128) {
+  plot(z, nbreaks = n.colours + 1, breaks = "equal", col = hcl.colors(n.colours))
 }
 
 

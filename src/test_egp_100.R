@@ -55,7 +55,7 @@ for(i in 1:nrow(parameters)) {
   # sam <- sample(1:nrow(ls), 10000)
   sam <- 1:10000
   # som.dim <- 25
-  som.dim <- 25
+  som.dim <- 10
   grid <- somgrid(xdim = som.dim, ydim = som.dim, 
                   topo = "rectangular", 
                   neighbourhood.fct = "gaussian")
@@ -107,10 +107,8 @@ for(i in 1:nrow(parameters)) {
                    data = ls)
     
   mod.gam <- gam(response ~
-             type + s(som_x, som_y, bs = "gp", k = 200),
-             # type + s(som_x, som_y, bs = "gp", k = 25),
-             # type + z1 + z2 + z3 + z4,
-             # type,
+             # type + s(som_x, som_y, bs = "gp", k = 200),
+             type + s(som_x, som_y, bs = "gp", k = 75),
              data = ls,
              select = TRUE,
              method= "REML",
@@ -120,10 +118,8 @@ for(i in 1:nrow(parameters)) {
   AIC(mod.gam)
 
   mod.egp <- gam(response ~
-             s(x, y, by = type, bs = "gp", k = 200) + s(som_x, som_y, bs = "gp", k = 200),
-             # type + s(som_x, som_y, bs = "gp", k = 25),
-             # type + z1 + z2 + z3 + z4,
-             # type,
+             # s(x, y, by = type, bs = "gp", k = 200) + s(som_x, som_y, bs = "gp", k = 200),
+             s(x, y, by = type, bs = "gp", k = 75) + s(som_x, som_y, bs = "gp", k = 75),
              data = ls,
              select = TRUE,
              method= "REML",
@@ -244,6 +240,7 @@ for(i in 1:nrow(parameters)) {
                nn = coef(mod.nn.ps)["typetreatment"]
                )
 
+  print(results[[i]]) 
 
   regions <-
     bin_cols(ls, c("x", "y"), bin.min = c(0, 0), bin.res = c(50,50), append = TRUE) |>
@@ -304,3 +301,5 @@ rbindlist(results) |>
 melt(id.vars = "id")
 
 rdt[, mean(value), variable]
+
+summary(mod.egp)
