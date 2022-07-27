@@ -16,7 +16,7 @@ library(MatchIt)
 
 RFoptions(install="no")
 
-source("~/projects/fcne_analysis/src/utilities.R")
+source("utilities_fcne.R")
 source("utilities.R")
 
 args <- commandArgs(trailingOnly = TRUE)
