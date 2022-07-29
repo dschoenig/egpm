@@ -25,7 +25,7 @@ task_count <- as.integer(args[2])
 # task_count <- 100
 
 path.base <- "../"
-ls.type <- "1000_4cov_nl"
+ls.type <- "100_4cov_nl"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
 path.ls.data <- paste0(path.ls, "data/")
 if(!dir.exists(path.ls.data)) dir.create(path.ls.data, recursive = TRUE)
@@ -33,9 +33,9 @@ if(!dir.exists(path.ls.data)) dir.create(path.ls.data, recursive = TRUE)
 file.par <- paste0(path.ls, "parameters.rds")
 
 n <- 1000
-ls.dim <- 1000
+ls.dim <- 100
 
-set.seed(19010511+1) # Rose Ausländer
+set.seed(19010511) # Rose Ausländer
 parameters <-
   data.table(
              id = 1:n,
@@ -132,7 +132,7 @@ parameters <-
              split.n = 200,
              split.prop = runif(n, 0.4, 0.6),
              e.exp.var = 0.1,
-             e.exp.scale = 100,
+             e.exp.scale = 10,
              e.nug.var = 0.1,
              e.rand.var = 0.1
              )
