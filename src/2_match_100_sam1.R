@@ -95,6 +95,8 @@ for(i in 1:nrow(parameters)) {
   # Export results
   saveRDS(results.mod, file.mod)
 
+  rm(mod.lm, mod.lmcov, matched.cem, md.cem, mod.cem, matched.nn.ps, md.nn.ps, mod.nn.ps)
+
   tb <- Sys.time()
   te <- tb-ta
   print(te)
