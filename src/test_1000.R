@@ -1,3 +1,5 @@
+args <- commandArgs(trailingOnly = TRUE)
+
 library(RandomFields)
 library(RandomFieldsUtils)
 library(raster)
@@ -19,33 +21,48 @@ RFoptions(install="no")
 source("utilities_fcne.R")
 source("utilities.R")
 
-args <- commandArgs(trailingOnly = TRUE)
-n.threads <- as.integer(args[1])
+task_id <- as.integer(args[1])
+task_count <- as.integer(args[2])
+n.threads <- as.integer(args[3])
+
+task_id <- 1
+task_count <- 1
 n.threads <- 4
 
-RFoptions(cores = n.threads)
+
+# RFoptions(cores = n.threads)
 
 path.base <- "../"
 path.tests <- paste0(path.base, "tests/")
 
 if(!dir.exists(path.tests)) dir.create(path.tests, recursive = TRUE)
 
-file.results <- paste0(path.tests, "test_200_sam0.01_som10_e1e4_k50.rds")
 
-n <- 1000
+n <- 2
 # n <- 2
-ls.dim <- 200
+ls.dim <- 1000
 sam.frac <- 0.01
-som.dim <- 10
-som.rlen <- 10000
-k.max <- 50
+som.dim <- 100
+som.rlen <- 1000
+k.max <- 200
 eval.som <- FALSE
+egp.approx <- TRUE
 egp.basis <- "gp"
 egp.select <- TRUE
 
 
+file.results <- paste0(path.tests,
+                       "test_", ls.dim,
+                       "_n", n,
+                       "_sam", sam.frac,
+                       "_som", som.dim,
+                       "_e", som.rlen,
+                       "_k", k.max,
+                       "_", task_id,
+                       ".rds")
 
-set.seed(19010511) # Rose Ausländer
+
+set.seed(19010511+1) # Rose Ausländer
 parameters <-
   data.table(
              id = 1:n,
@@ -71,24 +88,6 @@ parameters <-
                                      replace = TRUE),
              z4.effect.range = runif(n, 0.5, 4),
              z4.effect.mu = runif(n, -0.5, 0.5),
-             int12.effect.range = runif(n, 0.25, 2) ,
-             int12.effect.mu = runif(n, -0.25, 0.25),
-             int12.effect.nuclei = sample(2:5, n, replace = TRUE),
-             int13.effect.range = runif(n, 0.25, 2) ,
-             int13.effect.mu = runif(n, -0.25, 0.25),
-             int13.effect.nuclei = sample(2:5, n, replace = TRUE),
-             int14.effect.range = runif(n, 0.25, 2) ,
-             int14.effect.mu = runif(n, -0.25, 0.25),
-             int14.effect.nuclei = sample(2:5, n, replace = TRUE),
-             int23.effect.range = runif(n, 0.25, 2) ,
-             int23.effect.mu = runif(n, -0.25, 0.25),
-             int23.effect.nuclei = sample(2:5, n, replace = TRUE),
-             int24.effect.range = runif(n, 0.25, 2) ,
-             int24.effect.mu = runif(n, -0.25, 0.25),
-             int24.effect.nuclei = sample(2:5, n, replace = TRUE),
-             int34.effect.range = runif(n, 0.25, 2) ,
-             int34.effect.mu = runif(n, -0.25, 0.25),
-             int34.effect.nuclei = sample(2:5, n, replace = TRUE),
              # Parameters for generating functions
              # treatment.nuclei = sample(3:7, n, replace = TRUE),
              # treatment.phi.range = list(c(-pi/4, pi/4)),
@@ -129,7 +128,7 @@ parameters <-
              z3.grad.phi = runif(n, -pi/8, pi/8) +
                            sample(c(0, pi), n, replace = TRUE),
              z3.grad.prop = 1,
-             z3.acc = 0.1,
+             z3.acc = 1,
              z4.seg.n = sample(10:25, n, replace = TRUE),
              z4.mat.nu = runif(n, 1, 2),
              z4.mat.var = runif(n, 0.1, 1),
@@ -148,13 +147,17 @@ parameters <-
              )
 
 
+row.chunks <- chunk_seq(1, nrow(parameters), ceiling(nrow(parameters) / task_count))
+chunk <- row.chunks$from[task_id]:row.chunks$to[task_id]
+
+
 results <- list()
 som.quality <- list()
 edf <- list()
 
 # i<-sample(1:nrow(parameters), 1)
 
-for(i in 1:nrow(parameters)) {
+for(i in chunk) {
 
 ta <- Sys.time()
 
@@ -162,15 +165,13 @@ system.time({
 ls.par <- 
     as.list(parameters[i,]) |>
     lapply(unlist)
-new.land <- do.call(generate_landscape_4cov_nl, ls.par)
+ls <- do.call(generate_landscape_4cov_nl, ls.par)
 })
-
-ls <- new.land$landscape
 
 # plot_landscape_4cov_lin(ls)
 
 sam <- sample(1:nrow(ls), round(sam.frac * nrow(ls)))
-ls.sam <- ls[sam,]
+ls.sam <- na.omit(ls[sam,])
 # sam <- 1:10000
 # som.dim <- 25
 # som.dim <- 10
@@ -179,11 +180,12 @@ grid <- somgrid(xdim = som.dim, ydim = som.dim,
                 neighbourhood.fct = "gaussian")
 cov.z <- scale(ls.sam[, .(z1, z2, z3, z4)],
                center = TRUE, scale = TRUE)
+
 som.fit <- som(cov.z,
                grid = grid, 
                rlen = som.rlen,
                radius = som.dim,
-               init = init_som(cov.z, som.dim, som.dim),
+               init = init_som(na.omit(cov.z), som.dim, som.dim),
                mode = "pbatch", 
                cores = n.threads,
                normalizeDataLayers = FALSE)
@@ -223,22 +225,29 @@ if(is.null(k.max)) {
                floor((nrow(ls.sam) * (0.25))))
 }
 
-# mod.egp <- bam(response ~
-#            # s(x, y, by = type, bs = "gp", k = 200) + s(som_x, som_y, bs = "gp", k = 200),
-#            # s(x, y, by = type, bs = "gp", k = k.max) + s(som_x, som_y, bs = "gp", k = k.max),
-#            type + s(x, y, bs = "gp", k = k.max) + s(som_x, som_y, bs = "gp", k = k.max),
-#            data = ls.sam,
-#            select = TRUE
-#           )
-mod.egp <- gam(response.int ~
-           # s(x, y, by = type, bs = "gp", k = 200) + s(som_x, som_y, bs = "gp", k = 200),
-           s(x, y, by = type, bs = egp.basis, k = k.max) + s(som_x, som_y, bs = egp.basis, k = k.max),
-           # type + s(som_x, som_y, bs = "gp", k = k.max),
-           data = ls.sam,
-           select = egp.select,
-           method= "REML",
-           optimizer = "efs"
-          )
+if(egp.approx) {
+  mod.egp <- bam(response ~
+                 # s(x, y, by = type, bs = "gp", k = 200) + s(som_x, som_y, bs = "gp", k = 200),
+                 # s(x, y, by = type, bs = "gp", k = k.max) + s(som_x, som_y, bs = "gp", k = k.max),
+                 s(x, y, by = type, bs = egp.basis, k = k.max) +
+                 s(som_x, som_y, bs = egp.basis, k = k.max),
+                 data = ls.sam,
+                 select = TRUE,
+                 discrete = TRUE,
+                 nthreads = n.threads
+                 )
+} else {
+  mod.egp <- gam(response ~
+                 # s(x, y, by = type, bs = "gp", k = 200) + s(som_x, som_y, bs = "gp", k = 200),
+                 s(x, y, by = type, bs = egp.basis, k = k.max) +
+                 s(som_x, som_y, bs = egp.basis, k = k.max),
+                 # type + s(som_x, som_y, bs = "gp", k = k.max),
+                 data = ls.sam,
+                 select = egp.select,
+                 method= "REML",
+                 optimizer = "efs"
+                )
+}
 # summary(mod.egp)
 # AIC(mod.egp)
 
@@ -319,20 +328,19 @@ w.points <-
 eff.bl.type <- reweigh_posterior(yhat.som, w = w.points)
 
 eff.arc <- arc(yhat.type, eff.bl.type)
-summary(eff.arc)
+# summary(eff.arc)
 
-mod.lm <- lm(response.int ~ type, data = ls.sam)
-mod.lmcov <- lm(response.int ~ type + z1 + z2 + z3 + z4, data = ls.sam)
-
+mod.lm <- lm(response ~ type, data = ls.sam)
+mod.lmcov <- lm(response ~ type + z1 + z2 + z3 + z4, data = ls.sam)
 
 matched.cem <- matchit(type ~ z1 + z2 + z3 + z4, method = "cem", data = ls.sam)
 md.cem <- match.data(matched.cem)
-mod.cem <- lm(response.int ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.cem)
+mod.cem <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.cem)
 
 matched.nn.ps <-
   matchit(type ~ z1 + z2 + z3 + z4, method = "nearest", distance = "glm", data = ls.sam)
 md.nn.ps <- match.data(matched.nn.ps)
-mod.nn.ps <- lm(response.int ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.nn.ps)
+mod.nn.ps <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.nn.ps)
 
 results[[i]] <-
   data.table(

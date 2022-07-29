@@ -1,3 +1,17 @@
+library(RandomFields)
+library(RandomFieldsUtils)
+library(raster)
+library(sf)
+library(stars)
+library(spdep)
+library(igraph)
+library(data.table)
+library(mvnfast)
+library(colorspace)
+library(stringi)
+library(ggplot2)
+library(patchwork)
+library(kohonen)
 
 equilibrate <- function(x, ...) {
   UseMethod("equilibrate", x)
@@ -50,6 +64,59 @@ scale_int.stars <- function(x, int = c(0, 1)) {
   return(x)
 }
 
+
+interpolate_na <- function(x, ...) {
+  UseMethod("interpolate_na", x)
+}
+
+
+interpolate_na.stars <- function(x, method = "average", nh = "moore", range = 1) {
+  # Default: Moore neighbourhood
+  window <- expand.grid(seq(-range, range, 1), seq(-range, range, 1))
+  window <- unname(as.matrix(window[-which(window[,1] == 0 & window[,2] == 0),]))
+  if(nh == "neumann") {
+    dist <- apply(abs(window), 1, sum)
+    window <- window[which(dist <= range),]
+  }
+  n.att <- length(x)
+  for(i in 1:n.att) {
+    ind.na <- which(is.na(x[[i]]), arr.ind = TRUE)
+    dims <- dim(x[[i]])
+    inter <- NA
+    if(length(ind.na) > 0) {
+      for(j in 1:nrow(ind.na)) {
+        foc <- ind.na[j,]
+        ipol <- t(apply(window, 1, \(x) x + foc))
+        rem <- c(which(ipol[,1] > dims[1] | ipol[, 1] < 1),
+                 which(ipol[,2] > dims[2] | ipol[, 2] < 1))
+        if(length(rem) > 0){
+          ipol <- ipol[-rem,]
+        }
+        if(method == "average"){
+          inter[j] <- mean(x[[i]][ipol], na.rm = TRUE)
+        }
+        if(method == "gam") {
+          mod.df <- na.omit(data.frame(x = ipol[,1], y = ipol[,2], z = x[[i]][ipol]))
+          pred.df <- data.frame(x = unname(foc[1]), y = unname(foc[2]))
+          mod <- gam(z ~ s(x, y, k = nrow(mod.df)), data = mod.df)
+          inter[j] <- predict(object = mod, newdata = pred.df)
+        }
+      }
+      x[[i]][ind.na] <- inter
+    }
+  }
+  return(x)
+}
+
+
+scale_int.numeric <- function(x, int = c(0, 1)) {
+  if(!is.null(int)) {
+      min.x <- min(x, na.rm = TRUE)
+      max.x <- max(x, na.rm = TRUE)
+      y <- int[1] + (int[2] - int[1]) * (x - min.x) / (max.x - min.x)
+  }
+  return(y)
+}
 
 
 matrix2stars <- function(x, res = 1, name = "value", ...) {
@@ -476,7 +543,7 @@ generate_z3 <- function(
                             grad.prop = grad.prop,
                             dist.acc = acc,
                             rescale = c(0,1))
-  z <- dist
+  z <- interpolate_na(dist, method = "gam", nh = "neumann", range = 2)
   z <-
     scale_int(z, int = rescale) |>
     setNames(name)
@@ -791,7 +858,8 @@ generate_treatment <- function(x.dim,
 generate_nonlinear_effect <- function(field,
                                       eff.type = "random",
                                       eff.range = c(-1, 1),
-                                      mu = 0) {
+                                      mu = 0,
+                                      f.acc = 0.01) {
   field.rs <- scale_int(field, int = c(-1, 1))
   if(eff.type == "random") {
     eff.type <- sample(c("sigmoid", "minimum", "unimodal", "bimodal"), 1)
@@ -826,12 +894,66 @@ generate_nonlinear_effect <- function(field,
   }
   effect <-
     fn(field.rs) |>
-    scale_int()
+    scale_int(int = c(0, 1))
   effect <- eff.range * effect
   effect <- effect - mean(effect[[1]], na.rm = TRUE) + mu
-  return(effect)
+  fun <- data.table(x = seq(0, 1, f.acc))
+  fun[, f.x := eff.range * scale_int(fn((2 * x) - 1), int = c(0, 1))]
+  fun[, f.x := f.x - mean(f.x, na.rm = TRUE) + mu]
+  setnames(fun, c("x", "f.x"), c(names(field), paste0("f.", names(field)))) 
+  return(list(effect = effect,
+              fun = fun))
 }
 
+
+generate_interaction_effect <- function(field1,
+                                        field2,
+                                        range,
+                                        mu,
+                                        nuclei,
+                                        f.acc = 0.01) {
+  field1 <- scale_int(field1, int = c(0, 1))
+  field2 <- scale_int(field2, int = c(0, 1))
+  centres <- data.table(x = runif(nuclei, 0, 1),
+                        y = runif(nuclei, 0, 1),
+                        max = runif(nuclei, 0.5, 2),
+                        sign = sample(c(-1, 1), nuclei, replace = TRUE),
+                        scale.x = runif(nuclei, 0.5 * pi, 2 * pi))
+  centres[, scale.y := scale.x * runif(nuclei, 0.5, 2)]
+  fn <- function(x, y, centre.x, centre.y, sign, max, scale.x, scale.y) {
+    sign * max * exp(-((scale.x * (x - centre.x))^2 + (scale.y * (y - centre.y))^2))
+  }
+  int.effect <- generate_empty(x.dim = dim(field1)[1],
+                               y.dim = dim(field2)[2],
+                               name = paste0("f.", names(field1), names(field2)))
+  int.fun <- CJ(x = seq(0, 1, f.acc), y = seq(0, 1, f.acc))
+  int.fun.com <- matrix(NA, nrow = nrow(int.fun), ncol = nuclei)
+  for(i in 1:nrow(centres)){
+    int.effect <-
+      int.effect +
+      fn(field1, field2,
+         centre.x = centres[i, x],
+         centre.y = centres[i, y],
+         max = centres[i, max],
+         sign = centres[i, sign],
+         scale.x = centres[i, scale.x],
+         scale.y = centres[i, scale.y])
+    int.fun.com[,i] <-
+      fn(int.fun$x, int.fun$y,
+         centre.x = centres[i, x],
+         centre.y = centres[i, y],
+         max = centres[i, max],
+         sign = centres[i, sign],
+         scale.x = centres[i, scale.x],
+         scale.y = centres[i, scale.y])
+  }
+  int.effect <- scale_int(int.effect, c(0, 1)) * range
+  int.effect <- int.effect - mean(int.effect[[1]]) + mu
+  int.fun[, f.xy := apply(int.fun.com, 1, sum)]
+  setnames(int.fun, c(names(field1), names(field2),
+                      paste0("f.", names(field1), names(field2))))
+  return(list(effect = int.effect, fun = int.fun))
+}
 
 
 generate_landscape_4cov_nl <-
@@ -852,6 +974,24 @@ generate_landscape_4cov_nl <-
            z4.effect.type,
            z4.effect.range,
            z4.effect.mu,
+           int12.effect.range,
+           int12.effect.mu,
+           int12.effect.nuclei,
+           int13.effect.range,
+           int13.effect.mu,
+           int13.effect.nuclei,
+           int14.effect.range,
+           int14.effect.mu,
+           int14.effect.nuclei,
+           int23.effect.range,
+           int23.effect.mu,
+           int23.effect.nuclei,
+           int24.effect.range,
+           int24.effect.mu,
+           int24.effect.nuclei,
+           int34.effect.range,
+           int34.effect.mu,
+           int34.effect.nuclei,
            treatment.nuclei,
            treatment.phi.range,
            treatment.shift.range,
@@ -889,6 +1029,7 @@ generate_landscape_4cov_nl <-
            e.nug.var,
            e.rand.var,
            ...) {
+  ls.par <- as.list(match.call(expand.dots=FALSE))
   set.seed(seed)
   z1 <- generate_z1(x.dim = x.dim,
                     y.dim = y.dim,
@@ -958,51 +1099,57 @@ generate_landscape_4cov_nl <-
                        nuc.eff.range = treatment.nuc.eff.range,
                        name = "treatment")
 
-  # treatment <-
-  #   generate_treatment(x.dim = x.dim, y.dim = y.dim,
-  #                      effect.size.sp = treatment.effect.size.sp,
-  #                      effect.size.bd = treatment.effect.size.bd,
-  #                      nuclei = treatment.nuclei,
-  #                      poly = split,
-  #                      phi.range = treatment.phi.range,
-  #                      shift.range = treatment.shift.range,
-  #                      x.scale.range = treatment.x.scale.range,
-  #                      y.scale.range = treatment.y.scale.range,
-  #                      nuc.eff.range = treatment.nuc.eff.range,
-  #                      grad.prop = treatment.grad.prop,
-  #                      grad.w = treatment.grad.w,
-  #                      mat.nu = treatment.mat.nu,
-  #                      mat.var = treatment.mat.var,
-  #                      mat.scale = treatment.mat.scale,
-  #                      mat.w = treatment.mat.w,
-  #                      global.mean = treatment.global.mean,
-  #                      name = "treatment")
-
-
   covariates <- c(z1, z2, z3, z4)
-
-  # cov.effect.size <- c(z1.effect.size, z2.effect.size, z3.effect.size, z4.effect.size)
-  # cov.effects <- list()
-  # for(i in seq_along(cov.effect.size)){
-  #   cov.effects[[i]] <-
-  #     matrix2stars(covariates[[i]] * cov.effect.size[i])
-  # }
-
-  cov.effect.type <- ls.par[c(paste0("z", 1:4, ".effect.type"))]
-  cov.effect.range <- ls.par[c(paste0("z", 1:4, ".effect.range"))]
-  cov.effect.mu <- ls.par[c(paste0("z", 1:4, ".effect.mu"))]
-  cov.effects <- list()
-  for(i in seq_along(cov.effect.type)){
-    cov.effects[[i]] <-
+  
+  cov.main.names <- paste0("z", 1:4)
+  cov.main.effect.type <- ls.par[paste0(cov.main.names, ".effect.type")]
+  cov.main.effect.range <- ls.par[paste0(cov.main.names, ".effect.range")]
+  cov.main.effect.mu <- ls.par[paste0(cov.main.names, ".effect.mu")]
+  cov.main.effects <- list()
+  cov.main.funs <- list()
+  for(i in seq_along(cov.main.names)){
+    nl.effect <-
       generate_nonlinear_effect(covariates[i],
-                                eff.type = cov.effect.type[[i]],
-                                eff.range = cov.effect.range[[i]],
-                                mu = cov.effect.mu[[i]])
+                                eff.type = cov.main.effect.type[[i]],
+                                eff.range = cov.main.effect.range[[i]],
+                                mu = cov.main.effect.mu[[i]])
+    cov.main.effects[[i]] <- nl.effect$effect
+    setnames(nl.effect$fun, c("val", "f"))
+    nl.effect$fun[, cov := cov.main.names[i]]
+    cov.main.funs[[i]] <- nl.effect$fun
   }
+  cov.main.effects <-
+    do.call(c, cov.main.effects) |>
+    setNames(paste0("f.", cov.main.names))
+  cov.main.funs <- rbindlist(cov.main.funs)
+  setcolorder(cov.main.funs, c("cov", "val", "f"))
 
-  cov.effects <-
-    do.call(c, cov.effects) |>
-    setNames(paste0("f", 1:4))
+  cov.comb <- t(combn(1:4, 2))
+  cov.int.names <- apply(cov.comb, 1, \(x) paste0("int", x[1], x[2]))
+  cov.int.effect.range <- ls.par[paste0(cov.int.names, ".effect.range")]
+  cov.int.effect.mu <- ls.par[paste0(cov.int.names, ".effect.mu")]
+  cov.int.effect.nuclei <- ls.par[paste0(cov.int.names, ".effect.nuclei")]
+  cov.int.effects <-list()
+  cov.int.funs <- list()
+  for(i in seq_along(cov.int.names)){
+    int.effect <-
+      generate_interaction_effect(field1 = get(cov.main.names[cov.comb[i, 1]]),
+                                  field2 = get(cov.main.names[cov.comb[i, 2]]),
+                                  range = cov.int.effect.range[[i]],
+                                  mu = cov.int.effect.mu[[i]],
+                                  nuclei = cov.int.effect.nuclei[[i]])
+    cov.int.effects[[i]] <- int.effect$effect
+    setnames(int.effect$fun, c("val1", "val2", "f"))
+    int.effect$fun[, `:=`(int = cov.int.names[i],
+                          cov1 = cov.main.names[cov.comb[i, 1]],
+                          cov2 = cov.main.names[cov.comb[i, 2]])]
+    cov.int.funs[[i]] <- int.effect$fun
+  }
+  cov.int.effects <-
+    do.call(c, cov.int.effects) |>
+    setNames(paste0("f.", cov.int.names))
+  cov.int.funs <- rbindlist(cov.int.funs)
+  setcolorder(cov.int.funs, c("int", "cov1", "cov2", "val1", "val2", "f"))
 
   mod.error <-
     RMexp(var = e.exp.var, scale = e.exp.scale) +
@@ -1016,12 +1163,18 @@ generate_landscape_4cov_nl <-
   error <- error.sp + error.rand
 
   response <-
-    c(cov.effects, treatment, error) |>
+    c(cov.main.effects, treatment, error) |>
     merge() |>
     st_apply(1:2, sum) |>
     setNames("response")
 
-  landscape <- c(response, type, covariates, treatment, cov.effects, error)
+  response.int <-
+    c(cov.main.effects, cov.int.effects, treatment, error) |>
+    merge() |>
+    st_apply(1:2, sum) |>
+    setNames("response.int")
+
+  landscape <- c(response, response.int, type, covariates, treatment, cov.main.effects, cov.int.effects, error)
 
   landscape.dt <- 
     as.data.frame(landscape)
@@ -1030,8 +1183,10 @@ generate_landscape_4cov_nl <-
                         levels = c("control", "treatment"))]
   landscape.dt$cell <- 1:nrow(landscape.dt)
   setcolorder(landscape.dt, c("x", "y", "cell"))
+
+  fun <- list(main = cov.main.funs, interactions = cov.int.funs)
   
-  return(landscape.dt)
+  return(list(landscape = landscape.dt, fun = fun))
   }
 
 
