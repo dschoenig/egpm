@@ -52,54 +52,58 @@ for(i in 1:nrow(parameters)) {
   file.ls <- paste0(path.ls.data,
                     stri_pad_left(ls.par$id, 4, 0), ".rds")
   file.mod <- paste0(path.mod, mod.type, "_", stri_pad_left(ls.par$id, 4, 0), ".rds")
-  
-  ls <- readRDS(file.ls)$landscape
+ 
+  if(!file.exists(file.mod)) {
 
-  set.seed(ls.par$seed) 
-  sam <- sample(1:nrow(ls), round(sam.frac * nrow(ls)))
-  ls.sam <- na.omit(ls[sam,])
+    ls <- readRDS(file.ls)$landscape
 
-  mod.lm <- lm(response ~ type, data = ls.sam)
-  mod.lmcov <- lm(response ~ type + z1 + z2 + z3 + z4, data = ls.sam)
+    set.seed(ls.par$seed) 
+    sam <- sample(1:nrow(ls), round(sam.frac * nrow(ls)))
+    ls.sam <- na.omit(ls[sam,])
 
-  matched.cem <- matchit(type ~ z1 + z2 + z3 + z4, method = "cem", data = ls.sam)
-  md.cem <- match.data(matched.cem)
-  mod.cem <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.cem)
+    mod.lm <- lm(response ~ type, data = ls.sam)
+    mod.lmcov <- lm(response ~ type + z1 + z2 + z3 + z4, data = ls.sam)
 
-  matched.nn.ps <-
-    matchit(type ~ z1 + z2 + z3 + z4, method = "nearest", distance = "glm", data = ls.sam)
-  md.nn.ps <- match.data(matched.nn.ps)
-  mod.nn.ps <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.nn.ps)
+    matched.cem <- matchit(type ~ z1 + z2 + z3 + z4, method = "cem", data = ls.sam)
+    md.cem <- match.data(matched.cem)
+    mod.cem <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.cem)
 
-  matching <- 
-    list(lm = extract_lm(mod.lm),
-         lmcov = extract_lm(mod.lmcov),
-         cem = extract_lm(mod.cem),
-         nn.ps = extract_lm(mod.nn.ps))
+    matched.nn.ps <-
+      matchit(type ~ z1 + z2 + z3 + z4, method = "nearest", distance = "glm", data = ls.sam)
+    md.nn.ps <- match.data(matched.nn.ps)
+    mod.nn.ps <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.nn.ps)
 
-  results.mod <- list()
-  for(i in seq_along(matching)) {
-    est <- matching[[i]]
-    results.mod[[i]] <-
-      data.table(id = ls.par$id,
-                 method = names(matching)[i],
-                 mean = est$mean,
-                 q2.5 = est$ci[1],
-                 q97.5 = est$ci[2],
-                 dev.expl = est$dev.expl 
-                 )
+    matching <- 
+      list(lm = extract_lm(mod.lm),
+           lmcov = extract_lm(mod.lmcov),
+           cem = extract_lm(mod.cem),
+           nn.ps = extract_lm(mod.nn.ps))
+
+    results.mod <- list()
+    for(i in seq_along(matching)) {
+      est <- matching[[i]]
+      results.mod[[i]] <-
+        data.table(id = ls.par$id,
+                   method = names(matching)[i],
+                   mean = est$mean,
+                   q2.5 = est$ci[1],
+                   q97.5 = est$ci[2],
+                   dev.expl = est$dev.expl 
+                   )
+    }
+    
+    results.mod <- rbindlist(results.mod)
+
+    # Export results
+    saveRDS(results.mod, file.mod)
+
+    rm(ls, ls.sam, mod.lm, mod.lmcov, matched.cem, md.cem, mod.cem, matched.nn.ps, md.nn.ps, mod.nn.ps)
+
   }
-  
-  results.mod <- rbindlist(results.mod)
-
-  # Export results
-  saveRDS(results.mod, file.mod)
-
-  rm(mod.lm, mod.lmcov, matched.cem, md.cem, mod.cem, matched.nn.ps, md.nn.ps, mod.nn.ps)
 
   tb <- Sys.time()
   te <- tb-ta
   print(te)
 
-  }
+}
 
