@@ -1,3 +1,5 @@
+library(mgcv)
+library(posterior)
 library(RandomFields)
 library(RandomFieldsUtils)
 library(raster)
@@ -12,6 +14,8 @@ library(stringi)
 library(ggplot2)
 library(patchwork)
 library(kohonen)
+
+RFoptions(install="no")
 
 equilibrate <- function(x, ...) {
   UseMethod("equilibrate", x)
@@ -1530,12 +1534,12 @@ plot_landscape_4cov_lin <- function(x) {
       ls_theme
   }
 
-  eff.var <-  paste0("f", 1:4)
+  eff.var <-  paste0("f.", cov.var)
 
   lim.effects <-
     unlist(x[,
              .(min(as.matrix(.SD)), max(as.matrix(.SD))),
-             .SDcols = c("treatment", "error", paste0("f", 1:4))],
+             .SDcols = c("treatment", "error", paste0("f.", cov.var))],
            use.names = FALSE)
   lim.effects <- 
     (floor(lim.effects / 0.25) + c(0, 1)) * 0.25
@@ -1607,7 +1611,7 @@ plot_landscape_4cov_lin <- function(x) {
   ls_theme
 
   p2 <-
-  plots$treatment + plots$f1 + plots$f2 + plots$f3 + plots$f4 + plots$error +
+  plots$treatment + plots$f.z1 + plots$f.z2 + plots$f.z3 + plots$f.z4 + plots$error +
   plot_layout(design = layout2, guides = "collect") &
   ls_theme
   
