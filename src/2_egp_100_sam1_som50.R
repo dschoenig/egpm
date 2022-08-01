@@ -84,7 +84,7 @@ for(i in chunk) {
   #                normalizeDataLayers = FALSE)
   # som.fit$scale <- list(mean = attr(cov.z, "scaled:center"),
   #                       sd = attr(cov.z, "scaled:scale"))
-  file.som <- paste0(path.mod, "egp_sam0.01_som25_", stri_pad_left(ls.par$id, 4, 0), ".rds")
+  file.som <- paste0(path.mod, "egp_sam1_som25_", stri_pad_left(ls.par$id, 4, 0), ".rds")
   som.fit <- readRDS(file.som)$som
 
   mapped <- 
