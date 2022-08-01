@@ -19,7 +19,7 @@ path.base <- "../"
 ls.type <- "1000_4cov_nl"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
 path.ls.data <- paste0(path.ls, "data/")
-mod.type <- "egp_sam0.01_som25"
+mod.type <- "egp_sam0.01_som50"
 path.mod <- paste0(path.base, "models/", ls.type, "/")
 if(!dir.exists(path.mod)) dir.create(path.mod, recursive = TRUE)
 
@@ -44,13 +44,12 @@ row.chunks <- chunk_seq(1, nrow(parameters), ceiling(nrow(parameters) / task_cou
 chunk <- row.chunks$from[task_id]:row.chunks$to[task_id]
 
 
-# som.quality <- list()
-
+# chunk <- 1
 for(i in chunk) {
 
   ta <- Sys.time()
   
-  message(paste0("Fitting EGP model for landscape ", i, " / ", nrow(parameters), " …"))
+  message(paste0("Fitting EGP models for landscape ", i, " / ", nrow(parameters), " …"))
 
   results.mod <- list()
 
@@ -75,16 +74,18 @@ for(i in chunk) {
   cov.z <- scale(ls.sam[, .(z1, z2, z3, z4)],
                  center = TRUE, scale = TRUE)
 
-  som.fit <- som(cov.z,
-                 grid = grid, 
-                 rlen = som.rlen,
-                 radius = som.dim,
-                 init = init_som(na.omit(cov.z), som.dim, som.dim),
-                 mode = "pbatch", 
-                 cores = n.threads,
-                 normalizeDataLayers = FALSE)
-  som.fit$scale <- list(mean = attr(cov.z, "scaled:center"),
-                        sd = attr(cov.z, "scaled:scale"))
+  # som.fit <- som(cov.z,
+  #                grid = grid, 
+  #                rlen = som.rlen,
+  #                radius = som.dim,
+  #                init = init_som(na.omit(cov.z), som.dim, som.dim),
+  #                mode = "pbatch", 
+  #                cores = n.threads,
+  #                normalizeDataLayers = FALSE)
+  # som.fit$scale <- list(mean = attr(cov.z, "scaled:center"),
+  #                       sd = attr(cov.z, "scaled:scale"))
+  file.som <- paste0(path.mod, "egp_sam0.01_som25_", stri_pad_left(ls.par$id, 4, 0), ".rds")
+  som.fit <- readRDS(file.som)$som
 
   mapped <- 
       ls.sam[, .(z1, z2, z3, z4)] |>
@@ -97,6 +98,11 @@ for(i in chunk) {
                 som_y = mapped$grid.coordinates$bmu.1[,"y"])
            ]
 
+  ls.sam[, id := cell]
+  ls.sam <- ls.sam[, !"cell"]
+  setcolorder(ls.sam, "id")
+  
+  results.mod[["sample"]] <- ls.sam
   results.mod[["som"]] <- som.fit
 
   # if(som.eval) {
@@ -113,7 +119,7 @@ for(i in chunk) {
   # }
 
 
-  ## EGP (NO INTERACTIONS) ####################################################
+  ## EGP (LANDSCAPE WITHOUT INTERACTIONS) ######################################
 
   # if(is.null(egp.k)) {
   #   egp.k <- min(nrow(unique(ls.sam[, .(som_x, som_y)]) - 1),
@@ -145,26 +151,9 @@ for(i in chunk) {
   # summary(mod.egp)
   # AIC(mod.egp)
 
-  ## Extract model info
-
-  dev.expl <- (mod.egp$null.deviance - mod.egp$deviance)/mod.egp$null.deviance * 100
-
-  egp.edf <- NA
-  labels <- NA
-  n.smooth <- length(mod.egp$smooth)
-  for (j in 1:n.smooth) {
-    egp.edf[j] <-
-      sum(mod.egp$edf[mod.egp$smooth[[j]]$first.para:mod.egp$smooth[[j]]$last.para])
-  }
-  for (j in 1:n.smooth) {
-    labels[j] <- mod.egp$smooth[[j]]$label
-  }
-  names(egp.edf) <- labels
-
   
   # Estimate marginal effect
 
-  ls.sam[, id := cell]
   data.bl <- assign_bl_som(ls.sam,
                            som = som.fit,
                            cov.col = c("z1", "z2", "z3", "z4"),
@@ -228,28 +217,18 @@ for(i in chunk) {
                 })
   yhat.bl.type <- reweigh_posterior(yhat.som, w = w.points)
 
-  eff.mar <- extract_variable(arc(yhat.type, yhat.bl.type), "treatment")
-
-  eff.mar <-
-    summary(arc(yhat.type, yhat.bl.type), mean, \(x) quantile2(x, c(0.025, 0.975))) |>
-    as.data.table() |>
-    subset(variable == "treatment")
+  eff.mar <- arc(yhat.type, yhat.bl.type)
 
   # Export results
 
-  results.mod[["estimates"]] <-
-    data.table(id = ls.par$id,
-               mean = eff.mar$mean,
-               q2.5 = eff.mar$q2.5,
-               q97.5 = eff.mar$q97.5,
-               dev.expl = dev.expl 
-               )
-  results.mod[["edf"]] <- as.data.table(as.list(c(egp.edf, "k" = egp.k, "id" = ls.par$id)))
+  results.mod[["estimates.noint"]] <- list(gam = mod.egp,
+                                           posterior = post,
+                                           effects = eff.mar)
 
-  rm(mod.egp, eff.mar, dev.expl, egp.edf)
+  rm(mod.egp, post, eff.mar)
 
 
-  ## EGP (INCLUDING INTERACTIONS) ##############################################
+  ## EGP (LANDSCAPE WITH INTERACTIONS) #########################################
 
   # if(is.null(egp.k)) {
   #   egp.k <- min(nrow(unique(ls.sam[, .(som_x, som_y)]) - 1),
@@ -281,26 +260,9 @@ for(i in chunk) {
   # summary(mod.egp)
   # AIC(mod.egp)
 
-  ## Extract model info
-
-  dev.expl <- (mod.egp$null.deviance - mod.egp$deviance)/mod.egp$null.deviance * 100
-
-  egp.edf <- NA
-  labels <- NA
-  n.smooth <- length(mod.egp$smooth)
-  for (j in 1:n.smooth) {
-    egp.edf[j] <-
-      sum(mod.egp$edf[mod.egp$smooth[[j]]$first.para:mod.egp$smooth[[j]]$last.para])
-  }
-  for (j in 1:n.smooth) {
-    labels[j] <- mod.egp$smooth[[j]]$label
-  }
-  names(egp.edf) <- labels
-
   
   # Estimate marginal effect
 
-  ls.sam[, id := cell]
   data.bl <- assign_bl_som(ls.sam,
                            som = som.fit,
                            cov.col = c("z1", "z2", "z3", "z4"),
@@ -364,31 +326,24 @@ for(i in chunk) {
                 })
   yhat.bl.type <- reweigh_posterior(yhat.som, w = w.points)
 
-  eff.mar <- extract_variable(arc(yhat.type, yhat.bl.type), "treatment")
+  eff.mar <- arc(yhat.type, yhat.bl.type)
 
-  eff.mar <-
-    summary(arc(yhat.type, yhat.bl.type), mean, \(x) quantile2(x, c(0.025, 0.975))) |>
-    as.data.table() |>
-    subset(variable == "treatment")
 
   # Export results
 
-  results.mod[["estimates.int"]] <-
-    data.table(id = ls.par$id,
-               mean = eff.mar$mean,
-               q2.5 = eff.mar$q2.5,
-               q97.5 = eff.mar$q97.5,
-               dev.expl = dev.expl 
-               )
-  results.mod[["edf.int"]] <- as.data.table(as.list(c(egp.edf, "k" = egp.k, "id" = ls.par$id)))
+  results.mod[["estimates.int"]] <- list(gam = mod.egp,
+                                         posterior = post,
+                                         effects = eff.mar)
+
+  rm(mod.egp, post, eff.mar)
 
   saveRDS(results.mod, file.mod)
 
-  rm(results.mod)
+  rm(results.mod) 
   
   tb <- Sys.time()
   te <- tb-ta
   print(te)
 
-  }
+}
 
