@@ -15,7 +15,7 @@ path.base <- "../"
 ls.type <- "1000_4cov_nl"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
 path.ls.data <- paste0(path.ls, "data/")
-mod.type <- "match_sam1"
+mod.type <- "match_sam0.01"
 path.mod <- paste0(path.base, "models/", ls.type, "/")
 if(!dir.exists(path.mod)) dir.create(path.mod, recursive = TRUE)
 
