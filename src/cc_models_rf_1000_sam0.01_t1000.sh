@@ -1,4 +1,3 @@
-
 #!/bin/bash
 #SBATCH --account=def-cricrime 
 #SBATCH --cpus-per-task=4
