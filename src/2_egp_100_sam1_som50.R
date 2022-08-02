@@ -74,18 +74,18 @@ for(i in chunk) {
   cov.z <- scale(ls.sam[, .(z1, z2, z3, z4)],
                  center = TRUE, scale = TRUE)
 
-  # som.fit <- som(cov.z,
-  #                grid = grid, 
-  #                rlen = som.rlen,
-  #                radius = som.dim,
-  #                init = init_som(na.omit(cov.z), som.dim, som.dim),
-  #                mode = "pbatch", 
-  #                cores = n.threads,
-  #                normalizeDataLayers = FALSE)
-  # som.fit$scale <- list(mean = attr(cov.z, "scaled:center"),
-  #                       sd = attr(cov.z, "scaled:scale"))
-  file.som <- paste0(path.mod, "egp_sam1_som25_", stri_pad_left(ls.par$id, 4, 0), ".rds")
-  som.fit <- readRDS(file.som)$som
+  som.fit <- som(cov.z,
+                 grid = grid, 
+                 rlen = som.rlen,
+                 radius = som.dim,
+                 init = init_som(na.omit(cov.z), som.dim, som.dim),
+                 mode = "pbatch", 
+                 cores = n.threads,
+                 normalizeDataLayers = FALSE)
+  som.fit$scale <- list(mean = attr(cov.z, "scaled:center"),
+                        sd = attr(cov.z, "scaled:scale"))
+  # file.som <- paste0(path.mod, "egp_sam1_som50_", stri_pad_left(ls.par$id, 4, 0), ".rds")
+  # som.fit <- readRDS(file.som)$som
 
   mapped <- 
       ls.sam[, .(z1, z2, z3, z4)] |>

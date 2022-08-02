@@ -17,7 +17,9 @@ install.packages(c(
                    "mgcv",
                    "mvnfast",
                    "patchwork",
+                   "pdp",
                    "posterior",
+                   "ranger",
                    "RandomFields",
                    "RandomFieldsUtils",
                    "raster",
@@ -28,4 +30,3 @@ install.packages(c(
                    ))
                    
  devtools::install_github("cran/RandomFields")
-  devtools::install_github("cran/RandomFields")
