@@ -1207,7 +1207,8 @@ assign_bl_som <- function(data,
                           bl.level = "control",
                           som.col = "som_bmu",
                           min.obs = 1,
-                          n.threads = 4
+                          n.threads = 4,
+                          scale = TRUE
                           ){
   data <- setnames(copy(data), c(id.col, bl.col, som.col), c("id", "type", "som_bmu"))
   # Baseline units
@@ -1222,16 +1223,22 @@ assign_bl_som <- function(data,
   # first-order BMU.
   data.bmu.bl.mult <-
     data[!som_bmu %in% bl.bmu[n >= min.obs, som_bmu]]
-  data.bmu.bl.mult$som_bmu.bl.mult <-
-    scale_data_som(data.bmu.bl.mult[, ..cov.col],
-                   som) |>
-    bmu_match_reference(som, bl.bmu[, .(som_bmu, n)], min.obs, n.threads)
+  if(scale) {
+    data.bmu.bl.mult$som_bmu.bl.mult <-
+      scale_data_som(data.bmu.bl.mult[, ..cov.col],
+                     som) |>
+      bmu_match_reference(som, bl.bmu[, .(som_bmu, n)], min.obs, n.threads)
+  } else {
+    data.bmu.bl.mult$som_bmu.bl.mult <-
+      as.matrix(data.bmu.bl.mult[, ..cov.col]) |>
+      bmu_match_reference(som, bl.bmu[, .(som_bmu, n)], min.obs, n.threads)
+  }
   data.bmu <-
     data |>
     merge(data.bmu.bl[, .(id, som_bmu.bl)], all = TRUE, sort = FALSE) |>
     merge(data.bmu.bl.mult[, .(id, som_bmu.bl.mult)], all = TRUE, sort = FALSE)
   data.bmu[, `:=`(som_bmu.bl = fifelse(unlist(lapply(som_bmu.bl, is.null)),
-                                       som_bmu.bl.mult, som_bmu.bl))]
+                                       as.list(som_bmu.bl.mult), som_bmu.bl))]
   # Weights for each BMU
   id.bl <-
     data.bmu[,

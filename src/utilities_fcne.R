@@ -1225,11 +1225,38 @@ bin_cols <- function(data, columns, bin.res, bin.min = NULL, bin.round = NULL, b
 
 # SOM UTILITIES ################################################################
 
-init_som <- function(data, xdim, ydim) {
+# init_som <- function(data, xdim, ydim) {
+#   # Calculate principal components
+#   init_pca <- prcomp(x = data, center = FALSE, scale = FALSE)
+#   init_max <- apply(init_pca$x[, 1:2], 2, max)
+#   init_min <- apply(init_pca$x[, 1:2], 2, min)
+#   # Distribute nodes along first two PC
+#   init_coord_pc <- matrix(NA, nrow = xdim * ydim, ncol = 2)
+#   init_coord_pc[, 1] <-  rep(seq(init_min[1], init_max[1], 
+#                                   length.out = xdim),
+#                               times = ydim)
+#   init_coord_pc[, 2] <-  rep(seq(init_min[2], init_max[2], 
+#                                   length.out = ydim),
+#                               each = ydim)
+#   # Map to covariate space
+#   init_coord_cov <- init_coord_pc %*% t(init_pca$rotation[,1:2])
+#   return(init_coord_cov)
+# }
+
+init_som <- function(data, xdim = NULL, ydim = NULL, n.units = NULL, type = "square") {
   # Calculate principal components
   init_pca <- prcomp(x = data, center = FALSE, scale = FALSE)
+  init_eigen <- init_pca$sdev[1:2]^2
   init_max <- apply(init_pca$x[, 1:2], 2, max)
   init_min <- apply(init_pca$x[, 1:2], 2, min)
+  if(type == "rectangular") {
+    dim.r <- init_eigen[1] / init_eigen[2]
+    xdim <- round(sqrt(n.units * dim.r), 0)
+    ydim <- round(sqrt(n.units / dim.r), 0)
+   }
+  if(type == "square" & (is.null(xdim) | is.null(ydim))) {
+    xdim <- ydim <- round(sqrt(n.units), 0)
+  }
   # Distribute nodes along first two PC
   init_coord_pc <- matrix(NA, nrow = xdim * ydim, ncol = 2)
   init_coord_pc[, 1] <-  rep(seq(init_min[1], init_max[1], 
@@ -1237,9 +1264,10 @@ init_som <- function(data, xdim, ydim) {
                               times = ydim)
   init_coord_pc[, 2] <-  rep(seq(init_min[2], init_max[2], 
                                   length.out = ydim),
-                              each = ydim)
+                              each = xdim)
   # Map to covariate space
   init_coord_cov <- init_coord_pc %*% t(init_pca$rotation[,1:2])
+  attr(init_coord_cov, "som.dim") <- c(xdim, ydim)
   return(init_coord_cov)
 }
 
