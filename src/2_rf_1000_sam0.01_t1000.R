@@ -45,7 +45,8 @@ for(i in chunk) {
 
   ta <- Sys.time()
   
-  message(paste0("Fitting random forest models for landscape ", i, " / ", nrow(parameters), " …"))
+  message(paste0("Fitting random forest models for landscape ", parameters[i, id],
+                 " / ", parameters[, max(id)], " …"))
 
   results.mod <- list()
 

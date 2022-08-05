@@ -11,9 +11,9 @@ n.threads <- as.integer(args[1])
 task_id <- as.integer(args[2])
 task_count <- as.integer(args[3])
 
-# n.threads <- 4
-# task_id <- 1
-# task_count <- 100
+n.threads <- 4
+task_id <- 1
+task_count <- 1
 
 path.base <- "../"
 ls.type <- "1000_4cov_nl"
@@ -35,22 +35,32 @@ egp.max.knots.geo <- egp.k.geo*10
 egp.approx <- TRUE
 egp.basis <- "gp"
 egp.select <- TRUE
+overwrite = TRUE
 
 
 parameters <- readRDS(file.par)
 # parameters <- parameters[1:2]
 
+if(!overwrite) {
+  files <- list.files(path.mod, pattern = mod.type)
+  if(length(files > 0)) {
+    files.mod <- paste0(path.mod,
+                        list.files(path.mod, pattern = mod.type))
+    ids <- as.integer(stri_match_last_regex(files.mod, "\\d{4}"))
+    parameters <- parameters[!id %in% ids]
+  }
+}
 
 row.chunks <- chunk_seq(1, nrow(parameters), ceiling(nrow(parameters) / task_count))
 chunk <- row.chunks$from[task_id]:row.chunks$to[task_id]
-
 
 # chunk <- 1
 for(i in chunk) {
 
   ta <- Sys.time()
   
-  message(paste0("Fitting EGP models for landscape ", i, " / ", nrow(parameters), " …"))
+  message(paste0("Fitting EGP models for landscape ", parameters[i, id],
+                 " / ", parameters[, max(id)], " …"))
 
   results.mod <- list()
 
@@ -60,7 +70,9 @@ for(i in chunk) {
   file.ls <- paste0(path.ls.data,
                     stri_pad_left(ls.par$id, 4, 0), ".rds")
   file.mod <- paste0(path.mod, mod.type, "_", stri_pad_left(ls.par$id, 4, 0), ".rds")
-  
+ 
+  if(!overwrite & file.exists(file.mod)) next
+
   ls <- readRDS(file.ls)$landscape
 
   set.seed(ls.par$seed) 

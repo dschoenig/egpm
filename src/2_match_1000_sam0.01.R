@@ -31,7 +31,8 @@ for(i in 1:nrow(parameters)) {
 
   ta <- Sys.time()
   
-  message(paste0("Fitting matching models for landscape ", i, " / ", nrow(parameters), " …"))
+  message(paste0("Fitting matching models for landscape ", parameters[i, id],
+                 " / ", parameters[, max(id)], " …"))
 
   results.mod <- list()
 

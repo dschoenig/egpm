@@ -19,7 +19,7 @@ path.base <- "../"
 ls.type <- "1000_4cov_nl"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
 path.ls.data <- paste0(path.ls, "data/")
-mod.type <- "egp_sam0.01_som50"
+mod.type <- "egp_sam0.01_som50_l"
 path.mod <- paste0(path.base, "models/", ls.type, "/")
 if(!dir.exists(path.mod)) dir.create(path.mod, recursive = TRUE)
 
@@ -28,20 +28,33 @@ file.par <- paste0(path.ls, "parameters.rds")
 sam.frac <- 0.01
 som.dim <- 50
 som.rlen <- 1000
-# som.eval <- TRUE
-egp.k <- 200
-egp.max.knots <- som.dim^2
+egp.k.som <- som.dim^2
+egp.k.geo <- 250
+egp.max.knots.som <- som.dim^2
+egp.max.knots.geo <- egp.k.geo*10
 egp.approx <- TRUE
 egp.basis <- "gp"
 egp.select <- TRUE
+overwrite <- TRUE
 
 
 parameters <- readRDS(file.par)
 # parameters <- parameters[1:2]
 
+if(!overwrite) {
+  files <- list.files(path.mod, pattern = mod.type)
+  if(length(files > 0)) {
+    files.mod <- paste0(path.mod,
+                        list.files(path.mod, pattern = mod.type))
+    ids <- as.integer(stri_match_last_regex(files.mod, "\\d{4}"))
+    parameters <- parameters[!id %in% ids]
+  }
+}
 
 row.chunks <- chunk_seq(1, nrow(parameters), ceiling(nrow(parameters) / task_count))
 chunk <- row.chunks$from[task_id]:row.chunks$to[task_id]
+
+
 
 
 # chunk <- 1
@@ -49,7 +62,8 @@ for(i in chunk) {
 
   ta <- Sys.time()
   
-  message(paste0("Fitting EGP models for landscape ", i, " / ", nrow(parameters), " …"))
+  message(paste0("Fitting EGP models for landscape ", parameters[i, id],
+                 " / ", parameters[, max(id)], " …"))
 
   results.mod <- list()
 
@@ -105,6 +119,8 @@ for(i in chunk) {
   results.mod[["sample"]] <- ls.sam
   results.mod[["som"]] <- som.fit
 
+  egp.k.som <- min(nrow(unique(mapped[[1]])), egp.k.som)
+
   # if(som.eval) {
   #   quality <-
   #     evaluate_embedding(ls.sam[, .(z1, z2, z3, z4)],
@@ -126,12 +142,12 @@ for(i in chunk) {
   #                floor((nrow(ls.sam) * (0.25))))
   # }
 
-  if(egp.approx) {
+ if(egp.approx) {
     mod.egp <- bam(response ~
-                   s(x, y, by = type, bs = egp.basis, k = egp.k) +
-                   s(som_x, som_y, bs = egp.basis, k = egp.k,
-                     xt = list(max.knots = egp.max.knots)),
-                     # xt = list(max.knots = 2000)),
+                   s(x, y, by = type, bs = egp.basis, k = egp.k.geo,
+                     xt = list(max.knots = egp.max.knots.geo)) +
+                   s(som_x, som_y, bs = egp.basis, k = egp.k.som,
+                     xt = list(max.knots = egp.max.knots.som)),
                    data = ls.sam,
                    select = TRUE,
                    discrete = TRUE,
@@ -139,15 +155,18 @@ for(i in chunk) {
                    )
   } else {
     mod.egp <- gam(response ~
-                   s(x, y, by = type, bs = egp.basis, k = egp.k) +
-                   s(som_x, som_y, bs = egp.basis, k = egp.k,
-                     xt = list(max.knots = egp.max.knots)),
+                   s(x, y, by = type, bs = egp.basis, k = egp.k.geo,
+                     xt = list(max.knots = egp.max.knots.geo)) +
+                   s(som_x, som_y, bs = egp.basis, k = egp.k.som,
+                     xt = list(max.knots = egp.max.knots.som)),
                    data = ls.sam,
                    select = egp.select,
                    method= "REML",
                    optimizer = "efs"
                   )
   }
+  # summary(mod.egp)
+  # AIC(mod.egp)
   # summary(mod.egp)
   # AIC(mod.egp)
 
@@ -235,12 +254,12 @@ for(i in chunk) {
   #                floor((nrow(ls.sam) * (0.25))))
   # }
 
-  if(egp.approx) {
+ if(egp.approx) {
     mod.egp <- bam(response.int ~
-                   s(x, y, by = type, bs = egp.basis, k = egp.k) +
-                   s(som_x, som_y, bs = egp.basis, k = egp.k,
-                     xt = list(max.knots = egp.max.knots)),
-                     # xt = list(max.knots = 2000)),
+                   s(x, y, by = type, bs = egp.basis, k = egp.k.geo,
+                     xt = list(max.knots = egp.max.knots.geo)) +
+                   s(som_x, som_y, bs = egp.basis, k = egp.k.som,
+                     xt = list(max.knots = egp.max.knots.som)),
                    data = ls.sam,
                    select = TRUE,
                    discrete = TRUE,
@@ -248,9 +267,10 @@ for(i in chunk) {
                    )
   } else {
     mod.egp <- gam(response.int ~
-                   s(x, y, by = type, bs = egp.basis, k = egp.k) +
-                   s(som_x, som_y, bs = egp.basis, k = egp.k,
-                     xt = list(max.knots = egp.max.knots)),
+                   s(x, y, by = type, bs = egp.basis, k = egp.k.geo,
+                     xt = list(max.knots = egp.max.knots.geo)) +
+                   s(som_x, som_y, bs = egp.basis, k = egp.k.som,
+                     xt = list(max.knots = egp.max.knots.som)),
                    data = ls.sam,
                    select = egp.select,
                    method= "REML",
