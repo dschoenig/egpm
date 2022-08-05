@@ -19,16 +19,16 @@ path.base <- "../"
 ls.type <- "1000_4cov_nl"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
 path.ls.data <- paste0(path.ls, "data/")
-mod.type <- "egp_sam0.01_som50"
+mod.type <- "egp_sam0.01_som100"
 path.mod <- paste0(path.base, "models/", ls.type, "/")
 if(!dir.exists(path.mod)) dir.create(path.mod, recursive = TRUE)
 
 file.par <- paste0(path.ls, "parameters.rds")
 
 sam.frac <- 0.01
-som.dim <- 70
+som.dim <- 100
 som.rlen <- 1000
-egp.k.som <- 700
+egp.k.som <- 1000
 egp.k.geo <- 250
 egp.max.knots.som <- som.dim^2
 egp.max.knots.geo <- egp.k.geo*10
