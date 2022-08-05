@@ -13,44 +13,39 @@ task_count <- as.integer(args[3])
 
 # n.threads <- 4
 # task_id <- 1
-# task_count <- 1
+# task_count <- 100
 
 path.base <- "../"
 ls.type <- "1000_4cov_nl"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
 path.ls.data <- paste0(path.ls, "data/")
-mod.type <- "egp_sam0.01_som50_k250"
+mod.type <- "egp_sam0.01_som10"
 path.mod <- paste0(path.base, "models/", ls.type, "/")
 if(!dir.exists(path.mod)) dir.create(path.mod, recursive = TRUE)
 
 file.par <- paste0(path.ls, "parameters.rds")
 
 sam.frac <- 0.01
-som.dim <- 50
+som.dim <- 10
 som.rlen <- 1000
-# som.eval <- TRUE
-egp.k.som <- 250
+egp.k.som <- som.dim^2
 egp.k.geo <- 250
-egp.max.knots.som <- max(egp.k.som*10, 2000)
-egp.max.knots.geo <- max(egp.k.geo*10, 2000)
+egp.max.knots.som <- som.dim^2
+egp.max.knots.geo <- egp.k.geo*10
 egp.approx <- TRUE
 egp.basis <- "gp"
 egp.select <- TRUE
 
 
 parameters <- readRDS(file.par)
-
-# egp.res <- readRDS("../results/1000_4cov_nl/egp_sam0.01_som50.rds")
-# comp.egp <- merge(egp.res$int$terms, egp.res$int$effects)
-# parameters <- parameters[id %in% comp.egp[term == "s(som_x,som_y)"][order(-edf)][1:10, id]]
+# parameters <- parameters[1:2]
 
 
 row.chunks <- chunk_seq(1, nrow(parameters), ceiling(nrow(parameters) / task_count))
 chunk <- row.chunks$from[task_id]:row.chunks$to[task_id]
 
 
-chunk <- 1:2
-
+# chunk <- 1
 for(i in chunk) {
 
   ta <- Sys.time()
@@ -111,6 +106,8 @@ for(i in chunk) {
   results.mod[["sample"]] <- ls.sam
   results.mod[["som"]] <- som.fit
 
+  egp.k.som <- min(nrow(unique(mapped[[1]])), egp.k.som)
+
   # if(som.eval) {
   #   quality <-
   #     evaluate_embedding(ls.sam[, .(z1, z2, z3, z4)],
@@ -132,9 +129,7 @@ for(i in chunk) {
   #                floor((nrow(ls.sam) * (0.25))))
   # }
 
-  egp.k.som <- min(nrow(unique(mapped)), egp.k.som)
-
-  if(egp.approx) {
+ if(egp.approx) {
     mod.egp <- bam(response ~
                    s(x, y, by = type, bs = egp.basis, k = egp.k.geo,
                      xt = list(max.knots = egp.max.knots.geo)) +
@@ -157,6 +152,8 @@ for(i in chunk) {
                    optimizer = "efs"
                   )
   }
+  # summary(mod.egp)
+  # AIC(mod.egp)
   # summary(mod.egp)
   # AIC(mod.egp)
 
@@ -244,7 +241,7 @@ for(i in chunk) {
   #                floor((nrow(ls.sam) * (0.25))))
   # }
 
-  if(egp.approx) {
+ if(egp.approx) {
     mod.egp <- bam(response.int ~
                    s(x, y, by = type, bs = egp.basis, k = egp.k.geo,
                      xt = list(max.knots = egp.max.knots.geo)) +
