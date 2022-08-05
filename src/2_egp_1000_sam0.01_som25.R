@@ -11,9 +11,9 @@ n.threads <- as.integer(args[1])
 task_id <- as.integer(args[2])
 task_count <- as.integer(args[3])
 
-n.threads <- 4
-task_id <- 1
-task_count <- 100
+# n.threads <- 4
+# task_id <- 1
+# task_count <- 100
 
 path.base <- "../"
 ls.type <- "1000_4cov_nl"
