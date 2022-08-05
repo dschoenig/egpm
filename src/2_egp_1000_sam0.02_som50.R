@@ -52,7 +52,6 @@ if(!overwrite) {
 }
 
 row.chunks <- chunk_seq(1, nrow(parameters), ceiling(nrow(parameters) / task_count))
-row.chunks <- lapply(row.chunks, \(x) x[1:5])
 chunk <- row.chunks$from[task_id]:row.chunks$to[task_id]
 
 
