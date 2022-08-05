@@ -25,7 +25,7 @@ if(!dir.exists(path.mod)) dir.create(path.mod, recursive = TRUE)
 
 file.par <- paste0(path.ls, "parameters.rds")
 
-sam.frac <- 0.01
+sam.frac <- 0.005
 som.dim <- 50
 som.rlen <- 1000
 egp.k.som <- 500

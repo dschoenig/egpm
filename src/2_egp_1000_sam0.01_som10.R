@@ -28,14 +28,14 @@ file.par <- paste0(path.ls, "parameters.rds")
 sam.frac <- 0.01
 som.dim <- 10
 som.rlen <- 1000
-egp.k.som <- som.dim^2
+egp.k.som <- 100
 egp.k.geo <- 250
 egp.max.knots.som <- som.dim^2
 egp.max.knots.geo <- egp.k.geo*10
 egp.approx <- TRUE
 egp.basis <- "gp"
 egp.select <- TRUE
-overwrite = TRUE
+overwrite <- TRUE
 
 
 parameters <- readRDS(file.par)

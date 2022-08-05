@@ -13,7 +13,7 @@ task_count <- as.integer(args[3])
 
 # n.threads <- 4
 # task_id <- 1
-# task_count <- 100
+# task_count <- 1
 
 path.base <- "../"
 ls.type <- "1000_4cov_nl"
@@ -28,7 +28,7 @@ file.par <- paste0(path.ls, "parameters.rds")
 sam.frac <- 0.01
 som.dim <- 25
 som.rlen <- 1000
-egp.k.som <- som.dim^2
+egp.k.som <- 250 
 egp.k.geo <- 250
 egp.max.knots.som <- som.dim^2
 egp.max.knots.geo <- egp.k.geo*10
@@ -55,7 +55,7 @@ row.chunks <- chunk_seq(1, nrow(parameters), ceiling(nrow(parameters) / task_cou
 chunk <- row.chunks$from[task_id]:row.chunks$to[task_id]
 
 
-# chunk <- 1
+chunk <- c(593, 680)
 for(i in chunk) {
 
   ta <- Sys.time()
