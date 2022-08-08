@@ -16,14 +16,22 @@ if(length(args) > 3) {
   chunks.bypass <- NULL
 }
 
-str(args)
-print(args)
-print(chunks.bypass)
-
 # n.threads <- 4
 # task_id <- 1
 # task_count <- 200
 # chunks.bypass <- c(12, 13)
+
+sam.frac <- 0.005
+som.dim <- 5
+som.rlen <- 100
+egp.k.som <- 10
+egp.k.geo <- 10
+egp.max.knots.som <- som.dim^2
+egp.max.knots.geo <- egp.k.geo*10
+egp.approx <- TRUE
+egp.basis <- "gp"
+egp.select <- TRUE
+overwrite <- TRUE
 
 path.base <- "../"
 ls.type <- "1000_4cov_nl"
@@ -34,19 +42,6 @@ path.mod <- paste0(path.base, "models/", ls.type, "/")
 if(!dir.exists(path.mod)) dir.create(path.mod, recursive = TRUE)
 
 file.par <- paste0(path.ls, "parameters.rds")
-
-sam.frac <- 0.005
-som.dim <- 50
-som.rlen <- 1000
-egp.k.som <- 500
-egp.k.geo <- 250
-egp.max.knots.som <- som.dim^2
-egp.max.knots.geo <- egp.k.geo*10
-egp.approx <- TRUE
-egp.basis <- "gp"
-egp.select <- TRUE
-overwrite <- TRUE
-
 
 parameters <- readRDS(file.par)
 # parameters <- parameters[1:2]
@@ -68,15 +63,12 @@ if(!is.null(chunks.bypass)) {
 }
 chunk <- row.chunks$from[task_id]:row.chunks$to[task_id]
 
-files.tmp <- tempfile(pattern = paste0(mod.type, "_", chunk, "_"),
-                      fileext = ".rds")
 files.mod <- paste0(path.mod, mod.type, "_",
                     stri_pad_left(parameters[chunk, id], 4, 0),
                     ".rds")
 
-
-
 # chunk <- 1
+results <- list()
 for(i in chunk) {
 
   ta <- Sys.time()
@@ -387,16 +379,13 @@ for(i in chunk) {
 
   # Export results
 
-  message("Saving results to temporary file …")
-
   results.mod[["estimates.int"]] <- list(gam = mod.egp,
                                          posterior = post,
                                          effects = eff.mar)
 
   rm(mod.egp, post, eff.mar)
 
-  file.create(files.tmp[i])
-  saveRDS(results.mod, files.tmp[i])
+  results[[i]] <- results.mod
 
   rm(results.mod) 
   
@@ -408,7 +397,6 @@ for(i in chunk) {
 
 message("Copying results to final destination …")
 
-for(i in seq_along(files.tmp)) {
-  system(paste("cp", files.tmp[i], files.mod[i]))
-  system(paste("rm", files.tmp[i]))
+for(i in seq_along(results)) {
+  saveRDS(results[[i]], files.mod[i])
 }
