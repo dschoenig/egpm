@@ -19,7 +19,7 @@ if(length(args) > 3) {
 # n.threads <- 4
 # task_id <- 1
 # task_count <- 200
-# chunks.bypass <- c(127, 128)
+# chunks.bypass <- c(12, 13)
 
 path.base <- "../"
 ls.type <- "1000_4cov_nl"
@@ -391,6 +391,7 @@ for(i in chunk) {
 
   rm(mod.egp, post, eff.mar)
 
+  file.create(files.tmp[i])
   saveRDS(results.mod, files.tmp[i])
 
   rm(results.mod) 
