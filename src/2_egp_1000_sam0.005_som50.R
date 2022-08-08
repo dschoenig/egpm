@@ -22,10 +22,10 @@ if(length(args) > 3) {
 # chunks.bypass <- c(12, 13)
 
 sam.frac <- 0.005
-som.dim <- 5
-som.rlen <- 100
-egp.k.som <- 10
-egp.k.geo <- 10
+som.dim <- 50
+som.rlen <- 1000
+egp.k.som <- 500
+egp.k.geo <- 250
 egp.max.knots.som <- som.dim^2
 egp.max.knots.geo <- egp.k.geo*10
 egp.approx <- TRUE
