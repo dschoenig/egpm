@@ -22,10 +22,17 @@ if(!dir.exists(path.mod)) dir.create(path.mod, recursive = TRUE)
 file.par <- paste0(path.ls, "parameters.rds")
 
 sam.frac <- 0.01
+overwrite <- TRUE
 
 parameters <- readRDS(file.par)
 # parameters <- parameters[1:2]
 
+files.tmp <- paste0(paste0(tempdir(), "/", mod.type, "_",
+                           stri_pad_left(parameters[, id], 4, 0)),
+                    ".rds")
+files.res <- paste0(paste0(path.mod, mod.type, "_",
+                           stri_pad_left(parameters[, id], 4, 0)),
+                    ".rds")
 
 for(i in 1:nrow(parameters)) {
 
@@ -41,10 +48,8 @@ for(i in 1:nrow(parameters)) {
     lapply(unlist)
   file.ls <- paste0(path.ls.data,
                     stri_pad_left(ls.par$id, 4, 0), ".rds")
-  file.mod <- paste0(path.mod, mod.type, "_", stri_pad_left(ls.par$id, 4, 0), ".rds")
- 
 
-  if(!file.exists(file.mod)) {
+  if(overwrite | !file.exists(files.res[i])) {
 
     ls <- readRDS(file.ls)$landscape
 
@@ -64,24 +69,77 @@ for(i in 1:nrow(parameters)) {
     mod.lm <- lm(response ~ type, data = ls.sam)
     mod.lmcov <- lm(response ~ type + z1 + z2 + z3 + z4, data = ls.sam)
 
-    matched.cem <- matchit(type ~ z1 + z2 + z3 + z4, method = "cem", data = ls.sam)
-    md.cem <- match.data(matched.cem)
-    mod.cem <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.cem)
+    matched.cem.st <- matchit(type ~ z1 + z2 + z3 + z4,
+                           method = "cem", cutpoints = "st",
+                           data = ls.sam)
+    md.cem.st <- match.data(matched.cem.st)
+    mod.cem.st <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights,
+                          data = md.cem.st)
+    rm(matched.cem.st, md.cem.st)
 
-    matched.nn.ps <-
-      matchit(type ~ z1 + z2 + z3 + z4, method = "nearest", distance = "glm", data = ls.sam)
-    md.nn.ps <- match.data(matched.nn.ps)
-    mod.nn.ps <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.nn.ps)
+    matched.cem.sc <- matchit(type ~ z1 + z2 + z3 + z4,
+                           method = "cem", cutpoints = "sc",
+                           data = ls.sam)
+    md.cem.sc <- match.data(matched.cem.sc)
+    mod.cem.sc <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights,
+                  data = md.cem.sc)
+    rm(matched.cem.sc, md.cem.sc)
+
+    matched.cem.fd <- matchit(type ~ z1 + z2 + z3 + z4,
+                           method = "cem", cutpoints = "fd",
+                           data = ls.sam)
+    md.cem.fd <- match.data(matched.cem.fd)
+    mod.cem.fd <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights,
+                     data = md.cem.fd)
+    rm(matched.cem.fd, md.cem.fd)
+
+    matched.nn.ps.nr <-
+      matchit(type ~ z1 + z2 + z3 + z4,
+              method = "nearest", distance = "glm", replace = FALSE,
+              data = ls.sam)
+    md.nn.ps.nr <- match.data(matched.nn.ps.nr)
+    mod.nn.ps.nr <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.nn.ps.nr)
+    rm(matched.nn.ps.nr, md.nn.ps.nr)
+
+    matched.nn.ps.re <-
+      matchit(type ~ z1 + z2 + z3 + z4,
+              method = "nearest", distance = "glm", replace = TRUE,
+              data = ls.sam)
+    md.nn.ps.re <- match.data(matched.nn.ps.re)
+    mod.nn.ps.re <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.nn.ps.re)
+    rm(matched.nn.ps.re, md.nn.ps.re)
+
+    matched.nn.mh.nr <-
+      matchit(type ~ z1 + z2 + z3 + z4, replace = FALSE,
+              method = "nearest", distance = "mahalanobis",
+              data = ls.sam)
+    md.nn.mh.nr <- match.data(matched.nn.mh.nr)
+    mod.nn.mh.nr <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.nn.mh.nr)
+    rm(matched.nn.mh.nr, md.nn.mh.nr)
+
+    matched.nn.mh.re <-
+      matchit(type ~ z1 + z2 + z3 + z4, replace = TRUE,
+              method = "nearest", distance = "mahalanobis",
+              data = ls.sam)
+    md.nn.mh.re <- match.data(matched.nn.mh.re)
+    mod.nn.mh.re <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.nn.mh.re)
+    rm(matched.nn.mh.re, md.nn.mh.re)
 
     results.mod[["estimates.noint"]] <- 
       list(lm = mod.lm,
            lmcov = mod.lmcov,
-           cem = mod.cem,
-           nn.ps = mod.nn.ps)
+           cem.st = mod.cem.st,
+           cem.sc = mod.cem.sc,
+           cem.fd = mod.cem.fd,
+           nn.ps.nr = mod.nn.ps.nr,
+           nn.ps.re = mod.nn.ps.re,
+           nn.mh.nr = mod.nn.mh.nr,
+           nn.mh.re = mod.nn.mh.re)
 
     rm(mod.lm, mod.lmcov,
-       matched.cem, md.cem, mod.cem,
-       matched.nn.ps, md.nn.ps, mod.nn.ps)
+       mod.cem.st, mod.cem.sc, mod.cem.fd,
+       mod.nn.ps.nr, mod.nn.ps.re,
+       mod.nn.mh.nr, mod.nn.mh.re)
 
 
     ## MODELS (LANDSCAPE WITH INTERACTIONS) ######################################
@@ -90,27 +148,80 @@ for(i in 1:nrow(parameters)) {
     mod.lm <- lm(response.int ~ type, data = ls.sam)
     mod.lmcov <- lm(response.int ~ type + z1 + z2 + z3 + z4, data = ls.sam)
 
-    matched.cem <- matchit(type ~ z1 + z2 + z3 + z4, method = "cem", data = ls.sam)
-    md.cem <- match.data(matched.cem)
-    mod.cem <- lm(response.int ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.cem)
+    matched.cem.st <- matchit(type ~ z1 + z2 + z3 + z4,
+                           method = "cem", cutpoints = "st",
+                           data = ls.sam)
+    md.cem.st <- match.data(matched.cem.st)
+    mod.cem.st <- lm(response.int ~ type + z1 + z2 + z3 + z4, weights = weights,
+                          data = md.cem.st)
+    rm(matched.cem.st, md.cem.st)
 
-    matched.nn.ps <-
-      matchit(type ~ z1 + z2 + z3 + z4, method = "nearest", distance = "glm", data = ls.sam)
-    md.nn.ps <- match.data(matched.nn.ps)
-    mod.nn.ps <- lm(response.int ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.nn.ps)
+    matched.cem.sc <- matchit(type ~ z1 + z2 + z3 + z4,
+                           method = "cem", cutpoints = "sc",
+                           data = ls.sam)
+    md.cem.sc <- match.data(matched.cem.sc)
+    mod.cem.sc <- lm(response.int ~ type + z1 + z2 + z3 + z4, weights = weights,
+                  data = md.cem.sc)
+    rm(matched.cem.sc, md.cem.sc)
+
+    matched.cem.fd <- matchit(type ~ z1 + z2 + z3 + z4,
+                           method = "cem", cutpoints = "fd",
+                           data = ls.sam)
+    md.cem.fd <- match.data(matched.cem.fd)
+    mod.cem.fd <- lm(response.int ~ type + z1 + z2 + z3 + z4, weights = weights,
+                     data = md.cem.fd)
+    rm(matched.cem.fd, md.cem.fd)
+
+    matched.nn.ps.nr <-
+      matchit(type ~ z1 + z2 + z3 + z4,
+              method = "nearest", distance = "glm", replace = FALSE,
+              data = ls.sam)
+    md.nn.ps.nr <- match.data(matched.nn.ps.nr)
+    mod.nn.ps.nr <- lm(response.int ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.nn.ps.nr)
+    rm(matched.nn.ps.nr, md.nn.ps.nr)
+
+    matched.nn.ps.re <-
+      matchit(type ~ z1 + z2 + z3 + z4,
+              method = "nearest", distance = "glm", replace = TRUE,
+              data = ls.sam)
+    md.nn.ps.re <- match.data(matched.nn.ps.re)
+    mod.nn.ps.re <- lm(response.int ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.nn.ps.re)
+    rm(matched.nn.ps.re, md.nn.ps.re)
+
+    matched.nn.mh.nr <-
+      matchit(type ~ z1 + z2 + z3 + z4, replace = FALSE,
+              method = "nearest", distance = "mahalanobis",
+              data = ls.sam)
+    md.nn.mh.nr <- match.data(matched.nn.mh.nr)
+    mod.nn.mh.nr <- lm(response.int ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.nn.mh.nr)
+    rm(matched.nn.mh.nr, md.nn.mh.nr)
+
+    matched.nn.mh.re <-
+      matchit(type ~ z1 + z2 + z3 + z4, replace = TRUE,
+              method = "nearest", distance = "mahalanobis",
+              data = ls.sam)
+    md.nn.mh.re <- match.data(matched.nn.mh.re)
+    mod.nn.mh.re <- lm(response.int ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.nn.mh.re)
+    rm(matched.nn.mh.re, md.nn.mh.re)
 
     results.mod[["estimates.int"]] <- 
       list(lm = mod.lm,
            lmcov = mod.lmcov,
-           cem = mod.cem,
-           nn.ps = mod.nn.ps)
+           cem.st = mod.cem.st,
+           cem.sc = mod.cem.sc,
+           cem.fd = mod.cem.fd,
+           nn.ps.nr = mod.nn.ps.nr,
+           nn.ps.re = mod.nn.ps.re,
+           nn.mh.nr = mod.nn.mh.nr,
+           nn.mh.re = mod.nn.mh.re)
 
     rm(mod.lm, mod.lmcov,
-       matched.cem, md.cem, mod.cem,
-       matched.nn.ps, md.nn.ps, mod.nn.ps)
+       mod.cem.st, mod.cem.sc, mod.cem.fd,
+       mod.nn.ps.nr, mod.nn.ps.re,
+       mod.nn.mh.nr, mod.nn.mh.re)
 
     # Export results
-    saveRDS(results.mod, file.mod)
+    saveRDS(results.mod, files.tmp[i])
 
     rm(ls, ls.sam)
     rm(results.mod)
@@ -123,3 +234,8 @@ for(i in 1:nrow(parameters)) {
 
 }
 
+message("Copying results to final destination …")
+
+for(i in seq_along(files.tmp)) {
+  file.copy(files.tmp[i], files.res[i], overwrite = TRUE)
+}
