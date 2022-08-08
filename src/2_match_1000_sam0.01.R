@@ -8,8 +8,13 @@ source("utilities_fcne.R")
 source("utilities.R")
 
 n.threads <- as.integer(args[1])
-
-# n.threads <- 4
+task_id <- as.integer(args[2])
+task_count <- as.integer(args[3])
+if(length(args) > 3) {
+  chunks.bypass <- as.integer(args[4:length(args)])
+} else {
+  chunks.bypass <- NULL
+}
 
 path.base <- "../"
 ls.type <- "1000_4cov_nl"
@@ -26,20 +31,32 @@ overwrite <- TRUE
 
 parameters <- readRDS(file.par)
 # parameters <- parameters[1:2]
+ls.total <- nrow(parameters)
+
+row.chunks <- chunk_seq(1, nrow(parameters), ceiling(nrow(parameters) / task_count))
+if(!is.null(chunks.bypass)) {
+  row.chunks <- lapply(row.chunks, \(x) x[chunks.bypass])
+}
+chunk <- row.chunks$from[task_id]:row.chunks$to[task_id]
+
 
 files.tmp <- paste0(paste0(tempdir(), "/", mod.type, "_",
-                           stri_pad_left(parameters[, id], 4, 0)),
+                           stri_pad_left(parameters[chunk, id], 4, 0)),
                     ".rds")
 files.res <- paste0(paste0(path.mod, mod.type, "_",
-                           stri_pad_left(parameters[, id], 4, 0)),
+                           stri_pad_left(parameters[chunk, id], 4, 0)),
                     ".rds")
 
-for(i in 1:nrow(parameters)) {
+for(i in chunk) {
 
   ta <- Sys.time()
   
-  message(paste0("Fitting matching models for landscape ", parameters[i, id],
-                 " / ", parameters[, max(id)], " …"))
+  i.step <- which(chunk == i)
+  
+  message(paste0("Fitting EGP models for landscape ", parameters[i, id],
+                 "/", ls.total, " (",
+                 i.step, "/", length(chunk),
+                 " in chunk)", " …"))
 
   results.mod <- list()
 
@@ -49,7 +66,7 @@ for(i in 1:nrow(parameters)) {
   file.ls <- paste0(path.ls.data,
                     stri_pad_left(ls.par$id, 4, 0), ".rds")
 
-  if(overwrite | !file.exists(files.res[i])) {
+  if(overwrite | !file.exists(files.res[i.step])) {
 
     ls <- readRDS(file.ls)$landscape
 
@@ -221,7 +238,11 @@ for(i in 1:nrow(parameters)) {
        mod.nn.mh.nr, mod.nn.mh.re)
 
     # Export results
-    saveRDS(results.mod, files.tmp[i])
+
+    message("Copying results to final destination …")
+    saveRDS(results.mod, files.tmp[i.step])
+    file.copy(files.tmp[i.step], files.res[i.step], overwrite = TRUE)
+    file.remove(files.tmp[i.step])
 
     rm(ls, ls.sam)
     rm(results.mod)
@@ -232,10 +253,4 @@ for(i in 1:nrow(parameters)) {
   te <- tb-ta
   print(te)
 
-}
-
-message("Copying results to final destination …")
-
-for(i in seq_along(files.tmp)) {
-  file.copy(files.tmp[i], files.res[i], overwrite = TRUE)
 }

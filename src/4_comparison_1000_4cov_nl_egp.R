@@ -24,25 +24,25 @@ path.results <- paste0(path.base, "results/", ls.type, "/")
 # files.res <- paste0(path.results, list.files(path.results, pattern = mod.type))
 # som.sizes <- c(10, 100, 25, "50_200", "50_2500", "50_500")
 
-effects <- list()
+# effects <- list()
 
-for(i in seq_along(files.res)){
-  eff.egp <- readRDS(files.res[i])
-  effects[[i]] <- 
-    rbind(eff.egp$noint$effects[, .(id, interactions = FALSE, method = "egp", som = som.sizes[i],
-                                    mean, q2.5, q97.5)],
-          eff.egp$int$effects[, .(id, interactions = TRUE, method = "egp", som = som.sizes[i], 
-                                  mean, q2.5, q97.5)])
-}
+# for(i in seq_along(files.res)){
+#   eff.egp <- readRDS(files.res[i])
+#   effects[[i]] <- 
+#     rbind(eff.egp$noint$effects[, .(id, interactions = FALSE, method = "egp", som = som.sizes[i],
+#                                     mean, q2.5, q97.5)],
+#           eff.egp$int$effects[, .(id, interactions = TRUE, method = "egp", som = som.sizes[i], 
+#                                   mean, q2.5, q97.5)])
+# }
 
-effects <- rbindlist(effects)
-effects[, som := factor(som)]
+# effects <- rbindlist(effects)
+# effects[, som := factor(som)]
 
 
 
-files.res <- paste0(path.results, "egp_sam0.0", c("1", "2"), c("_som50.rds"))
-sam.sizes <- c(0.01, 0.02)
-som.sizes <- c(50, 50)
+files.res <- paste0(path.results, "egp_sam0.0", c("05", "1", "2"), c("_som50.rds"))
+sam.sizes <- c(0.005, 0.01, 0.02)
+som.sizes <- c(50, 50, 50)
 
 effects <- list()
 
