@@ -64,8 +64,7 @@ if(!is.null(chunks.bypass)) {
 }
 chunk <- row.chunks$from[task_id]:row.chunks$to[task_id]
 
-files.tmp <- tempfile(pattern = paste0(mod.type, "_", chunk, "_"),
-                      fileext = ".rds")
+files.tmp <- tempfile(pattern = paste0(chunk, "_"), fileext = ".rds")
 files.mod <- paste0(path.mod, mod.type, "_",
                     stri_pad_left(parameters[chunk, id], 4, 0),
                     ".rds")

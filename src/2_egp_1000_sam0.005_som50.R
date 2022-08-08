@@ -16,6 +16,10 @@ if(length(args) > 3) {
   chunks.bypass <- NULL
 }
 
+str(args)
+print(args)
+print(chunks.bypass)
+
 # n.threads <- 4
 # task_id <- 1
 # task_count <- 200
