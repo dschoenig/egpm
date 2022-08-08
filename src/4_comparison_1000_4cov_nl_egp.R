@@ -22,9 +22,11 @@ path.ls.data <- paste0(path.ls, "data/")
 path.results <- paste0(path.base, "results/", ls.type, "/")
 
 files.res <- paste0(path.results, list.files(path.results, pattern = mod.type))
-som.sizes <- c(10, 25, 50)
+som.sizes <- c(10, 100, 25, "50_200", "50_2500", "50_500")
 
 effects <- list()
+
+
 
 for(i in seq_along(files.res)){
   eff.egp <- readRDS(files.res[i])
@@ -38,9 +40,12 @@ for(i in seq_along(files.res)){
 effects <- rbindlist(effects)
 effects[, som := factor(som)]
 
-ggplot(effects[interactions == TRUE]) +
+
+effects[interactions == TRUE, mean(mean), som]
+
+ggplot(effects[interactions == FALSE]) +
 # geom_violin(aes(x = method, y = mean))
-stat_halfeye(aes(y = som, x = mean, fill_ramp = stat(cut_cdf_qi(cdf))),
+stat_halfeye(aes(y = som, x = abs(mean -1), fill_ramp = stat(cut_cdf_qi(cdf))),
              alpha = 0.8,
              point_interval = mean_qi,
              n = 1001) +

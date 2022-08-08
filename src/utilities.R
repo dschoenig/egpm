@@ -1237,8 +1237,9 @@ assign_bl_som <- function(data,
     data |>
     merge(data.bmu.bl[, .(id, som_bmu.bl)], all = TRUE, sort = FALSE) |>
     merge(data.bmu.bl.mult[, .(id, som_bmu.bl.mult)], all = TRUE, sort = FALSE)
+  data.bmu[, som_bmu.bl.mult := as.list(som_bmu.bl.mult)]
   data.bmu[, `:=`(som_bmu.bl = fifelse(unlist(lapply(som_bmu.bl, is.null)),
-                                       as.list(som_bmu.bl.mult), som_bmu.bl))]
+                                       som_bmu.bl.mult, som_bmu.bl))]
   # Weights for each BMU
   id.bl <-
     data.bmu[,

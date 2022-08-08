@@ -10,10 +10,16 @@ source("utilities.R")
 n.threads <- as.integer(args[1])
 task_id <- as.integer(args[2])
 task_count <- as.integer(args[3])
+if(length(args) > 3) {
+  chunks.bypass <- as.integer(args[4:length(args)])
+} else {
+  chunks.bypass <- NULL
+}
 
 # n.threads <- 4
 # task_id <- 1
 # task_count <- 200
+# chunks.bypass <- c(127, 128)
 
 path.base <- "../"
 ls.type <- "1000_4cov_nl"
@@ -40,6 +46,7 @@ overwrite <- TRUE
 
 parameters <- readRDS(file.par)
 # parameters <- parameters[1:2]
+ls.total <- nrow(parameters)
 
 if(!overwrite) {
   files <- list.files(path.mod, pattern = mod.type)
@@ -52,8 +59,16 @@ if(!overwrite) {
 }
 
 row.chunks <- chunk_seq(1, nrow(parameters), ceiling(nrow(parameters) / task_count))
+if(!is.null(chunks.bypass)) {
+  row.chunks <- lapply(row.chunks, \(x) x[chunks.bypass])
+}
 chunk <- row.chunks$from[task_id]:row.chunks$to[task_id]
 
+files.tmp <- tempfile(pattern = paste0(mod.type, "_", chunk, "_"),
+                      fileext = ".rds")
+files.mod <- paste0(path.mod, mod.type, "_",
+                    stri_pad_left(parameters[chunk, id], 4, 0),
+                    ".rds")
 
 
 
@@ -63,7 +78,9 @@ for(i in chunk) {
   ta <- Sys.time()
   
   message(paste0("Fitting EGP models for landscape ", parameters[i, id],
-                 " / ", parameters[, max(id)], " …"))
+                 "/", ls.total, " (",
+                 which(chunk == i), "/", length(chunk),
+                 " in chunk)", " …"))
 
   results.mod <- list()
 
@@ -81,6 +98,8 @@ for(i in chunk) {
   ls.sam <- na.omit(ls[sam,])
 
   ## SOM #######################################################################
+
+  message(paste0("Fitting SOM …"))
 
   grid <- somgrid(xdim = som.dim, ydim = som.dim, 
                   topo = "rectangular", 
@@ -142,6 +161,9 @@ for(i in chunk) {
   #                floor((nrow(ls.sam) * (0.25))))
   # }
 
+
+  message("Fitting GAM (response without interactions) …")
+
  if(egp.approx) {
     mod.egp <- bam(response ~
                    s(x, y, by = type, bs = egp.basis, k = egp.k.geo,
@@ -173,6 +195,8 @@ for(i in chunk) {
   
   # Estimate marginal effect
 
+  message("Estimating marginal effect …")
+
   data.bl <- assign_bl_som(ls.sam,
                            som = som.fit,
                            cov.col = c("z1", "z2", "z3", "z4"),
@@ -188,7 +212,7 @@ for(i in chunk) {
                        newdata = ls.sam,
                        id.col = "id",
                        type = "response",
-                       progress = TRUE)
+                       progress = FALSE)
 
   groups.type <-
       ls.sam |>
@@ -199,6 +223,7 @@ for(i in chunk) {
   yhat.type <- aggregate_variables(lp,
                       agg.fun = mean,
                       ids = id.list.type,
+                      progress = FALSE
                       )
 
   groups.som <-
@@ -209,7 +234,8 @@ for(i in chunk) {
   yhat.som <- aggregate_variables(lp,
                       agg.fun = mean,
                       ids = id.list.som,
-                      agg.size = 1e5
+                      agg.size = 1e5,
+                      progress = FALSE
                       )
 
   ids.units <- data.bl[,
@@ -254,6 +280,8 @@ for(i in chunk) {
   #                floor((nrow(ls.sam) * (0.25))))
   # }
 
+  message("Fitting GAM (response with interactions) …")
+
  if(egp.approx) {
     mod.egp <- bam(response.int ~
                    s(x, y, by = type, bs = egp.basis, k = egp.k.geo,
@@ -283,6 +311,8 @@ for(i in chunk) {
   
   # Estimate marginal effect
 
+  message("Estimating marginal effect …")
+
   data.bl <- assign_bl_som(ls.sam,
                            som = som.fit,
                            cov.col = c("z1", "z2", "z3", "z4"),
@@ -298,7 +328,7 @@ for(i in chunk) {
                        newdata = ls.sam,
                        id.col = "id",
                        type = "response",
-                       progress = TRUE)
+                       progress = FALSE)
 
   groups.type <-
       ls.sam |>
@@ -309,6 +339,7 @@ for(i in chunk) {
   yhat.type <- aggregate_variables(lp,
                       agg.fun = mean,
                       ids = id.list.type,
+                      progress = FALSE
                       )
 
   groups.som <-
@@ -319,7 +350,8 @@ for(i in chunk) {
   yhat.som <- aggregate_variables(lp,
                       agg.fun = mean,
                       ids = id.list.som,
-                      agg.size = 1e5
+                      agg.size = 1e5,
+                      progress = FALSE
                       )
 
   ids.units <- data.bl[,
@@ -351,13 +383,15 @@ for(i in chunk) {
 
   # Export results
 
+  message("Saving results to temporary file …")
+
   results.mod[["estimates.int"]] <- list(gam = mod.egp,
                                          posterior = post,
                                          effects = eff.mar)
 
   rm(mod.egp, post, eff.mar)
 
-  saveRDS(results.mod, file.mod)
+  saveRDS(results.mod, files.tmp[i])
 
   rm(results.mod) 
   
@@ -367,3 +401,9 @@ for(i in chunk) {
 
 }
 
+message("Copying results to final destination …")
+
+for(i in seq_along(files.tmp)) {
+  system(paste("cp", files.tmp[i], files.mod[i]))
+  system(paste("rm", files.tmp[i]))
+}
