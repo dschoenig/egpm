@@ -14,19 +14,17 @@ source("utilities.R")
 # mod.type <- args[2]
 
 ls.type <- "1000_4cov_nl"
-mod.type <- "egp_sam0.01"
+mod.type <- "egp_sam0.0"
 
 path.base <- "../"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
 path.ls.data <- paste0(path.ls, "data/")
 path.results <- paste0(path.base, "results/", ls.type, "/")
 
-files.res <- paste0(path.results, list.files(path.results, pattern = mod.type))
-som.sizes <- c(10, 100, 25, "50_200", "50_2500", "50_500")
+# files.res <- paste0(path.results, list.files(path.results, pattern = mod.type))
+# som.sizes <- c(10, 100, 25, "50_200", "50_2500", "50_500")
 
 effects <- list()
-
-
 
 for(i in seq_along(files.res)){
   eff.egp <- readRDS(files.res[i])
@@ -41,11 +39,33 @@ effects <- rbindlist(effects)
 effects[, som := factor(som)]
 
 
-effects[interactions == TRUE, mean(mean), som]
+
+files.res <- paste0(path.results, "egp_sam0.0", c("1", "2"), c("_som50.rds"))
+sam.sizes <- c(0.01, 0.02)
+som.sizes <- c(50, 50)
+
+effects <- list()
+
+for(i in seq_along(files.res)){
+  eff.egp <- readRDS(files.res[i])
+  effects[[i]] <- 
+    rbind(eff.egp$noint$effects[, .(id, interactions = FALSE, method = "egp",
+                                    sam = sam.sizes[i], som = som.sizes[i],
+                                    mean, q2.5, q97.5)],
+          eff.egp$int$effects[, .(id, interactions = TRUE, method = "egp",
+                                  sam = sam.sizes[i], som = som.sizes[i],
+                                  mean, q2.5, q97.5)])
+}
+
+effects <- rbindlist(effects)
+effects[, `:=`(som = factor(som),
+               sam = factor(sam))]
+
+effects[interactions == TRUE, mean(mean), c("som", "sam")]
 
 ggplot(effects[interactions == FALSE]) +
 # geom_violin(aes(x = method, y = mean))
-stat_halfeye(aes(y = som, x = abs(mean -1), fill_ramp = stat(cut_cdf_qi(cdf))),
+stat_halfeye(aes(y = sam, x = mean, fill_ramp = stat(cut_cdf_qi(cdf))),
              alpha = 0.8,
              point_interval = mean_qi,
              n = 1001) +

@@ -63,19 +63,25 @@ if(!is.null(chunks.bypass)) {
 }
 chunk <- row.chunks$from[task_id]:row.chunks$to[task_id]
 
-files.mod <- paste0(path.mod, mod.type, "_",
-                    stri_pad_left(parameters[chunk, id], 4, 0),
+
+files.tmp <- paste0(paste0(tempdir(), "/", mod.type, "_",
+                           stri_pad_left(parameters[chunk, id], 4, 0)),
+                    ".rds")
+files.res <- paste0(paste0(path.mod, mod.type, "_",
+                           stri_pad_left(parameters[chunk, id], 4, 0)),
                     ".rds")
 
 # chunk <- 1
-results <- list()
+# results <- list()
 for(i in chunk) {
 
   ta <- Sys.time()
+
+  i.step <- which(chunk == i)
   
   message(paste0("Fitting EGP models for landscape ", parameters[i, id],
                  "/", ls.total, " (",
-                 which(chunk == i), "/", length(chunk),
+                 i.step, "/", length(chunk),
                  " in chunk)", " …"))
 
   results.mod <- list()
@@ -385,7 +391,8 @@ for(i in chunk) {
 
   rm(mod.egp, post, eff.mar)
 
-  results[[i]] <- results.mod
+  # results[[i]] <- results.mod
+  saveRDS(object = results.mod, file = files.tmp[i.step])
 
   rm(results.mod) 
   
@@ -397,6 +404,6 @@ for(i in chunk) {
 
 message("Copying results to final destination …")
 
-for(i in seq_along(results)) {
-  saveRDS(results[[i]], files.mod[i])
+for(i in seq_along(files.tmp)) {
+  file.copy(files.tmp[i], files.res[i], overwrite = TRUE)
 }
