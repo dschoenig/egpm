@@ -21,7 +21,7 @@ if(length(args) > 3) {
 # task_count <- 200
 # chunks.bypass <- c(12, 13)
 
-sam.frac <- 0.005
+sam.frac <- 0.01
 som.dim <- 50
 som.rlen <- 1000
 egp.k.som <- 500
@@ -37,7 +37,7 @@ path.base <- "../"
 ls.type <- "1000_4cov_nl"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
 path.ls.data <- paste0(path.ls, "data/")
-mod.type <- "egp_sam0.005_som50"
+mod.type <- "egp_sam0.01_som50"
 path.mod <- paste0(path.base, "models/", ls.type, "/")
 if(!dir.exists(path.mod)) dir.create(path.mod, recursive = TRUE)
 
@@ -78,136 +78,26 @@ for(i in chunk) {
   ta <- Sys.time()
 
   i.step <- which(chunk == i)
-  
+
   message(paste0("Fitting EGP models for landscape ", parameters[i, id],
                  "/", ls.total, " (",
                  i.step, "/", length(chunk),
                  " in chunk)", " …"))
 
-  results.mod <- list()
+  results.mod <- readRDS(file = files.res[i.step])
+  ls.sam <- results.mod$sample
+  som.fit <- results.mod$som
 
-  ls.par <- 
-    as.list(parameters[i,]) |>
-    lapply(unlist)
-  file.ls <- paste0(path.ls.data,
-                    stri_pad_left(ls.par$id, 4, 0), ".rds")
-  file.mod <- paste0(path.mod, mod.type, "_", stri_pad_left(ls.par$id, 4, 0), ".rds")
-  
-  ls <- readRDS(file.ls)$landscape
-
-  set.seed(ls.par$seed) 
-  sam <- sample(1:nrow(ls), round(sam.frac * nrow(ls)))
-  ls.sam <- na.omit(ls[sam,])
-
-  ## SOM #######################################################################
-
-  message(paste0("Fitting SOM …"))
-
-  grid <- somgrid(xdim = som.dim, ydim = som.dim, 
-                  topo = "rectangular", 
-                  neighbourhood.fct = "gaussian")
-  cov.z <- scale(ls.sam[, .(z1, z2, z3, z4)],
-                 center = TRUE, scale = TRUE)
-
-  som.fit <- som(cov.z,
-                 grid = grid, 
-                 rlen = som.rlen,
-                 radius = som.dim,
-                 init = init_som(na.omit(cov.z), som.dim, som.dim),
-                 mode = "pbatch", 
-                 cores = n.threads,
-                 normalizeDataLayers = FALSE)
-  som.fit$scale <- list(mean = attr(cov.z, "scaled:center"),
-                        sd = attr(cov.z, "scaled:scale"))
-  # file.som <- paste0(path.mod, "egp_sam0.01_som50_", stri_pad_left(ls.par$id, 4, 0), ".rds")
-  # som.fit <- readRDS(file.som)$som
-
-  mapped <- 
-      ls.sam[, .(z1, z2, z3, z4)] |>
-      scale_data_som(som = som.fit) |>
-      embed_som(som = som.fit,
-                grid.coord = TRUE)
-  ls.sam[,
-           `:=`(som_bmu = mapped$bmu[,1],
-                som_x = mapped$grid.coordinates$bmu.1[,"x"],
-                som_y = mapped$grid.coordinates$bmu.1[,"y"])
-           ]
-
-  ls.sam[, id := cell]
-  ls.sam <- ls.sam[, !"cell"]
-  setcolorder(ls.sam, "id")
-  
-  results.mod[["sample"]] <- ls.sam
-  results.mod[["som"]] <- som.fit
-
-  egp.k.som <- min(nrow(unique(mapped[[1]])), egp.k.som)
-
-  # if(som.eval) {
-  #   quality <-
-  #     evaluate_embedding(ls.sam[, .(z1, z2, z3, z4)],
-  #                        mapped = as.matrix(ls.sam[, .(som_x, som_y)]),
-  #                        k.max = egp.k,
-  #                        combined = FALSE)
-  #   som.quality[[i]] <-
-  #     data.table(id = parameters[i, id],
-  #                rec = mean(quality$dev.expl^-1)^-1,
-  #                ve = variance_explained(som.fit),
-  #                te = topological_error(som.fit))
-  # }
-
-
-  ## EGP (LANDSCAPE WITHOUT INTERACTIONS) ######################################
-
-  # if(is.null(egp.k)) {
-  #   egp.k <- min(nrow(unique(ls.sam[, .(som_x, som_y)]) - 1),
-  #                floor((nrow(ls.sam) * (0.25))))
-  # }
-
-
-  message("Fitting GAM (response without interactions) …")
-
- if(egp.approx) {
-    mod.egp <- bam(response ~
-                   s(x, y, by = type, bs = egp.basis, k = egp.k.geo,
-                     xt = list(max.knots = egp.max.knots.geo)) +
-                   s(som_x, som_y, bs = egp.basis, k = egp.k.som,
-                     xt = list(max.knots = egp.max.knots.som)),
-                   data = ls.sam,
-                   select = TRUE,
-                   discrete = TRUE,
-                   nthreads = n.threads
-                   )
-  } else {
-    mod.egp <- gam(response ~
-                   s(x, y, by = type, bs = egp.basis, k = egp.k.geo,
-                     xt = list(max.knots = egp.max.knots.geo)) +
-                   s(som_x, som_y, bs = egp.basis, k = egp.k.som,
-                     xt = list(max.knots = egp.max.knots.som)),
-                   data = ls.sam,
-                   select = egp.select,
-                   method= "REML",
-                   optimizer = "efs"
-                  )
-  }
-  # summary(mod.egp)
-  # AIC(mod.egp)
-  # summary(mod.egp)
-  # AIC(mod.egp)
-
-  
-  # Estimate marginal effect
 
   message("Estimating marginal effect …")
+
+  mod.egp <- results.mod$estimates.noint$gam
+  post <- results.mod$estimates.noint$post
 
   data.bl <- assign_bl_som(ls.sam,
                            som = som.fit,
                            cov.col = c("z1", "z2", "z3", "z4"),
                            id.col = "id")
-
-  post <- rmvn(1000, coef(mod.egp), vcov(mod.egp, unconditional = TRUE))
-  colnames(post) <- names(coef(mod.egp))
-  post <- as_draws_matrix(post)
-
   lp <-
     evaluate_posterior(model = mod.egp,
                        posterior = post,
@@ -268,62 +158,20 @@ for(i in chunk) {
 
   # Export results
 
-  results.mod[["estimates.noint"]] <- list(gam = mod.egp,
-                                           posterior = post,
-                                           effects = eff.mar)
+  results.mod$estimates.noint$effects <- eff.mar
 
   rm(mod.egp, post, eff.mar)
 
 
-  ## EGP (LANDSCAPE WITH INTERACTIONS) #########################################
-
-  # if(is.null(egp.k)) {
-  #   egp.k <- min(nrow(unique(ls.sam[, .(som_x, som_y)]) - 1),
-  #                floor((nrow(ls.sam) * (0.25))))
-  # }
-
-  message("Fitting GAM (response with interactions) …")
-
- if(egp.approx) {
-    mod.egp <- bam(response.int ~
-                   s(x, y, by = type, bs = egp.basis, k = egp.k.geo,
-                     xt = list(max.knots = egp.max.knots.geo)) +
-                   s(som_x, som_y, bs = egp.basis, k = egp.k.som,
-                     xt = list(max.knots = egp.max.knots.som)),
-                   data = ls.sam,
-                   select = TRUE,
-                   discrete = TRUE,
-                   nthreads = n.threads
-                   )
-  } else {
-    mod.egp <- gam(response.int ~
-                   s(x, y, by = type, bs = egp.basis, k = egp.k.geo,
-                     xt = list(max.knots = egp.max.knots.geo)) +
-                   s(som_x, som_y, bs = egp.basis, k = egp.k.som,
-                     xt = list(max.knots = egp.max.knots.som)),
-                   data = ls.sam,
-                   select = egp.select,
-                   method= "REML",
-                   optimizer = "efs"
-                  )
-  }
-  # summary(mod.egp)
-  # AIC(mod.egp)
-
-  
-  # Estimate marginal effect
-
   message("Estimating marginal effect …")
+
+  mod.egp <- results.mod$estimates.int$gam
+  post <- results.mod$estimates.int$post
 
   data.bl <- assign_bl_som(ls.sam,
                            som = som.fit,
                            cov.col = c("z1", "z2", "z3", "z4"),
                            id.col = "id")
-
-  post <- rmvn(1000, coef(mod.egp), vcov(mod.egp, unconditional = TRUE))
-  colnames(post) <- names(coef(mod.egp))
-  post <- as_draws_matrix(post)
-
   lp <-
     evaluate_posterior(model = mod.egp,
                        posterior = post,
@@ -382,12 +230,9 @@ for(i in chunk) {
 
   eff.mar <- arc(yhat.type, yhat.bl.type)
 
-
   # Export results
 
-  results.mod[["estimates.int"]] <- list(gam = mod.egp,
-                                         posterior = post,
-                                         effects = eff.mar)
+  results.mod$estimates.int$effects <- eff.mar
 
   rm(mod.egp, post, eff.mar)
 

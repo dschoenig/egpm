@@ -27,7 +27,7 @@ if(!dir.exists(path.mod)) dir.create(path.mod, recursive = TRUE)
 file.par <- paste0(path.ls, "parameters.rds")
 
 sam.frac <- 0.01
-overwrite <- TRUE
+overwrite <- FALSE
 
 parameters <- readRDS(file.par)
 # parameters <- parameters[1:2]
@@ -53,7 +53,7 @@ for(i in chunk) {
   
   i.step <- which(chunk == i)
   
-  message(paste0("Fitting EGP models for landscape ", parameters[i, id],
+  message(paste0("Fitting matching models for landscape ", parameters[i, id],
                  "/", ls.total, " (",
                  i.step, "/", length(chunk),
                  " in chunk)", " …"))
