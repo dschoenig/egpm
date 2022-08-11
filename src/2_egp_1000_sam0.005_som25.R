@@ -21,10 +21,10 @@ if(length(args) > 3) {
 # task_count <- 200
 # chunks.bypass <- c(12, 13)
 
-sam.frac <- 0.02
-som.dim <- 50
+sam.frac <- 0.005
+som.dim <- 25
 som.rlen <- 1000
-egp.k.som <- 500
+egp.k.som <- 250
 egp.k.geo <- 250
 egp.max.knots.som <- som.dim^2
 egp.max.knots.geo <- egp.k.geo*10
@@ -37,7 +37,7 @@ path.base <- "../"
 ls.type <- "1000_4cov_nl"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
 path.ls.data <- paste0(path.ls, "data/")
-mod.type <- "egp_sam0.02_som50"
+mod.type <- "egp_sam0.005_som25"
 path.mod <- paste0(path.base, "models/", ls.type, "/")
 if(!dir.exists(path.mod)) dir.create(path.mod, recursive = TRUE)
 

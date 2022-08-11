@@ -8,5 +8,5 @@
 
 module load StdEnv/2020 gcc/9.3.0 gdal/3.4.3 geos/3.10.2 python/3.10 udunits/2.2.28 r/4.2.1
 
-Rscript 3_effects_egp.R 1000_4cov_nl egp_sam0.005_som50
+Rscript 3_effects_egp.R 1000_4cov_nl egp_sam0.02_som25
 
