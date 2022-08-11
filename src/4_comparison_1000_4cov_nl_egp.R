@@ -44,6 +44,11 @@ files.res <- paste0(path.results, "egp_sam0.0", c("05", "1", "2"), c("_som50.rds
 sam.sizes <- c(0.005, 0.01, 0.02)
 som.sizes <- c(50, 50, 50)
 
+files.res <- paste0(path.results, "egp_sam0.01_som", c("10", "50", "100"), ".rds")
+sam.sizes <- c(0.01, 0.01, 0.01)
+som.sizes <- c(10, 50, 100)
+
+
 effects <- list()
 
 for(i in seq_along(files.res)){
@@ -65,7 +70,7 @@ effects[interactions == TRUE, mean(mean), c("som", "sam")]
 
 ggplot(effects[interactions == FALSE]) +
 # geom_violin(aes(x = method, y = mean))
-stat_halfeye(aes(y = sam, x = mean, fill_ramp = stat(cut_cdf_qi(cdf))),
+stat_halfeye(aes(y = som, x = mean, fill_ramp = stat(cut_cdf_qi(cdf))),
              alpha = 0.8,
              point_interval = mean_qi,
              n = 1001) +
