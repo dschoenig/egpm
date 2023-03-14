@@ -5,6 +5,7 @@ library(RandomFieldsUtils)
 library(raster)
 library(sf)
 library(stars)
+library(lwgeom)
 library(spdep)
 library(igraph)
 library(data.table)
@@ -14,6 +15,9 @@ library(stringi)
 library(ggplot2)
 library(patchwork)
 library(kohonen)
+library(GA)
+library(memoise)
+library(Matrix)
 
 RFoptions(install="no")
 
@@ -59,11 +63,35 @@ scale_int <- function(x, ...) {
 scale_int.stars <- function(x, int = c(0, 1)) {
   if(!is.null(int)) {
     n.att <- length(x)
+    # For loop is *much* faster than merge, st_apply, split
     for(i in 1:n.att) {
       min.att <- min(x[[i]], na.rm = TRUE)
       max.att <- max(x[[i]], na.rm = TRUE)
       x[[i]] <- int[1] + (int[2] - int[1]) * (x[[i]] - min.att) / (max.att - min.att)
     }
+  }
+  return(x)
+}
+
+
+scale_int.numeric <- function(x, int = c(0, 1)) {
+  if(!is.null(int)) {
+      min.x <- min(x, na.rm = TRUE)
+      max.x <- max(x, na.rm = TRUE)
+      y <- int[1] + (int[2] - int[1]) * (x - min.x) / (max.x - min.x)
+  }
+  return(y)
+}
+
+
+scale.stars <- function(x, center = TRUE, scale = TRUE) {
+  if(!is.null(int)) {
+    x.d <- as.data.table(as.data.frame(x))
+    att <- names(x)
+    x <-
+      x.d[, (att) := lapply(.SD, \(x) scale(x, center = center, scale = scale)),
+          .SDcols = att] |>
+      st_as_stars()
   }
   return(x)
 }
@@ -147,6 +175,58 @@ reset_dim.stars <- function(x, y = NULL, ...) {
 }
 
 
+inverse <- function(x, ...) {
+  UseMethod("inverse", x)
+}
+
+
+inverse.stars <- function(x, attributes = NULL) {
+  if(is.null(attributes)) {
+    inv.att <- 1:length(x)
+  } else {
+    if(is.logical(attributes)) {
+      inv.att <- which(attributes)
+    }
+    if(is.character(attributes)) {
+      inv.att <- which(names(x) %in% attributes)
+    }
+  }
+  for(i in inv.att) {
+    x[[i]] <- x[[i]] * -1
+  }
+  return(x)
+}
+
+
+score <- function(x, ...) {
+  UseMethod("score", x)
+}
+
+score.stars <- function(x,
+                        type = "euclidean") {
+  att <- names(x)
+  x.d <- as.data.table(as.data.frame(x))
+  att.mat <- as.matrix(x.d[, ..att])
+  att.min <- apply(att.mat, 2, min)
+  if(type == "qss")
+    x.d[, score := apply(apply(att.mat, 2, \(x) ecdf(x)(x)),
+                         1,  \(x) sum(x^2))]
+  if(type == "qprod")
+    x.d[, score := apply(apply(att.mat, 2, \(x) ecdf(x)(x)),
+                         1, \(x) prod(x)^(1/length(att)))]
+  if(type == "mahalanobis")
+    x.d[, score := mahalanobis(att.mat, center = att.min, cov = cov(att.mat))]
+  if(type == "sumofsquares")
+    x.d[, score := apply(att.mat, 1, \(x) sum((x - att.min)^2))]
+  if(type == "euclidean")
+    x.d[, score := apply(att.mat, 1, \(x) sqrt(sum((x - att.min)^2)))]
+  if(type == "prod")
+    x.d[, score := apply(att.mat, 1, \(x) prod(x - att.min))]
+  x.s <- st_as_stars(x.d[, -..att])
+  return(x.s)
+}
+
+
 limit_polygon <- function(x.dim,
                           y.dim) {
   limit <-
@@ -161,6 +241,267 @@ limit_polygon <- function(x.dim,
     st_sfc()
   return(limit)
 }
+
+resize_polygon <- function(x,
+                           limit,
+                           dist,
+                             ...) {
+  st_agr(x) <- "constant"
+  x.buf <-
+    st_buffer(x, dist = dist, ...) |>
+    st_intersection(limit) |>
+    st_as_sf() |>
+    st_set_agr("constant")
+  # poly.new <-
+    # res.grid[unlist(st_contains(poly.buf, st_centroid(grid))),]
+  # return(poly.new)
+  return(x.buf[, names(x)])
+}
+
+
+resize_polygons <- function(x,
+                            limit,
+                            dist,
+                             ...) {
+  st_agr(x) <- "constant"
+  x.buf.l <- list()
+  for(i in 1:nrow(x)) {
+    x.buf.l[[i]] <-
+      resize_polygon(x[i,],
+                     limit = limit[i,],
+                     dist = dist,
+                     ...)
+  }
+  x.buf <-
+    do.call(rbind, x.buf.l) |>
+    st_as_sf()
+  return(x.buf[, names(x)])
+}
+
+
+d_cohen <- function(x, y) {
+  mu_x <- mean(x)
+  mu_y <- mean(y)
+  s <- sqrt((sum((x-mu_x)^2) + sum((y-mu_y)^2)) / (length(x) + length(y) - 2))
+  d <- (mu_x - mu_y) / s
+  return(d)
+}
+
+var_ratio <- function(x, y) {
+  var(x) / var(y)
+}
+
+ks_stat <- function(x, y) {
+  x <- x[!is.na(x)]
+  y <- y[!is.na(y)]
+  n <- length(x)
+  y <- y[!is.na(y)]
+  n.x <- as.double(n)
+  n.y <- length(y)
+  w <- c(x, y)
+  z <- cumsum(ifelse(order(w) <= n.x, 1/n.x, -1/n.y))
+  z <- z[c(which(diff(sort(w)) != 0), n.x + n.y)] #exclude ties
+  ks <- max(abs(z))
+  return(ks)
+}
+
+get_breaks <- function(x, breaks = "FD", ...) {
+  x.range <- range(x)
+  if(is.character(breaks)) {
+    breaks <- match.arg(tolower(breaks),
+                        c("fd", "scott", "sturges"))
+    breaks <- switch(breaks,
+                     fd = nclass.FD(x),
+                     scott = nclass.scott(x),
+                     sturges = nclass.Sturges(x),
+                     stop(paste("Unknown algorithm to calculate breaks.",
+                                "Possible values are: `FD`, `Scott`, or `Sturges`.")))
+  }
+  if(is.numeric(breaks) & length(breaks) == 1) {
+    breaks <- seq(x.range[1], x.range[2], length.out = breaks+1)
+  }
+  return(breaks)
+}
+
+assign_breaks <- function(x, breaks = "FD", ...) {
+  breaks <- get_breaks(x, breaks = breaks)
+  breaks.assigned = cut(x, breaks, include.lowest = TRUE, labels = FALSE)
+  return(breaks.assigned)
+}
+
+
+to_pdist <- function(x, ...) {
+    p <- density(x, ...)$y
+    p <- p/sum(p)
+    return(p)
+}
+
+
+to_pmass <- function(x, breaks = "FD", ...) {
+  # p.range <- range(x)
+  # if(is.character(breaks)) {
+  #   breaks <- match.arg(tolower(breaks),
+  #                       c("fd", "scott", "sturges"))
+  #   breaks <- switch(breaks,
+  #                    fd = nclass.FD(x),
+  #                    scott = nclass.scott(x),
+  #                    sturges = nclass.Sturges(x),
+  #                    stop(paste("Unknown algorithm to calculate breaks.",
+  #                               "Possible values are: `FD`, `Scott`, or `Sturges`.")))
+  # }
+  # if(is.numeric(breaks) & length(breaks) == 1) {
+  #   breaks <- seq(p.range[1], p.range[2], length.out = breaks+1)
+  # }
+  x.dt <- data.table(x, h = assign_breaks(x, breaks = breaks))
+  x.dt <- x.dt[, .(x = .N/nrow(x.dt)), h]
+  if(nrow(x.dt) < length(breaks)) {
+    i.br <- 1:length(breaks)
+    x.dt <- rbind(x.dt, data.table(h = i.br[!(i.br %in% x.dt$h)], x = 0))
+  }
+  return(x.dt[is.na(x), x := 0][order(h), x])
+}
+
+
+
+# kl_div <- function(x, y, base = 2, symmetric = FALSE, to.pdist = FALSE, p.range = NULL, p.n = 512, p.bw = "SJ-dpi") {
+#   if(to.pdist) {
+#     if(is.null(p.range)) {
+#       p.range <- range(c(range(x), range(y)))
+#     }
+#     if(is.null(p.n)) {
+#       p.n <- 512
+#     }
+#     x <- to_pdist(x, bw = p.bw, from = p.range[1], to = p.range[2], n = 512)
+#     y <- to_pdist(y, bw = p.bw, from = p.range[1], to = p.range[2], n = 512)
+#   }
+#   if(symmetric) {
+#     d <-
+#       0.5 *
+#       (kl_dist(x, y, base = base, symmetric == FALSE, to.pdist = FALSE) /
+#        kl_dist(y, x, base = base, symmetric == FALSE, to.pdist = FALSE))
+#   } else {
+#     d <- sum(x * log(x / y, base = base))
+#   }
+#   return(d)
+# }
+
+
+kl_div <- function(
+                   x,
+                   y,
+                   base = 2,
+                   symmetric = FALSE,
+                   type = "raw",
+                   disc.breaks = "FD",
+                   dens.range = NULL,
+                   dens.n = 512,
+                   dens.bw = "SJ") {
+  if(type == "density") {
+    if(is.null(dens.range)) {
+      p.range <- range(c(range(x), range(y)))
+    }
+    if(is.null(dens.n)) {
+      dens.n <- 512
+    }
+    x <- to_pdist(x, bw = dens.bw, from = p.range[1], to = p.range[2], n = dens.n)
+    y <- to_pdist(y, bw = dens.bw, from = p.range[1], to = p.range[2], n = dens.n)
+  }
+  if(type == "discrete") {
+    disc.breaks <- get_breaks(c(x, y), disc.breaks = disc.breaks)
+    x <- to_pmass(x, breaks = disc.breaks)
+    y <- to_pmass(y, breaks = disc.breaks)
+  }
+  x[x == 0] <- .Machine$double.eps
+  y[y == 0] <- .Machine$double.eps
+  if(length(x) != length(y)) {
+    print(x)
+    print(y)
+    # stop("Wrong length.")
+  }
+  if(symmetric) {
+    d <-
+      0.5 *
+      (kl_dist(x, y, base = base, symmetric == FALSE, type = "raw") /
+       kl_dist(y, x, base = base, symmetric == FALSE, type = "raw"))
+  } else {
+    d <- sum(x * log(x / y, base = base))
+  }
+  return(d)
+}
+
+
+# js_div <- function(x, y, base = 2, to.pdist = FALSE, p.range = NULL, p.n = 512, p.bw = "SJ") {
+#   if(type == "density") {
+#     if(is.null(dens.range)) {
+#       p.range <- range(c(range(x), range(y)))
+#     }
+#     if(is.null(dens.n)) {
+#       dens.n <- 512
+#     }
+#     x <- to_pdist(x, bw = dens.bw, from = p.range[1], to = p.range[2], n = dens.n)
+#     y <- to_pdist(y, bw = dens.bw, from = p.range[1], to = p.range[2], n = dens.n)
+#   }
+#   if(type == "discrete") {
+#     p.range <- range(c(range(x), range(y)))
+#     if(is.character(disc.breaks)) {
+#       disc.breaks <- match.arg(tolower(disc.breaks),
+#                                c("fd", "scott", "sturges"))
+#       disc.breaks <- switch(disc.breaks,
+#                             fd = nclass.FD(x),
+#                             scott = nclass.scott(x),
+#                             sturges = nclass.Sturges(x),
+#                             stop(paste("Unknown algorithm to calculate breaks.",
+#                                        "Possible values are: `FD`, `Scott`, or `Sturges`.")))
+#     }
+#     if(is.numeric(disc.breaks) & length(disc.breaks) == 1) {
+#       disc.breaks <- seq(p.range[1], p.range[2], length.out = disc.breaks+1)
+#     }
+#     x <- to_pmass(x, breaks = disc.breaks)
+#     y <- to_pmass(y, breaks = disc.breaks)
+#   }
+#   x[x == 0] <- .Machine$double.eps
+#   y[y == 0] <- .Machine$double.eps
+#   z <- 0.5 * (x + y)
+#   d <-
+#     0.5 *
+#     (kl_div(x, z, base = base, symmetric = FALSE, type = "raw") +
+#      kl_div(y, z, base = base, symmetric = FALSE, type = "raw"))
+#   return(d)
+# }
+
+js_div <- function(x,
+                   y,
+                   base = 2,
+                   type = "raw",
+                   disc.breaks = "FD",
+                   dens.range = NULL,
+                   dens.n = 512,
+                   dens.bw = "SJ") {
+  if(type == "density") {
+    if(is.null(dens.range)) {
+      p.range <- range(c(range(x), range(y)))
+    }
+    if(is.null(dens.n)) {
+      dens.n <- 512
+    }
+    x <- to_pdist(x, bw = dens.bw, from = p.range[1], to = p.range[2], n = dens.n)
+    y <- to_pdist(y, bw = dens.bw, from = p.range[1], to = p.range[2], n = dens.n)
+  }
+  if(type == "discrete") {
+    disc.breaks <- get_breaks(c(x, y), breaks = disc.breaks)
+    x <- to_pmass(x, breaks = disc.breaks)
+    y <- to_pmass(y, breaks = disc.breaks)
+  }
+  x[x == 0] <- .Machine$double.eps
+  y[y == 0] <- .Machine$double.eps
+  z <- 0.5 * (x + y)
+  d <-
+    0.5 *
+    (kl_div(x, z, base = base, symmetric = FALSE, type = "raw") +
+     kl_div(y, z, base = base, symmetric = FALSE, type = "raw"))
+  return(d)
+}
+
 
 generate_empty <- function(x.dim,
                            y.dim,
@@ -431,6 +772,1145 @@ generate_split <- function(x.dim,
   split[[name]] <- c(0, 1)
   return(split)
 }
+
+
+generate_areas_poly <- function(x.dim,
+                                y.dim,
+                                area.prop = 0.5,
+                                area.exact = FALSE,
+                                shape.constraints = TRUE,
+                                shape.compactness = 2,
+                                score = NULL,
+                                imbalance = 0.1,
+                                score.prop = 0.5,
+                                score.sam = 1e4,
+                                seg.n,
+                                seg.res,
+                                seg.min.dist,
+                                min.bound.dist = 0,
+                                verbose = FALSE,
+                                iter.max = 25,
+                                opt.tol = 1e-4,
+                                ...
+                                ) {
+
+# for(m in 1:20){
+  if(verbose) message("Setting up candidate polygons ...")
+
+  if(is.null(score)) {
+    score <- generate_empty(x.dim = x.dim, y.dim = y.dim) + 1
+    score.prop <- 0
+  } else {
+    score <- score[1]
+  }
+  names(score)[1] <- "score"
+  score <- scale_int(score, int = c(0, 1))
+
+  poly.lim <- limit_polygon(x.dim, y.dim)
+
+  # set up segment grid
+  x.crd.seg <- seq(1, x.dim - (0.5 * seg.min.dist), seg.min.dist) + (0.5 * seg.min.dist)
+  y.crd.seg <- seq(1, y.dim - (0.5 * seg.min.dist), seg.min.dist) + (0.5 * seg.min.dist)
+  seg.grid <-
+    cbind(x = rep(x.crd.seg, times = length(y.crd.seg)),
+          y = rep(y.crd.seg, each = length(y.crd.seg))) |>
+    st_multipoint() |>
+    st_sfc() |>
+    st_cast("POINT") |>
+    st_as_sf()
+  seg.sam <- sample(1:nrow(seg.grid), seg.n)
+  seg.coarse <- 
+      seg.grid[seg.sam,] |>
+      st_union() |>
+      st_voronoi() |>
+      st_cast() |>
+      st_intersection(poly.lim) |>
+      st_as_sf() |>
+      st_set_geometry("geometry")
+
+  # set up segment grid
+  x.crd.res <- seq(1, x.dim - (0.5 * seg.res), seg.res) + (0.5 * seg.res)
+  x.crd.res <- x.crd.res + runif(n = length(x.crd.res), -seg.res/2, seg.res/2)
+  y.crd.res <- seq(1, y.dim - (0.5 * seg.res), seg.res) + (0.5 * seg.res)
+  y.crd.res <- y.crd.res + runif(n = length(y.crd.res), -seg.res/2, seg.res/2)
+
+  res.grid <-
+    (cbind(x = rep(x.crd.res, times = length(y.crd.res)),
+           y = rep(y.crd.res, each = length(y.crd.res))) +
+     matrix(runif(n = 2 * prod(length(x.crd.res), length(y.crd.res)),
+                  -seg.res/2, seg.res/2),
+            ncol = 2)) |>
+    st_multipoint() |>
+    st_sfc() |>
+    st_cast("POINT") |>
+    st_as_sf() |>
+    st_union() |>
+    st_voronoi() |>
+    st_cast() |>
+    st_intersection(poly.lim) |>
+    st_as_sf() |>
+    st_set_geometry("geometry")
+
+  res.grid$grid <- as.integer(1:nrow(res.grid))
+  res.grid <- st_set_agr(res.grid, "constant")
+  res.grid$segment <- as.integer(st_within(st_centroid(res.grid), seg.coarse))
+  res.grid$dist.lim <- st_distance(res.grid, st_cast(poly.lim, "LINESTRING"))
+  res.grid$eligible <- res.grid$dist.lim >= min.bound.dist
+
+  seg.fine <-
+    aggregate(res.grid[res.grid$eligible,],
+              by = list(seg = res.grid$segment[res.grid$eligible]), identity) |>
+    st_geometry() |>
+    st_as_sf() |>
+    st_set_geometry("geometry")
+  seg.fine$segment <- as.integer(1:nrow(seg.fine))
+
+  seg.score <- 
+    st_rasterize(res.grid, template = generate_empty(x.dim = x.dim, y.dim = y.dim)) |>
+    as.data.table() |>
+    merge(as.data.table(score), all.x = FALSE, all.y = TRUE)
+  if(score.sam < nrow(seg.score)) {
+    seg.score <- seg.score[sample(1:nrow(seg.score), score.sam)][order(x, y)]
+  }
+  setindex(seg.score, grid)
+  setindex(seg.score, segment)
+  score.breaks <- get_breaks(seg.score$score, breaks = "FD")
+  seg.score[, score.bin := assign_breaks(score, breaks = score.breaks)]
+
+  if(verbose) message("Building areas (coarse selection) …")
+
+  infl <- prod(x.dim, y.dim) / sum(st_area(seg.fine))
+  n.tot <- round(area.prop * nrow(seg.fine) * infl)
+  n.score <- round(score.prop * n.tot)
+  n.rand <- n.tot - n.score
+
+  seg.score.bin <-
+    merge(seg.score[, .(n.bin = .N), by = c("segment", "score.bin")],
+          as.data.table(expand.grid(segment = unique(seg.score$segment),
+                        score.bin = 1:length(score.breaks))),
+          by = c("segment", "score.bin"), all = TRUE)
+  seg.score.bin[is.na(n.bin), n.bin := 0]
+  setindex(seg.score.bin, segment)
+  setindex(seg.score.bin, score.bin)
+
+  idx.trt.score <- integer(0)
+  if(n.score > 0) {
+    for(i in 1:n.score) {
+      seg.ids <- with(seg.fine, segment[!(segment %in% idx.trt.score)])
+      dist <- list()
+      for(j in seq_along(seg.ids)) {
+        idx <- c(idx.trt.score, seg.ids[j])
+        foc.obs <- seg.score[.(idx), na.omit(score), on = "segment"]
+        rem.obs <- seg.score[!.(idx), na.omit(score), on = "segment"]
+        foc.freq <-
+          seg.score.bin[.(idx),
+                        .(n = sum(n.bin)),
+                        by = "score.bin", on = "segment"
+                        ][!is.na(score.bin)
+                          ][order(score.bin), n/sum(n)]
+        rem.freq <-
+          seg.score.bin[!.(idx),
+                        .(n = sum(n.bin)),
+                        by = "score.bin", on = "segment"
+                        ][!is.na(score.bin)
+                          ][order(score.bin), n/sum(n)]
+        if(length(foc.freq) > 0 & length(rem.freq) > 0) {
+          dist[[j]] <- data.table(segment = seg.ids[j],
+                                  dist = js_div(foc.freq, rem.freq,
+                                                type = "raw"),
+                                  smd = d_cohen(foc.obs, rem.obs))
+        }
+      }
+      dist <- rbindlist(dist)
+      idx.trt.score <-
+        c(idx.trt.score,
+          dist[smd >= 0][which.min(abs(dist - imbalance)), segment])
+      }
+  }
+
+  # # Old algorithm
+  # idx.trt.score <- integer(0)
+  # if(n.score > 0) {
+  #   for(i in 1:n.score) {
+  #     seg.ids <- with(seg.fine, segment[!segment %in% idx.trt.score])
+  #     dist <- list()
+  #     for(j in seq_along(seg.ids)) {
+  #       idx <- c(idx.trt.score, seg.ids[j])
+  #       foc.obs <- seg.score[.(idx), na.omit(score), on = "segment"]
+  #       rem.obs <- seg.score[!.(idx), na.omit(score), on = "segment"]
+  #       if(length(foc.obs) > 0 & length(rem.obs) > 0) {
+  #         dist[[j]] <- data.table(segment = seg.ids[j],
+  #                                 dist = js_div(foc.obs, rem.obs,
+  #                                               type = "discrete"),
+  #                                 smd = d_cohen(foc.obs, rem.obs))
+  #       }
+  #     }
+  #     dist <- rbindlist(dist)
+  #     idx.trt.score <-
+  #       c(idx.trt.score,
+  #         dist[smd >= 0][which.min(abs(dist - imbalance)), segment])
+  #     }
+  # }
+
+  idx.trt.rand <-
+    sample(seg.score$segment[-which(seg.score$segment %in% idx.trt.score)], n.rand)
+  
+  idx.trt <- c(idx.trt.score, idx.trt.rand)
+  idx.ref <- seg.fine$segment[!(seg.fine$segment %in% idx.trt)]
+
+  # seg.trt <-
+  #   seg.fine[which(seg.fine$segment %in% idx.trt),] |>
+  #   st_union(is_coverage = TRUE) |>
+  #   st_as_sf() |>
+  #   st_set_geometry("geometry")
+
+
+  if(verbose) message("Adjusting areas (fine tuning) …")
+
+   A.nb <-
+      poly2nb(res.grid, queen = FALSE) |>
+      nb2listw(style = "B") |> 
+      listw2mat()
+
+  grid.trt <- with(res.grid, grid[eligible & segment %in% idx.trt])
+  grid.ref <- setdiff(res.grid$grid, grid.trt)
+  trt.prop <- seg.score[.(grid.trt), length(segment) / nrow(seg.score), on = "grid"]
+  trt.imb <-
+    js_div(x = seg.score[.(grid.trt), na.omit(score), on = "grid"],
+           y = seg.score[!.(grid.trt), na.omit(score), on = "grid"],
+           type = "discrete")
+  if(n.rand > 0) {
+    # Maintain deviation from target imbalance if randomness was introduced earlier.
+    imbalance <- trt.imb
+  }
+  opt.null <- log((trt.imb - imbalance)^2 + (trt.prop - area.prop)^2)
+
+
+  seg.score.bin.f <-
+    merge(seg.score[, .(n.bin = .N), by = c("grid", "score.bin")],
+          expand.grid(grid = unique(seg.score$grid),
+                      score.bin = 1:length(score.breaks)),
+          by = c("grid", "score.bin"), all = TRUE)
+  seg.score.bin.f[is.na(n.bin), n.bin := 0]
+  setindex(seg.score.bin.f, grid)
+  setindex(seg.score.bin.f, score.bin)
+    
+
+  for(i in 1:iter.max) {
+    if(trt.prop >= area.prop) {
+      grid.adj <- grid.trt[rowSums(A.nb[grid.trt, -grid.trt]) > 0]
+      # if(shape.constraints) {
+      #     ex.bridge <- exclude_bridges(A.nb, grid.ref, grid.trt)
+      #     grid.adj <- grid.adj[!(grid.adj %in% ex.bridge)]
+      # }
+      adj <- list()
+      for(j in seq_along(grid.adj)) {
+        idx.trt <- grid.trt[!(grid.trt %in% grid.adj[j])]
+        idx.ref <- with(res.grid, grid[!(grid %in% idx.trt)])
+        if(shape.constraints) {
+          ex.islands.ref <- exclude_islands(A.nb, idx.ref, shape.compactness)
+          ex.islands.trt <- exclude_islands(A.nb, idx.trt, shape.compactness)
+          idx.trt <- c(idx.trt[!(idx.trt %in% ex.islands.trt)], ex.islands.ref)
+        }
+        idx.trt.l[[j]] <- idx.trt
+        foc.obs <- seg.score[.(idx.trt), na.omit(score), on = "grid"]
+        rem.obs <- seg.score[!.(idx.trt), na.omit(score), on = "grid"]
+        foc.freq <-
+          seg.score.bin.f[.(idx.trt),
+                          .(n = sum(n.bin)),
+                          by = "score.bin", on = "grid"
+                          ][!is.na(score.bin)
+                            ][order(score.bin), n/sum(n)]
+        rem.freq <-
+          seg.score.bin.f[!.(idx.trt),
+                          .(n = sum(n.bin)),
+                          by = "score.bin", on = "grid"
+                          ][!is.na(score.bin)
+                            ][order(score.bin), n/sum(n)]
+        if(length(foc.obs) > 0 & length(rem.obs) > 0) {
+          adj[[j]] <- data.table(grid = grid.adj[j],
+                                 dist = js_div(foc.freq, rem.freq,
+                                               type = "raw"),
+                                 prop = seg.score[.(idx.trt),
+                                                  length(grid) / nrow(seg.score),
+                                                  on = "grid"],
+                                 smd = d_cohen(foc.obs, rem.obs))
+        }
+      }
+    }
+    if(trt.prop < area.prop) {
+      grid.adj <-
+        grid.ref[rowSums(A.nb[grid.ref, -grid.ref]) > 0 &
+                 grid.ref %in% with(res.grid, grid[eligible])]
+      if(shape.constraints) {
+          ex.bridge <- exclude_bridges(A.nb, grid.trt, grid.ref)
+          grid.adj <- grid.adj[!(grid.adj %in% ex.bridge)]
+      }
+      adj <- list()
+      idx.trt.l <- list()
+      for(j in seq_along(grid.adj)) {
+        idx.trt <- c(grid.trt, grid.adj[j])
+        idx.ref <- with(res.grid, grid[!(grid %in% idx.trt)])
+        if(shape.constraints) {
+          ex.islands.ref <- exclude_islands(A.nb, idx.ref, shape.compactness)
+          ex.islands.trt <- exclude_islands(A.nb, idx.trt, shape.compactness)
+          idx.trt <- c(idx.trt[!(idx.trt %in% ex.islands.trt)], ex.islands.ref)
+        }
+        idx.trt.l[[j]] <- idx.trt
+        foc.obs <- seg.score[.(idx.trt), na.omit(score), on = "grid"]
+        rem.obs <- seg.score[!.(idx.trt), na.omit(score), on = "grid"]
+        foc.freq <-
+          seg.score.bin.f[.(idx.trt),
+                          .(n = sum(n.bin)),
+                          by = "score.bin", on = "grid"
+                          ][!is.na(score.bin)
+                            ][order(score.bin), n/sum(n)]
+        rem.freq <-
+          seg.score.bin.f[!.(idx.trt),
+                          .(n = sum(n.bin)),
+                          by = "score.bin", on = "grid"
+                          ][!is.na(score.bin)
+                            ][order(score.bin), n/sum(n)]
+        if(length(foc.obs) > 0 & length(rem.obs) > 0) {
+          adj[[j]] <- data.table(grid = grid.adj[j],
+                                 dist = js_div(foc.freq, rem.freq,
+                                               type = "raw"),
+                                 prop = seg.score[.(idx.trt),
+                                                  length(grid) / nrow(seg.score),
+                                                  on = "grid"],
+                                 smd = d_cohen(foc.obs, rem.obs))
+        }
+      }
+    } # fi area <
+    adj.dt <- rbindlist(adj)
+    adj.dt[, `:=`(opt = log((dist - imbalance)^2 + (prop - area.prop)^2))]
+    grid.change.j <- adj.dt[smd > 0 & opt < opt.null, which.min(opt)]
+    if(length(grid.change.j) > 0) {
+      grid.trt <- idx.trt.l[[grid.change.j]]
+      grid.ref <- setdiff(res.grid$grid, grid.trt)
+      trt.prop <- adj.dt[grid.change.j, prop] 
+      trt.imb <- adj.dt[grid.change.j, dist] 
+      grid.opt <- adj.dt[grid.change.j, opt]
+      if(abs(opt.null - grid.opt) > opt.tol) {
+        opt.null <- grid.opt
+      } else {
+        break
+      }
+    } else {
+      break
+    }
+    if(verbose & i == iter.max) {
+      message(paste0("Maximum number of iterations reached (", iter.max,
+                     "). Further optimization is possible."))
+    }
+  }
+
+# }
+
+  poly.trt <- 
+    res.grid[res.grid$grid %in% grid.trt,] |>
+    st_union() |>
+    st_as_sf() |>
+    st_set_geometry("geometry")
+
+
+  if(trt.prop != area.prop & area.exact == TRUE) {
+    if(verbose) message("Resizing area … ")
+    opt.bounds <- c(-2, 2) * (abs(sum(trt.prop) - area.prop) * sqrt(prod(x.dim, y.dim)))
+    opt.res <-
+      optimize(opt_resize_poly, interval = opt.bounds,
+               poly = poly.trt, limit = poly.lim, prop.target = area.prop)
+    poly.trt <-
+      resize_polygon(poly.trt, limit = poly.lim,
+                       dist = opt.res$minimum ) |>
+      st_union() |>
+      st_as_sf() |>
+      st_set_geometry("geometry")
+  }
+
+  poly.ref <-
+    st_difference(poly.lim, poly.trt) |>
+    st_as_sf() |>
+    st_set_geometry("geometry")
+
+  poly.areas <- st_as_sf(rbind(poly.ref, poly.trt))
+  poly.areas$type <- factor(c("reference", "treatment"),
+                            levels = c("reference", "treatment"))
+
+  if(verbose) {
+    areas.dt <-
+      st_rasterize(poly.areas, template = score) |>
+      as.data.table() |>
+      merge(score, all.x = FALSE, all.y = TRUE)
+    trt.prop <- areas.dt[type == "treatment", length(type) / nrow(areas.dt)]
+    trt.imb <-
+      js_div(x = areas.dt[type == "treatment", na.omit(score)],
+             y = areas.dt[type == "reference", na.omit(score)],
+             type = "discrete")
+    message(paste0("Imbalance: ", round(trt.imb, getOption("digits")),
+                   "\nArea proportion: ", round(trt.prop, getOption("digits"))))
+  }
+  return(poly.areas)
+}
+
+
+match_to_segments_old <- function(segments, pw.dist, center, buffer, collapse = TRUE) {
+  stopifnot(length(center) == length(buffer))
+  center.inb <- center %in% 1:nrow(pw.dist)
+  matched.l <- list()
+  for(i in seq_along(center)) {
+    if(center.inb[i]) {
+      seg.sel <- which(segments == i)
+      grid.sel <- unname(which(pw.dist[, center[i]] <= buffer[i]))
+      matched.l[[i]] <- grid.sel[grid.sel %in% seg.sel]
+    } else {
+      matched.l[[i]] <- integer(0)
+    }
+  }
+  if(collapse == TRUE) matched.l <- do.call(c, matched.l)
+  return(matched.l)
+}
+
+
+match_to_segments <- function(pw.dist,
+                              center,
+                              buffer,
+                              min.dist = 0,
+                              include.unmatched = TRUE) {
+    stopifnot(length(center) == length(buffer))
+    center.inb <- center %in% 1:nrow(pw.dist)
+    matched.l <- list()
+    if(any(center.inb)) {
+      grid.seg <-
+        data.table(grid = 1:nrow(pw.dist),
+                   segment =
+                     apply(pw.dist[, center[center.inb], drop = FALSE],
+                           1, which.min) |>
+                     lapply(\(x) ifelse(length(x) > 0, x, 0)) |>
+                     unlist())
+      grid.seg[, dist := pw.dist[grid, center[center.inb][segment]], by = .I]
+      for(i in seq_along(center)) {
+        if(center.inb[i]) {
+          matched.l[[i]] <- grid.seg[segment == i & dist <= buffer[i], grid]
+        } else {
+          matched.l[[i]] <- integer(0)
+        }
+      }
+      matched.grid <- do.call(c, matched.l)
+      matched.segment <- do.call(c, mapply(\(x, y) rep(y, length(x)),
+                                           matched.l, 1:sum(center.inb)))
+    } else {
+      matched.grid <- integer(0)
+      matched.segment <- integer(0)
+    }
+    if(include.unmatched) {
+      unmatched.grid <-  (1:nrow(pw.dist))[!1:nrow(pw.dist) %in% matched.grid]
+      unmatched.segment <- rep(0, length(unmatched.grid))
+      matched.grid <- c(matched.grid, unmatched.grid)
+      matched.segment <- c(matched.segment, unmatched.segment)
+    }
+    return(list(grid = matched.grid, segment = matched.segment))
+  }
+
+
+segment_min_distance <- function(pw.dist,
+                                 grid.cols = c("grid1", "grid2"),
+                                 grid.sel,
+                                 segments) {
+  grid.seg <- data.table(grid = grid.sel, segment = segments)
+  grid.dist.dt <- as.data.table(pw.dist[grid.sel, grid.sel])
+  names(grid.dist.dt) <- as.character(grid.sel)
+  grid.dist.dt[, grid1 := grid.sel]
+  grid.dist.dt <-
+    melt(grid.dist.dt,
+         id.vars = "grid1",
+         variable.name = "grid2", value.name = "dist",
+         variable.factor = FALSE) |>
+    DT(, grid2 := as.integer(grid2)) |>
+    merge(grid.seg[, .(grid1 = grid, segment1 = segment)],
+          by = "grid1") |>
+    merge(grid.seg[, .(grid2 = grid, segment2 = segment)],
+          by = "grid2") |>
+  DT(segment1 != segment2,
+     .(dist.min = min(dist)),
+     by = c("segment1", "segment2")) |>
+  DT(order(segment1, segment2))
+  return(grid.dist.dt)
+}
+
+
+encode_grid_buffer <- function(grid, buffer, order.grid, order.buffer) {
+  grid.gray <- lapply(grid, \(x) binary2gray(decimal2binary(x, order.grid)))
+  buffer.gray <- lapply(buffer, \(x) binary2gray(decimal2binary(x, order.buffer)))
+  string <- c(do.call(c, grid.gray), do.call(c, buffer.gray))
+  return(string)
+}
+
+decode_grid_buffer <- function(string, bit.orders) {
+  string <- split(string, rep.int(seq.int(bit.orders), times = bit.orders))
+  orders <- sapply(string, function(x) { binary2decimal(gray2binary(x)) })
+  dec <- unname(orders)
+  grid.i <- 1:round(0.5*length(dec))
+  return(list(grid = dec[grid.i],
+              buffer = dec[-grid.i]))
+}
+
+exclude_islands <- function(x, a, min.vertices = 1) {
+  x.a <- x[a, a, drop = FALSE] 
+  diag(x.a) <- 0
+  to_exclude <- a[rowSums(x.a) < min.vertices]
+  return(to_exclude)
+}
+
+exclude_bridges <- function(x, a, b) {
+  filter.a <- matrix(0, nrow = nrow(x), ncol = ncol(x))
+  filter.a[a, a] <- 1
+  diag(filter.a) <- 0
+  filter.b <- matrix(0, nrow = nrow(x), ncol = ncol(x))
+  filter.b[b, b] <- 1
+  diag(filter.b) <- 0
+  filter.ab <- matrix(0, nrow = nrow(x), ncol = ncol(x))
+  filter.ab[a, b] <- 1
+  filter.ab[b, a] <- 1
+  diag(filter.ab) <- 0
+  # Which nodes of type `a` are seperated by more than 2 other nodes of type `a`
+  x.a <- x * filter.a
+  x.a2 <- x.a %*% x.a
+  x.a3 <- x.a2 %*% x.a
+  x.asep2 <- x.a + x.a2 + x.a3
+  x.asep2 <- (x.asep2 == 0) * filter.a
+  # Identify type `a` nodes that are connected to a type `b` nodes; either
+  # directly, or through one other `a` node.
+  x.ab <- x * filter.ab
+  x.b <- x * filter.b
+  x.b2a <- x.ab + (x.ab %*% x.b)
+  # Which nodes of type `b` are on a path that connects two type `a` nodes
+  # that are seperated as defined above ?
+  x.bridge <- x.b2a %*% x.asep2 %*% x.b2a
+  to_exclude <- b[diag(x.bridge)[b] > 0]
+  return(to_exclude)
+}
+
+
+generate_areas_poly2 <- function(x.dim,
+                                y.dim,
+                                imbalance = 0.1,
+                                imbalance.tol = NULL,
+                                area.prop = 0.5,
+                                area.tol = NULL,
+                                area.exact = FALSE,
+                                score,
+                                score.sam = 1e4,
+                                seg.seed,
+                                seg.res = 0.1 * min(x.dim, y.dim),
+                                seg.min.dist = 0,
+                                seg.min.area = 0,
+                                seg.even = 2,
+                                seg.prec = 0.1 * seg.res,
+                                min.bound.dist = 0,
+                                verbose = FALSE,
+                                opt.imp.imb = 1,
+                                opt.imp.area = 1,
+                                opt.pop = 50,
+                                opt.prec = 1e-4,
+                                opt.pcrossover = 0.8,
+                                opt.pmutation = 0.1,
+                                opt.max.iter = 100,
+                                opt.run = opt.max.iter,
+                                opt.parallel = FALSE,
+                                opt.fine = TRUE,
+                                opt.fine.max.iter = 25,
+                                opt.fine.constr = TRUE,
+                                opt.fine.tol = 1e-4,
+                                ...
+                                ) {
+
+# for(m in 1:20){
+  if(verbose) message("Setting up candidate polygons ...")
+
+  if(is.null(area.tol)) {
+    area.lim <- rep(area.prop, 2)
+  } else{
+    if(length(area.tol) == 1) {
+      area.lim <- area.prop + c(-area.tol, area.tol)
+    } else {
+      area.lim <- area.prop + area.tol
+    }
+  }
+
+  if(is.null(imbalance.tol)) {
+    imbalance.lim <- rep(imbalance, 2)
+  } else{
+    if(length(imbalance.tol) == 1) {
+      imbalance.lim <- imbalance + c(-imbalance.tol, imbalance.tol)
+    } else {
+      imbalance.lim <- imbalance + imbalance.tol
+    }
+  }
+
+  # if(is.null(score)) {
+  #   score <- generate_empty(x.dim = x.dim, y.dim = y.dim) + 1
+  #   score.prop <- 0
+  # } else {
+  # }
+  score <- score[1]
+  names(score)[1] <- "score"
+  score <- scale_int(score, int = c(0, 1))
+
+  poly.lim <- limit_polygon(x.dim, y.dim)
+  
+  # if(seg.seed > 1) {
+  #   seg.sp <- max(seg.min.dist * 2, seg.res)
+  #   x.crd.seg <- seq(0, x.dim - (0.5 * seg.sp), seg.sp) + (0.5 * seg.sp)
+  #   y.crd.seg <- seq(0, y.dim - (0.5 * seg.sp), seg.sp) + (0.5 * seg.sp)
+  #   seg.grid <-
+  #     cbind(x = rep(x.crd.seg, times = length(y.crd.seg)),
+  #           y = rep(y.crd.seg, each = length(y.crd.seg))) |>
+  #     st_multipoint() |>
+  #     st_sfc() |>
+  #     st_cast("POINT") |>
+  #     st_as_sf()
+  #   seg.sam <- sample(1:nrow(seg.grid), seg.seed)
+  #   seg.coarse <- 
+  #       seg.grid[seg.sam,] |>
+  #       st_union() |>
+  #       st_voronoi() |>
+  #       st_cast() |>
+  #       st_intersection(poly.lim) |>
+  #       st_as_sf() |>
+  #       st_set_geometry("geometry")
+  # } else {
+  #   seg.coarse <-
+  #     st_as_sf(poly.lim) |>
+  #     st_set_geometry("geometry")
+  # }
+
+  # set up segment grid
+
+  res.grid.coord <- 
+    expand.grid(x = seq(1, x.dim - (0.5 * seg.res), seg.res) + (0.5 * seg.res),
+                y = seq(1, y.dim - (0.5 * seg.res), seg.res) + (0.5 * seg.res)) |>
+    as.data.table()
+  res.grid.coord
+
+
+  # seg.even <- 0.75
+  x.crd.res <- seq(- seg.res, x.dim + seg.res, seg.res) + (0.5 * seg.res)
+  y.crd.res <- seq(- seg.res, y.dim + seg.res, seg.res) + (0.5 * seg.res)
+  # x.crd.res <- seq(-0.5 * seg.res, x.dim + (0.5 * seg.res), seg.res) + (0.5 * seg.res)
+  # y.crd.res <- seq(-0.5 * seg.res, y.dim + (0.5 * seg.res), seg.res) + (0.5 * seg.res)
+  grid.per <- 
+    matrix((rbeta(n = 2 * length(x.crd.res) * length(y.crd.res),
+                  seg.even, seg.even) * seg.res) -
+           (0.5 * seg.res),
+           ncol = 2)
+  grid.per <- 
+    round(grid.per / seg.prec) * seg.prec
+  res.grid <-
+    (cbind(x = rep(x.crd.res, times = length(y.crd.res)),
+           y = rep(y.crd.res, each = length(y.crd.res))) +
+     grid.per) |>
+    st_multipoint() |>
+    st_sfc() |>
+    st_cast("POINT") |>
+    st_as_sf() |>
+    st_union() |>
+    st_voronoi() |>
+    # st_triangulate() |>
+    st_cast() |>
+    st_intersection(poly.lim) |>
+    st_as_sf() |>
+    # st_simplify(preserveTopology = TRUE, dTolerance = seg.prec) |> 
+    st_snap_to_grid(seg.prec) |>
+    st_make_valid() |>
+    st_set_geometry("geometry")
+  st_agr(res.grid) <- "constant"
+  res.grid <- res.grid[!st_is_empty(res.grid) & st_geometry_type(res.grid) == "POLYGON",]
+  # plot(res.grid)
+
+  res.grid$area <- st_area(res.grid)
+  res.grid$dist.lim <- st_distance(res.grid, st_cast(poly.lim, "LINESTRING"))
+  res.grid <- res.grid[res.grid$dist.lim >= min.bound.dist,]
+  res.grid$grid <- as.integer(1:nrow(res.grid))
+  res.grid$selected <- FALSE
+  res.grid <- st_set_agr(res.grid, "constant")
+
+  res.grid.dt <- as.data.table(st_drop_geometry(res.grid))
+  setindex(res.grid.dt, grid)
+  setindex(res.grid.dt, selected)
+  setorder(res.grid.dt, grid)
+
+  grid.dist.pw <- suppressWarnings(st_distance(res.grid))
+
+
+  seg.score <- 
+    st_rasterize(res.grid[, "grid"],
+                 template = generate_empty(x.dim = x.dim, y.dim = y.dim)) |>
+    as.data.table() |>
+    merge(as.data.table(score), all.x = FALSE, all.y = TRUE)
+  if(score.sam < nrow(seg.score)) {
+    seg.score <- seg.score[sample(1:nrow(seg.score), score.sam)][order(x, y)]
+  }
+  setindex(seg.score, grid)
+  score.breaks <- get_breaks(seg.score$score, breaks = "FD")
+  seg.score[, score.bin := assign_breaks(score, breaks = score.breaks)]
+
+  seg.score.bin <-
+    merge(seg.score[, .(n.bin = .N), by = c("grid", "score.bin")],
+          expand.grid(grid = unique(seg.score$grid),
+                      score.bin = 1:length(score.breaks)),
+          by = c("grid", "score.bin"), all = TRUE)
+  seg.score.bin[is.na(n.bin), n.bin := 0]
+  setindex(seg.score.bin, grid)
+  setindex(seg.score.bin, score.bin)
+
+
+  if(verbose) message("Building areas (optimisation) …")
+
+  order.grid <- ceiling(log2(nrow(res.grid.dt)))
+  order.buffer <- ceiling(log2(sqrt(x.dim^2 + y.dim^2)))
+  order.c <- rep(c(order.grid, order.buffer), each = seg.seed)
+  n.bits <- sum(order.c)
+
+  f_opt_imb_area <- function(x) {
+    x <- decode_grid_buffer(x, order.c)
+    n.seg <- length(x$grid)
+    trt.proposed <-
+      match_to_segments.m(pw.dist = grid.dist.pw,
+                          center = x$grid,
+                          buffer = x$buffer,
+                          include.unmatched = FALSE) |>
+      as.data.table()
+    if(length(trt.proposed$grid) == 0) {
+      f <- length(x$grid)^2 * sqrt(.Machine$double.xmax)
+    } else {
+      foc.obs <- seg.score[.(trt.proposed$grid), na.omit(score), on = "grid"]
+      rem.obs <- seg.score[!.(trt.proposed$grid), na.omit(score), on = "grid"]
+      foc.freq <-
+        seg.score.bin[.(trt.proposed$grid),
+                      .(n = sum(n.bin)),
+                      by = "score.bin", on = "grid"
+                      ][!is.na(score.bin)
+                        ][order(score.bin), n/sum(n)]
+      rem.freq <-
+        seg.score.bin[!.(trt.proposed$grid),
+                      .(n = sum(n.bin)),
+                      by = "score.bin", on = "grid"
+                      ][!is.na(score.bin)
+                       ][order(score.bin), n/sum(n)]
+      trt.imb <- js_div.m(foc.freq, rem.freq, type = "raw")
+      trt.a <- 
+        merge(res.grid.dt[.(trt.proposed$grid),
+                          on = "grid"],
+              trt.proposed) |>
+        DT(, .(area = sum(area)), by = "segment")
+      # Any remaining segments without assigned grid polygons?
+      seg.rem <- setdiff(1:n.seg, trt.a$segment)
+      if(length(seg.rem) > 0) {
+        trt.a <-
+          rbind(trt.a,
+                data.table(segment = seg.rem,
+                           area = rep(0, length(seg.rem))))
+      }
+      trt.area <- sum(trt.a) / prod(x.dim, y.dim)
+      imbalance.loss <- (trt.imb - imbalance)^2
+      area.loss <- (trt.area - area.prop)^2
+      penalty.min.area <- pmax(-trt.a$area + seg.min.area, 0) * sqrt(.Machine$double.xmax)
+      penalty.min.dist <-
+        segment_min_distance.m(pw.dist = grid.dist.pw,
+                               grid.cols = c("grid1", "grid2"),
+                               grid.sel = trt.proposed$grid,
+                               segments = trt.proposed$segment) |>
+        DT(, as.numeric(dist.min < seg.min.dist) * sqrt(.Machine$double.xmax))
+      penalty.oob <- as.numeric(!(x$grid %in% res.grid.dt$grid)) * sqrt(.Machine$double.xmax)
+      f <-
+        opt.imp.imb * imbalance.loss +
+        opt.imp.area * area.loss +
+        sum(penalty.min.area) + sum(penalty.oob) + sum(penalty.min.dist)
+    }
+    return(-f)
+  }
+
+  # Cache function evaluations
+  fm_opt_imb_area <- memoise(f_opt_imb_area)
+  match_to_segments.m <- memoise(match_to_segments)
+  segment_min_distance.m <- memoise(segment_min_distance)
+  js_div.m <- memoise(js_div)
+  
+  pop.start.mat <- matrix(NA, nrow = opt.pop, ncol = sum(order.c))
+  for(i in 1:opt.pop) {
+    grid <- sample(res.grid.dt$grid, seg.seed)
+    buffer <- round(runif(n = 3,
+                          sqrt(seg.min.area),
+                          sqrt(area.prop * x.dim * y.dim / seg.seed)))
+    pop.start.mat[i,] <- encode_grid_buffer(grid, buffer, order.grid, order.buffer)
+  }
+
+  f_max <- -((opt.imp.imb + opt.imp.area) * opt.prec)
+
+  f_monitor <- ifelse(verbose, gaMonitor, FALSE)
+
+  buffer.opt <- NULL
+  while(is.null(buffer.opt)) {
+    try({
+      buffer.opt <-
+          ga(type =  "binary",
+             fitness = fm_opt_imb_area,
+             maxFitness = f_max,
+             # lower = rep(0, seg.seed), upper = rep(max(x.dim, y.dim), seg.seed),
+             nBits = sum(order.c), suggestions = pop.start.mat,
+             run = opt.run, popSize = opt.pop, maxiter = opt.max.iter,
+             optim = TRUE, optimArgs = list(poptim = 0.25),
+             parallel = opt.parallel,
+             pcrossover = opt.pcrossover, pmutation = opt.pmutation,
+             monitor = f_monitor)
+    })
+    if(verbose & is.null(buffer.opt)) message("Optimization failed. Trying again …")
+  }
+
+  imb_area.sol <- decode_grid_buffer(buffer.opt@solution[1,], order.c)
+
+  trt.proposed <-
+    match_to_segments.m(pw.dist = grid.dist.pw,
+                      center = imb_area.sol$grid,
+                      buffer = imb_area.sol$buffer,
+                      include.unmatched = TRUE) |>
+  as.data.table()
+
+  # Update segment and selection information for grid polygons
+
+  res.grid <-
+    as.data.table(res.grid) |>
+    merge(trt.proposed) |>
+    DT(segment != 0, selected := TRUE) |>
+    st_as_sf()
+
+  res.grid.dt <-
+    merge(res.grid.dt,
+          trt.proposed) |>
+    DT(segment != 0, selected := TRUE)
+  setindex(res.grid.dt, grid)
+  setindex(res.grid.dt, segment)
+  setindex(res.grid.dt, selected)
+  setorder(res.grid.dt, grid)
+
+  grid.dist.dt <- as.data.table(grid.dist.pw)
+  names(grid.dist.dt) <- as.character(1:nrow(res.grid))
+  grid.dist.dt[, grid1 := 1:.N]
+  grid.dist.dt <-
+    melt(grid.dist.dt, id.vars = "grid1",
+         variable.name = "grid2", value.name = "dist",
+         variable.factor = FALSE)
+  grid.dist.dt[,
+              c("grid1", "grid2") := lapply(.SD, \(x) as.integer(as.character(x))),
+              .SDcols = c("grid1", "grid2")]
+  grid.dist.dt <-
+    merge(grid.dist.dt,
+          res.grid.dt[, .(grid1 = grid, segment1 = segment)], by = "grid1") |>
+    merge(res.grid.dt[, .(grid2 = grid, segment2 = segment)], by = "grid2")
+
+  # plot(res.grid[, "selected"])
+
+  # Extract results of coarse optimisation
+
+  grid.trt <- with(res.grid, grid[selected])
+  grid.ref <- setdiff(res.grid$grid, grid.trt)
+  trt.a <- 
+    res.grid.dt[.(grid.trt),
+                .(area = sum(area)),
+                by = "segment",
+                on = "grid"
+                ][, area]
+
+  trt.area <- seg.score[.(grid.trt), length(grid) / nrow(seg.score), on = "grid"]
+  trt.imb <-
+    js_div(x = seg.score[.(grid.trt), na.omit(score), on = "grid"],
+           y = seg.score[!.(grid.trt), na.omit(score), on = "grid"],
+           type = "discrete")
+
+
+  # remove cached functions
+  rm(fm_opt_imb_area, match_to_segments.m, segment_min_distance.m, js_div.m)
+
+  if(verbose) {
+    message(paste0("Imbalance: ", round(trt.imb, getOption("digits")),
+                   ". Area proportion: ", round(trt.area, getOption("digits"))))
+  }
+
+  if(opt.fine) {
+
+    if(verbose) message("Attempt to further adjust areas (fine tuning) …")
+
+    penalty <- sqrt(opt.imp.imb + opt.imp.area)
+    pen.imb = ifelse(trt.imb < area.lim[1] | trt.imb > area.lim[2],
+                     min(abs(trt.imb - area.lim)) * sqrt(penalty), 0)
+    pen.area = ifelse(trt.area < area.lim[1] | trt.area > area.lim[2],
+                     min(abs(trt.area - area.lim)) * sqrt(penalty), 0)
+    pen.min.area <- sum(pmax(-trt.a + seg.min.area, 0) * sqrt(penalty))
+    pen.min.dist <-
+      grid.dist.dt[grid1 %in% grid.trt & grid2 %in% grid.trt,
+                   .(dist.min = min(dist)),
+                   by = c("segment1", "segment2")
+                   ][segment1 != segment2,
+                     sum(0.5 * as.numeric(dist.min < seg.min.dist) * sqrt(penalty))]
+    imb.loss <- (trt.imb - imbalance)^2
+    area.loss <- (trt.area - area.prop)^2
+    loss.null <- opt.imp.imb * imb.loss +
+                 opt.imp.area * area.loss +
+                 pen.min.area + pen.min.dist + pen.imb + pen.area
+
+    A.nb <- st_relate(res.grid, res.grid, pattern = "F***1****", sparse = FALSE) * 1
+    diag(A.nb) <- 0
+    A.nb <- as(A.nb, "sparseMatrix")
+
+#     A.nb <-
+#         poly2nb(res.grid, queen = FALSE) |>
+#         nb2listw(style = "B") |> 
+#         listw2mat()
+    loss.hist <- list()
+
+    for(i in 1:opt.fine.max.iter) {
+      # if(trt.area <= area.prop) {
+        grid.adj.add <-
+          grid.ref[rowSums(A.nb[grid.ref, -grid.ref]) > 0 &
+                   grid.ref %in% with(res.grid, grid[segment != 0])]
+        # if(opt.fine.constr) {
+        #     ex.bridge <- exclude_bridges(A.nb, grid.trt, grid.ref)
+        #     grid.adj.add <- grid.adj.add[!(grid.adj.add %in% ex.bridge)]
+        # }
+        adj.add <- list()
+        idx.trt.add.l <- list()
+        for(j in seq_along(grid.adj.add)) {
+          idx.trt <- c(grid.trt, grid.adj.add[j])
+          idx.ref <- with(res.grid, grid[!(grid %in% idx.trt)])
+          if(opt.fine.constr) {
+            ex.islands.ref <- exclude_islands(A.nb, idx.ref, 2)
+            ex.islands.trt <- exclude_islands(A.nb, idx.trt, 2)
+            idx.trt <- c(idx.trt[!(idx.trt %in% ex.islands.trt)], ex.islands.ref)
+            idx.trt <- idx.trt[idx.trt %in% with(res.grid, grid[segment != 0])]
+          }
+          idx.trt.add.l[[j]] <- idx.trt
+          foc.obs <- seg.score[.(idx.trt), na.omit(score), on = "grid"]
+          rem.obs <- seg.score[!.(idx.trt), na.omit(score), on = "grid"]
+          foc.freq <-
+            seg.score.bin[.(idx.trt),
+                          .(n = sum(n.bin)),
+                          by = "score.bin", on = "grid"
+                          ][!is.na(score.bin)
+                            ][order(score.bin), n/sum(n)]
+          rem.freq <-
+            seg.score.bin[!.(idx.trt),
+                          .(n = sum(n.bin)),
+                          by = "score.bin", on = "grid"
+                          ][!is.na(score.bin)
+                            ][order(score.bin), n/sum(n)]
+         foc.a <- 
+            res.grid.dt[.(idx.trt),
+                        .(area = sum(area)),
+                        by = "segment",
+                        on = "grid"
+                        ][, area]
+        pen.min.dist <-
+          grid.dist.dt[grid1 %in% idx.trt & grid2 %in% idx.trt,
+                       .(dist.min = min(dist)),
+                       by = c("segment1", "segment2")
+                       ][segment1 != segment2,
+                         0.5 * as.numeric(dist.min < seg.min.dist) * sqrt(penalty)]
+          if(length(foc.obs) > 0 & length(rem.obs) > 0) {
+            adj.add[[j]] <- data.table(grid = grid.adj.add[j],
+                                       # smd = d_cohen(foc.obs, rem.obs),
+                                       imb = js_div(foc.freq, rem.freq,
+                                                    type = "raw"),
+                                       area = sum(foc.a) / prod(x.dim, y.dim),
+                                       pen.min.area = sum(pmax(-foc.a + seg.min.area, 0) *
+                                                          sqrt(penalty)),
+                                       pen.min.dist = sum(pen.min.dist))
+          }
+        }
+      # } # fi area <
+      # if(trt.area > area.prop) {
+        grid.adj.rem <- grid.trt[rowSums(A.nb[grid.trt, -grid.trt]) > 0]
+        # if(opt.fine.constr) {
+        #     ex.bridge <- exclude_bridges(A.nb, grid.ref, grid.trt)
+        #     grid.adj.rem <- grid.adj.rem[!(grid.adj.rem %in% ex.bridge)]
+        # }
+        adj.rem <- list()
+        idx.trt.rem.l <- list()
+        for(j in seq_along(grid.adj.rem)) {
+          idx.trt <- grid.trt[!(grid.trt %in% grid.adj.rem[j])]
+          idx.ref <- with(res.grid, grid[!(grid %in% idx.trt)])
+          if(opt.fine.constr) {
+            ex.islands.ref <- exclude_islands(A.nb, idx.ref, 2)
+            ex.islands.trt <- exclude_islands(A.nb, idx.trt, 2)
+            idx.trt <- c(idx.trt[!(idx.trt %in% ex.islands.trt)], ex.islands.ref)
+            idx.trt <- idx.trt[idx.trt %in% with(res.grid, grid[segment != 0])]
+          }
+          idx.trt.rem.l[[j]] <- idx.trt
+          foc.obs <- seg.score[.(idx.trt), na.omit(score), on = "grid"]
+          rem.obs <- seg.score[!.(idx.trt), na.omit(score), on = "grid"]
+          foc.freq <-
+            seg.score.bin[.(idx.trt),
+                          .(n = sum(n.bin)),
+                          by = "score.bin", on = "grid"
+                          ][!is.na(score.bin)
+                            ][order(score.bin), n/sum(n)]
+          rem.freq <-
+            seg.score.bin[!.(idx.trt),
+                          .(n = sum(n.bin)),
+                          by = "score.bin", on = "grid"
+                          ][!is.na(score.bin)
+                            ][order(score.bin), n/sum(n)]
+          foc.a <- 
+            res.grid.dt[.(idx.trt),
+                        .(area = sum(area)),
+                        by = "segment",
+                        on = "grid"
+                        ][, area]
+          if(length(foc.obs) > 0 & length(rem.obs) > 0) {
+            adj.rem[[j]] <- data.table(grid = grid.adj.rem[j],
+                                       # smd = d_cohen(foc.obs, rem.obs),
+                                       imb = js_div(foc.freq, rem.freq,
+                                                    type = "raw"),
+                                       area = sum(foc.a) / prod(x.dim, y.dim),
+                                       pen.min.area = sum(pmax(-foc.a + seg.min.area, 0) *
+                                                          sqrt(penalty)),
+                                       pen.min.dist = sum(pen.min.dist))
+          }
+        }
+      # }
+      idx.trt.l <- c(idx.trt.add.l, idx.trt.rem.l)
+      adj.dt <- rbind(rbindlist(adj.add), rbindlist(adj.rem))
+      adj.dt[, `:=`(pen.imb = 0, pen.area = 0)]
+      adj.dt[imb < imbalance.lim[1] | imb > imbalance.lim[2],
+             `:=`(
+                  pen.imb = fifelse(imb < imbalance.lim[1],
+                                    abs(imb - imbalance.lim[1]) * sqrt(penalty),
+                                    abs(imb - imbalance.lim[2]) * sqrt(penalty)
+                                    )
+                  )]
+      adj.dt[area < area.lim[1] | area > area.lim[2],
+             `:=`(
+                  pen.area = fifelse(area < area.lim[1],
+                                     abs(area - area.lim[1]) * sqrt(penalty),
+                                     abs(area - area.lim[2]) * sqrt(penalty)
+                                     )
+                  )]
+      adj.dt[, `:=`(imbalance.loss = opt.imp.imb * (imb - imbalance)^2,
+                    area.loss = opt.imp.area * (area - area.prop)^2
+                 )]
+      adj.dt[, `:=`(loss = opt.imp.imb * imbalance.loss +
+                           opt.imp.area * area.loss +
+                           pen.min.area + pen.imb + pen.area)]
+      grid.change.j <- adj.dt[loss < loss.null, which.min(loss)]
+      if(length(grid.change.j) > 0) {
+        grid.trt <- idx.trt.l[[grid.change.j]]
+        grid.ref <- setdiff(res.grid$grid, grid.trt)
+        trt.area <- adj.dt[grid.change.j, area] 
+        trt.imb <- adj.dt[grid.change.j, imb] 
+        grid.loss <- adj.dt[grid.change.j, loss]
+        loss.hist[[i]] <- grid.loss
+        if((loss.null - grid.loss) > opt.fine.tol) {
+          loss.null <- grid.loss
+          if(verbose) {
+            message(paste0("Iteration ", i,
+                           ". Imbalance: ", round(trt.imb, getOption("digits")),
+                           ". Area proportion: ", round(trt.area, getOption("digits")),
+                           ". Loss: ", round(grid.loss, getOption("digits"))))
+          }
+        } else {
+          message(paste0("Iteration ", i, ". No further improvement."))
+          break
+        }
+      } else {
+        message(paste0("Iteration ", i, ". No further improvement."))
+        break
+      }
+      if(verbose & i == opt.fine.max.iter) {
+        message(paste0("Maximum number of iterations reached (", opt.fine.max.iter,
+                       "). Further optimization may be possible."))
+      }
+    }
+
+  } # End fine-scale optimisation
+
+  res.grid$selected[-grid.trt] <- FALSE
+  res.grid$selected[grid.trt] <- TRUE
+
+  res.grid.sel <- res.grid[res.grid$selected,]
+
+  poly.trt <-
+    with(res.grid.sel, aggregate(geometry, by = list(segment = segment), st_union)) |>
+    st_as_sf()
+
+  if(trt.area != area.prop & area.exact == TRUE) {
+    if(verbose) message("Resizing area … ")
+
+    res.grid.seg <- res.grid[res.grid$segment != 0,]
+    poly.seg.ex <-
+      with(res.grid.seg, aggregate(geometry, by = list(segment = segment), st_union)) |>
+      st_as_sf()
+    st_agr(poly.seg.ex) <- "constant"
+
+    f_opt_area_exact <- function(x) {
+      poly.new <- resize_polygons(poly.trt,
+                                  limit = poly.seg.ex,
+                                  dist = x,
+                                  endCapStyle  = "SQUARE",
+                                  joinStyle = "MITRE",
+                                  mitreLimit = 1)
+      prop.new <- sum(st_area(poly.new)) / prod(x.dim, y.dim)
+      return(-abs(prop.new - area.prop))
+    }
+
+    opt.bounds <- c(-2, 2) * (abs(sum(trt.area) - area.prop) * sqrt(prod(x.dim, y.dim)))
+
+    opt.res <-
+      ga(type = "real-valued", fitness = \(x) suppressWarnings(f_opt_area_exact(x)),
+         lower = opt.bounds[1], upper = opt.bounds[2],
+         popSize = 20, run = 10)
+
+    poly.trt <-
+      resize_polygons(poly.trt,
+                      limit = poly.seg.ex,
+                      dist = opt.res@solution[1,],
+                      endCapStyle  = "SQUARE",
+                      joinStyle = "MITRE",
+                      mitreLimit = 1)
+  }
+
+  poly.trt <-
+    st_union(poly.trt) |>
+    st_as_sf() |>
+    st_set_geometry("geometry")
+
+  poly.ref <-
+    st_difference(poly.lim, poly.trt) |>
+    st_as_sf() |>
+    st_set_geometry("geometry")
+
+  poly.areas <- st_as_sf(rbind(poly.ref, poly.trt))
+  poly.areas$type <- factor(c("reference", "treatment"),
+                            levels = c("reference", "treatment"))
+
+  areas.dt <-
+    st_rasterize(poly.areas, template = score) |>
+    as.data.table() |>
+    merge(score, all.x = FALSE, all.y = TRUE)
+  trt.area <- areas.dt[type == "treatment", length(type) / nrow(areas.dt)]
+  trt.imb <-
+    js_div(x = areas.dt[type == "treatment", na.omit(score)],
+           y = areas.dt[type == "reference", na.omit(score)],
+           type = "discrete")
+
+  if(verbose) {
+    message(paste0("Final result: Imbalance: ", round(trt.imb, getOption("digits")),
+                   ". Area proportion: ", round(trt.area, getOption("digits"))))
+  }
+
+  return(list(shape = poly.areas, table = areas.dt[, .(x, y, type)],
+              performance = c(imbalance = trt.imb, area.prop = trt.area)))
+}
+
 
 
 # generate_z1 <- function(x.dim,
@@ -1083,8 +2563,7 @@ generate_landscape_4cov_nl <-
   split <- generate_split(x.dim = x.dim, 
                           y.dim = y.dim,
                           n = split.n,
-                          prop = split.prop,
-  )
+                          prop = split.prop)
   type <- st_rasterize(split, template = generate_empty(x.dim = x.dim, y.dim = y.dim))
   type <- reset_dim(type)
   type <- setNames(type, "type")
@@ -1640,6 +3119,4 @@ capwords <- function(s, strict = FALSE) {
                              sep = "", collapse = " " )
     sapply(strsplit(s, split = " "), cap, USE.NAMES = !is.null(names(s)))
 }
-
-
 
