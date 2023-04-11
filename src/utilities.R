@@ -61,7 +61,9 @@ scale_int <- function(x, ...) {
 }
 
 scale_int.stars <- function(x, int = c(0, 1)) {
-  if(!is.null(int)) {
+  if(all(int == FALSE)) {
+    return(x)
+  } else if(!is.null(int)) {
     n.att <- length(x)
     # For loop is *much* faster than merge, st_apply, split
     for(i in 1:n.att) {
@@ -75,7 +77,9 @@ scale_int.stars <- function(x, int = c(0, 1)) {
 
 
 scale_int.numeric <- function(x, int = c(0, 1)) {
-  if(!is.null(int)) {
+  if(all(int == FALSE)) {
+    return(x)
+  } else if(!is.null(int)) {
       min.x <- min(x, na.rm = TRUE)
       max.x <- max(x, na.rm = TRUE)
       y <- int[1] + (int[2] - int[1]) * (x - min.x) / (max.x - min.x)
@@ -175,12 +179,12 @@ reset_dim.stars <- function(x, y = NULL, ...) {
 }
 
 
-inverse <- function(x, ...) {
-  UseMethod("inverse", x)
+invert <- function(x, ...) {
+  UseMethod("invert", x)
 }
 
 
-inverse.stars <- function(x, attributes = NULL) {
+invert.stars <- function(x, attributes = NULL) {
   if(is.null(attributes)) {
     inv.att <- 1:length(x)
   } else {
@@ -505,8 +509,20 @@ js_div <- function(x,
 
 generate_empty <- function(x.dim,
                            y.dim,
+                           value = 0,
                            name = "value") {
-  mat <- matrix(0, nrow = x.dim, ncol = y.dim)
+  mat <- matrix(value, nrow = x.dim, ncol = y.dim)
+  r <- matrix2stars(mat, name = name)
+  return(r)
+}
+
+generate_nugget <- function(x.dim,
+                            y.dim,
+                            var = 1,
+                            name = "value") {
+  mat <- matrix(rnorm(prod(x.dim, y.dim), 0, var),
+                nrow = x.dim,
+                ncol = y.dim)
   r <- matrix2stars(mat, name = name)
   return(r)
 }
@@ -539,6 +555,50 @@ generate_sigmoid_gradient <- function(x.dim,
   return(sig.grad)
 }
 
+
+cos2_2d_trunc <- function(x, y, a = 1, xd = 1, yd = xd, x0 = 0, y0 = 0) {
+  bx <- pi/(2*xd)
+  by <- pi/(2*yd)
+  x.t <- bx * (x - x0)
+  y.t <- by * (y - y0)
+  # x.t <- 1/b * x - x0
+  # y.t <- 1/b * y - y0
+  z <- a * ((cos(x.t))^2 * (cos(y.t))^2)
+  z[x.t < -pi/2 | x.t > pi/2] <- 0
+  z[y.t < -pi/2 | y.t > pi/2] <- 0
+  return(z)
+}
+
+generate_sin_gradient <- function(x.dim,
+                                  y.dim,
+                                  phi = NULL,
+                                  shift = NULL,
+                                  centre = NULL,
+                                  x.scale = x.dim/2,
+                                  y.scale = y.dim/2,
+                                  rescale = c(0,1),
+                                  name = "value") {
+  if(is.null(centre)) {
+    centre <- point_on_square(phi)
+    centre <- centre - (shift * (centre - 0.5))
+    centre <- centre * c(x.dim, y.dim)
+  }
+  bx <- pi/(2*x.scale)
+  by <- pi/(2*y.scale)
+  x.seq <- bx * (1:x.dim - centre[1])
+  y.seq <- by * (1:y.dim - centre[2])
+  x.seq[x.seq < -pi/2 | x.seq > pi/2] <- pi/2
+  y.seq[y.seq < -pi/2 | y.seq > pi/2] <- pi/2
+  grad.mat <-
+    outer(x.seq, y.seq,
+          # FUN = \(x,y) exp(-((x - x.off)^2 + (y - y.off)^2)))
+          FUN = \(x,y) ((cos(x))^2 * (cos(y))^2))
+  matrix2stars(grad.mat)
+  grad <-
+      matrix2stars(grad.mat, name = name) |> 
+      scale_int(int = rescale)
+  return(grad)
+}
 
 
 generate_exp_gradient <- function(x.dim,
@@ -588,23 +648,98 @@ generate_fbm <- function(x.dim,
   return(fbm)
 }
 
-generate_matern <- function(x.dim,
-                            y.dim,
-                            nu = 1,
-                            var = 1,
-                            scale = 1,
-                            mean = 0,
-                            rescale = c(0,1),
-                            name = "value") {
-  mod <- RMmatern(nu = nu, var = var, scale = scale) + RMtrend(mean = mean)
+generate_matern <-
+  function(x.dim,
+           y.dim,
+           nu = 1,
+           var = 1,
+           scale = 1,
+           mean = 0,
+           rescale = c(0,1),
+           name = "value") {
+  mod <- RMmatern(nu = nu, var = var, scale = scale) + mean
   matern <- 
     RFsimulate(model = mod, x = 1:x.dim, y = 1:y.dim) |>
     as.matrix() |>
     t() |>
-    matrix2stars(name = name) |>
-    scale_int(int = rescale)
+    matrix2stars(name = name)
+  if(is.numeric(rescale)) {
+    matern <- scale_int(matern, int = rescale)
+  }
   return(matern)
 }
+
+
+
+# # Backup if RandomFields eventually breaks
+# generate_matern_fields <-
+#   function(x.dim,
+#            y.dim,
+#            nu = 1,
+#            scale = max(x.dim, y.dim)/10,
+#            var = 1,
+#            mean = 0,
+#            rescale = c(0,1),
+#            name = "value",
+#            ...) {
+#   ce.setup <-
+#     find_ce_domain(x.dim = x.dim,
+#                    y.dim = y.dim,
+#                    cov.args = list(Covariance= "Matern",
+#                                             aRange = scale,
+#                                             smoothness = nu),
+#                    cov.function = "stationary.cov",
+#                    return.setup = TRUE,
+#                    ...)
+#   if(is.null(ce.setup)) stop("Domain to small for chosen range.")
+#   field <-
+#     (circulantEmbedding(ce.setup) * var) |>
+#     matrix2stars(name = name)
+#   field <- field + mean
+#   if(is.numeric(rescale)) {
+#     field <- scale_int(field, int = rescale)
+#   }
+#   return(field)
+#   }
+
+# find_ce_domain <-
+#   function(x.dim,
+#            y.dim,
+#            ex.max = 5,
+#            cov.args,
+#            cov.function = "stationary.cov",
+#            return.setup = TRUE
+#            ) {
+#     p2 <- 2^(1:ex.max)
+#     for(i in seq_along(p2)) {
+#       M <- p2[i] * c(x.dim, y.dim)
+#       dx <- c(1,1)
+#       sim.grid <- as.matrix(expand.grid(1:M[1], 1:M[2]))
+#       sim.center <- rbind(round(M/2))
+#       cov.out <- do.call(cov.function, c(cov.args, list(x1 = sim.grid, x2 = sim.center)))
+#       cov.out <- array(c(cov.out), M)
+#       arr.center <- array(0, M)
+#       arr.center[rbind(sim.center)] <- 1
+#       weights <- fft(cov.out)/(fft(arr.center) * prod(M))
+#       if(!any(Re(weights) < 0)) break
+#     }
+#     if(!(any(Re(weights) < 0))) {
+#       if(return.setup) {
+#         ce.setup <- list(m = c(x.dim, y.dim),
+#                          grid = list(1:x.dim, 1:y.dim),
+#                          dx = c(1, 1),
+#                          M = M,
+#                          wght = weights,
+#                          call = NULL)
+#         return(ce.setup)
+#       } else {
+#       return(M)
+#       }
+#     } else {
+#       return(NULL)
+#     }
+#   }
+
 
 generate_mpd <- function(x.dim,
                          y.dim,
@@ -659,29 +794,26 @@ generate_mpd <- function(x.dim,
 
 generate_distance <- function(x.dim,
                               y.dim,
-                              n,
-                              grad.phi,
-                              grad.prop = 1,
-                              dist.acc = 0.1,
+                              dist.n,
+                              dist.acc = 1,
+                              mix = NULL,
+                              mix.prop = 1,
                               rescale = c(0,1),
                               name = "value") {
   poly.lim <- limit_polygon(x.dim, y.dim)
-  target <- st_sample(poly.lim, n) |> st_union()
-  grad.lin <- 
-    generate_linear_gradient(x.dim = x.dim,
-                             y.dim = y.dim,
-                             phi = grad.phi,
-                             rescale = c(1 - grad.prop, 1))
-  grad.lin <-
-    as.data.table(as.data.frame(grad.lin))
-  nuclei.id <- sample(1:nrow(grad.lin), size = n, prob = grad.lin$value)
+  target <- st_sample(poly.lim, dist.n) |> st_union()
+  if(is.null(mix)) {
+    mix <- generate_empty(x.dim = x.dim, y.dim = y.dim) + 1
+  }
+  mix.dt <- as.data.table(as.data.frame(mix))
+  nuclei.id <- sample(1:nrow(mix.dt), size = dist.n, prob = mix.dt$value)
   target <-
-    grad.lin[nuclei.id, .(x, y)] |>
+    mix.dt[nuclei.id, .(x, y)] |>
     as.matrix() |>
     st_multipoint() |>
     st_sfc()
-  x.crd <- seq(1, x.dim, 1 / dist.acc) + (1/(2*dist.acc))
-  y.crd <- seq(1, y.dim, 1 / dist.acc) + (1/(2*dist.acc))
+  x.crd <- seq(0 + dist.acc/2, x.dim - dist.acc/2, dist.acc)
+  y.crd <- seq(0 + dist.acc/2, y.dim - dist.acc/2, dist.acc)
   points <-
     cbind(x = rep(x.crd, times = length(y.crd)),
           y = rep(y.crd, each = length(y.crd))) |>
@@ -695,6 +827,7 @@ generate_distance <- function(x.dim,
     st_warp(use_gdal = TRUE, cellsize = 1,
             method = "cubicspline", no_data_value = 0)
   dist <- reset_dim(dist)
+  dist[[1]][which(is.na(dist[[1]]))] <- 0
   # st_dimensions(dist) <-
   #   st_dimensions(generate_empty(x.dim = x.dim, y.dim = y.dim))
   dist <-
@@ -774,7 +907,7 @@ generate_split <- function(x.dim,
 }
 
 
-generate_areas_poly <- function(x.dim,
+generate_areas_poly.old <- function(x.dim,
                                 y.dim,
                                 area.prop = 0.5,
                                 area.exact = FALSE,
@@ -795,7 +928,7 @@ generate_areas_poly <- function(x.dim,
                                 ) {
 
 # for(m in 1:20){
-  if(verbose) message("Setting up candidate polygons ...")
+  if(verbose) message("Setting up candidate polygons …")
 
   if(is.null(score)) {
     score <- generate_empty(x.dim = x.dim, y.dim = y.dim) + 1
@@ -1171,38 +1304,70 @@ match_to_segments_old <- function(segments, pw.dist, center, buffer, collapse = 
   return(matched.l)
 }
 
+# REMOVE
+# n = 3
+x <- c(10, 10, 15, 15, 25,
+       65, 35, 75, 27, 15,
+       50, 80, 37, 85, 35)
+
+decode_seg <- function(x, n = 1, digits = 0) {
+  seg.list <- split(round(x, digits = digits),
+                    f = rep(1:5, times = n))
+  names(seg.list) <- c("x.seg", "y.seg", "x.cen", "y.cen", "buffer")
+  return(seg.list)
+}
+
+
+# REMOVE
+# x <- decode_seg(x)
+# x.dt <- as.data.table(x)
+# x.dt[,
+#      `:=`(grid.seg = res.grid$grid[st_intersects(res.grid,
+#                                                  st_point(c(x.seg, y.seg)),
+#                                                  sparse = FALSE)],
+#           grid.cen = res.grid$grid[st_intersects(res.grid,
+#                                                  st_point(c(x.cen, y.cen)),
+#                                                  sparse = FALSE)]),
+#      by = .I]
+
+
+# st_as_sf(st
+
+# res.grid$grid[st_intersects(res.grid, st_point(c(5, 25)), sparse = FALSE)]
+
+# REMOVE
+# pw.dist = grid.dist.pw
+# segments = x.dt$grid.seg
+# centers = x.dt$grid.cen
+# buffer = x.dt$buffer
+# include.unmatched = FALSE
+# plot(res.grid[res.grid$grid %in% c(segments, grid),])
 
 match_to_segments <- function(pw.dist,
-                              center,
+                              segments,
+                              centers,
                               buffer,
                               min.dist = 0,
                               include.unmatched = TRUE) {
-    stopifnot(length(center) == length(buffer))
-    center.inb <- center %in% 1:nrow(pw.dist)
+    stopifnot(length(segments) == length(buffer) &
+              length(centers) == length(buffer))
+    n.seg <- length(segments)
     matched.l <- list()
-    if(any(center.inb)) {
-      grid.seg <-
-        data.table(grid = 1:nrow(pw.dist),
-                   segment =
-                     apply(pw.dist[, center[center.inb], drop = FALSE],
-                           1, which.min) |>
-                     lapply(\(x) ifelse(length(x) > 0, x, 0)) |>
-                     unlist())
-      grid.seg[, dist := pw.dist[grid, center[center.inb][segment]], by = .I]
-      for(i in seq_along(center)) {
-        if(center.inb[i]) {
-          matched.l[[i]] <- grid.seg[segment == i & dist <= buffer[i], grid]
-        } else {
-          matched.l[[i]] <- integer(0)
-        }
-      }
-      matched.grid <- do.call(c, matched.l)
-      matched.segment <- do.call(c, mapply(\(x, y) rep(y, length(x)),
-                                           matched.l, 1:sum(center.inb)))
-    } else {
-      matched.grid <- integer(0)
-      matched.segment <- integer(0)
+    grid.seg <-
+      data.table(grid = 1:nrow(pw.dist),
+                 segment =
+                   apply(pw.dist[, segments, drop = FALSE],
+                         1, which.min) |>
+                   lapply(\(x) ifelse(length(x) > 0, x, 0)) |>
+                   unlist())
+    grid.seg[, dist := pw.dist[grid, centers[segment]], by = .I]
+    matched.l <- list()
+    for(i in 1:n.seg) {
+      matched.l[[i]] <- grid.seg[segment == i & dist <= buffer[i], grid]
     }
+    matched.grid <- do.call(c, matched.l)
+    matched.segment <- do.call(c, mapply(\(x, y) rep(y, length(x)),
+                                         matched.l, 1:n.seg))
     if(include.unmatched) {
       unmatched.grid <-  (1:nrow(pw.dist))[!1:nrow(pw.dist) %in% matched.grid]
       unmatched.segment <- rep(0, length(unmatched.grid))
@@ -1212,6 +1377,18 @@ match_to_segments <- function(pw.dist,
     return(list(grid = matched.grid, segment = matched.segment))
   }
 
+#3 REMOVE
+# matched <-
+# match_to_segments(pw.dist = grid.dist.pw,
+# segments = x.dt$grid.seg,
+# centers = x.dt$grid.cen,
+# buffer = x$buffer,
+# include.unmatched = TRUE) |>
+# as.data.table()
+
+# plot(cbind(res.grid, merge(res.grid.dt, matched)[order(grid), segment]))
+
+# system.time(segment_min_distance(grid.dist.pw, grid.sel = grid.sel, segments = segments))
 
 segment_min_distance <- function(pw.dist,
                                  grid.cols = c("grid1", "grid2"),
@@ -1231,22 +1408,81 @@ segment_min_distance <- function(pw.dist,
           by = "grid1") |>
     merge(grid.seg[, .(grid2 = grid, segment2 = segment)],
           by = "grid2") |>
-  DT(segment1 != segment2,
-     .(dist.min = min(dist)),
-     by = c("segment1", "segment2")) |>
-  DT(order(segment1, segment2))
+    DT(segment1 != segment2,
+       .(dist.min = min(dist)),
+       by = c("segment1", "segment2")) |>
+    DT(order(segment1, segment2))
   return(grid.dist.dt)
 }
 
+# segment_min_distance <- function(pw.dist,
+#                                  grid.sel,
+#                                  segments,
+#                                  grid.cols = c("grid1", "grid2"),
+#                                  dist.col = "dist"
+#                                  ) {
+#   if(is.data.table(pw.dist)) {
+#     grid.seg <- data.table(grid = grid.sel, segment = segments)
+#     grid.seg[, `:=`(grid1 = grid, grid2 = grid, segment1 = segment, segment2 = segment)]
+#     pw.dist[.(grid.sel),
+#             on = grid.cols[1]
+#             ][.(grid.sel),
+#               on = grid.cols[2]
+#               ] |>
+#     merge(grid.seg[, .(grid1, segment1)], by = "grid1") |>
+#     merge(grid.seg[, .(grid2, segment2)], by = "grid2") |>
+#       DT(segment1 != segment2,
+#          .(dist.min = min(dist)),
+#          by = c("segment1", "segment2")) |>
+#       DT(order(segment1, segment2))
+#   }
+#   if(is.matrix(pw.dist)) {
+#     grid.dist.dt <- as.data.table(pw.dist[grid.sel, grid.sel])
+#     names(grid.dist.dt) <- as.character(grid.sel)
+#     grid.dist.dt[, grid1 := grid.sel]
+#     grid.dist.dt <-
+#       melt(grid.dist.dt,
+#            id.vars = "grid1",
+#            variable.name = "grid2", value.name = "dist",
+#            variable.factor = FALSE) |>
+#       DT(, grid2 := as.integer(grid2)) |>
+#       merge(grid.seg[, .(grid1 = grid, segment1 = segment)],
+#             by = "grid1") |>
+#       merge(grid.seg[, .(grid2 = grid, segment2 = segment)],
+#             by = "grid2") |>
+#       DT(segment1 != segment2,
+#          .(dist.min = min(dist)),
+#          by = c("segment1", "segment2")) |>
+#       DT(order(segment1, segment2))
+#   }
+#   return(grid.dist.dt)
+# }
 
-encode_grid_buffer <- function(grid, buffer, order.grid, order.buffer) {
+
+encode_grid_buffer.old <- function(grid, buffer, order.grid, order.buffer) {
   grid.gray <- lapply(grid, \(x) binary2gray(decimal2binary(x, order.grid)))
   buffer.gray <- lapply(buffer, \(x) binary2gray(decimal2binary(x, order.buffer)))
   string <- c(do.call(c, grid.gray), do.call(c, buffer.gray))
   return(string)
 }
 
+encode_grid_buffer <- function(grid.seg, grid.cen, buffer, order.grid, order.buffer) {
+  grid.gray <- lapply(c(grid.seg, grid.cen), \(x) binary2gray(decimal2binary(x, order.grid)))
+  buffer.gray <- lapply(buffer, \(x) binary2gray(decimal2binary(x, order.buffer)))
+  string <- c(do.call(c, grid.gray), do.call(c, buffer.gray))
+  return(string)
+}
+
 decode_grid_buffer <- function(string, bit.orders) {
+  string <- split(string, rep.int(seq.int(bit.orders), times = bit.orders))
+  orders <- sapply(string, function(x) { binary2decimal(gray2binary(x)) })
+  decoded <- split(unname(orders), f = rep(1:3, each = length(bit.orders)/3))
+  return(list(grid.seg = decoded[[1]],
+              grid.cen = decoded[[2]],
+              buffer = decoded[[3]]))
+}
+
+decode_grid_buffer.old <- function(string, bit.orders) {
   string <- split(string, rep.int(seq.int(bit.orders), times = bit.orders))
   orders <- sapply(string, function(x) { binary2decimal(gray2binary(x)) })
   dec <- unname(orders)
@@ -1292,26 +1528,27 @@ exclude_bridges <- function(x, a, b) {
 }
 
 
-generate_areas_poly2 <- function(x.dim,
+generate_areas_poly <- function(x.dim,
                                 y.dim,
+                                seg.seed,
+                                score,
+                                score.sam = 1e4,
                                 imbalance = 0.1,
                                 imbalance.tol = NULL,
                                 area.prop = 0.5,
                                 area.tol = NULL,
                                 area.exact = FALSE,
-                                score,
-                                score.sam = 1e4,
-                                seg.seed,
                                 seg.res = 0.1 * min(x.dim, y.dim),
                                 seg.min.dist = 0,
                                 seg.min.area = 0,
                                 seg.even = 2,
                                 seg.prec = 0.1 * seg.res,
                                 min.bound.dist = 0,
-                                verbose = FALSE,
+                                verbose = 2,
                                 opt.imp.imb = 1,
                                 opt.imp.area = 1,
                                 opt.pop = 50,
+                                # opt.pop.try = 10*opt.pop,
                                 opt.prec = 1e-4,
                                 opt.pcrossover = 0.8,
                                 opt.pmutation = 0.1,
@@ -1326,7 +1563,7 @@ generate_areas_poly2 <- function(x.dim,
                                 ) {
 
 # for(m in 1:20){
-  if(verbose) message("Setting up candidate polygons ...")
+  if(verbose > 0) message("Setting up candidate polygons …")
 
   if(is.null(area.tol)) {
     area.lim <- rep(area.prop, 2)
@@ -1441,6 +1678,18 @@ generate_areas_poly2 <- function(x.dim,
   setorder(res.grid.dt, grid)
 
   grid.dist.pw <- suppressWarnings(st_distance(res.grid))
+  grid.dist.dt <- as.data.table(grid.dist.pw)
+  names(grid.dist.dt) <- as.character(1:nrow(res.grid))
+  grid.dist.dt[, grid1 := 1:.N]
+  grid.dist.dt <-
+    melt(grid.dist.dt, id.vars = "grid1",
+         variable.name = "grid2", value.name = "dist",
+         variable.factor = FALSE)
+  grid.dist.dt[,
+              c("grid1", "grid2") := lapply(.SD, \(x) as.integer(as.character(x))),
+              .SDcols = c("grid1", "grid2")]
+  setindex(grid.dist.dt, grid1)
+  setindex(grid.dist.dt, grid2)
 
 
   seg.score <- 
@@ -1465,116 +1714,196 @@ generate_areas_poly2 <- function(x.dim,
   setindex(seg.score.bin, score.bin)
 
 
-  if(verbose) message("Building areas (optimisation) …")
+  if(verbose > 0) message("Building areas (optimisation) …")
 
   order.grid <- ceiling(log2(nrow(res.grid.dt)))
   order.buffer <- ceiling(log2(sqrt(x.dim^2 + y.dim^2)))
-  order.c <- rep(c(order.grid, order.buffer), each = seg.seed)
+  order.c <- rep(c(order.grid, order.grid, order.buffer), each = seg.seed)
   n.bits <- sum(order.c)
 
   f_opt_imb_area <- function(x) {
-    x <- decode_grid_buffer(x, order.c)
-    n.seg <- length(x$grid)
-    trt.proposed <-
-      match_to_segments.m(pw.dist = grid.dist.pw,
-                          center = x$grid,
-                          buffer = x$buffer,
-                          include.unmatched = FALSE) |>
-      as.data.table()
-    if(length(trt.proposed$grid) == 0) {
-      f <- length(x$grid)^2 * sqrt(.Machine$double.xmax)
-    } else {
-      foc.obs <- seg.score[.(trt.proposed$grid), na.omit(score), on = "grid"]
-      rem.obs <- seg.score[!.(trt.proposed$grid), na.omit(score), on = "grid"]
-      foc.freq <-
-        seg.score.bin[.(trt.proposed$grid),
-                      .(n = sum(n.bin)),
-                      by = "score.bin", on = "grid"
-                      ][!is.na(score.bin)
-                        ][order(score.bin), n/sum(n)]
-      rem.freq <-
-        seg.score.bin[!.(trt.proposed$grid),
-                      .(n = sum(n.bin)),
-                      by = "score.bin", on = "grid"
-                      ][!is.na(score.bin)
-                       ][order(score.bin), n/sum(n)]
-      trt.imb <- js_div.m(foc.freq, rem.freq, type = "raw")
-      trt.a <- 
-        merge(res.grid.dt[.(trt.proposed$grid),
-                          on = "grid"],
-              trt.proposed) |>
-        DT(, .(area = sum(area)), by = "segment")
-      # Any remaining segments without assigned grid polygons?
-      seg.rem <- setdiff(1:n.seg, trt.a$segment)
-      if(length(seg.rem) > 0) {
-        trt.a <-
-          rbind(trt.a,
-                data.table(segment = seg.rem,
-                           area = rep(0, length(seg.rem))))
-      }
-      trt.area <- sum(trt.a) / prod(x.dim, y.dim)
-      imbalance.loss <- (trt.imb - imbalance)^2
-      area.loss <- (trt.area - area.prop)^2
-      penalty.min.area <- pmax(-trt.a$area + seg.min.area, 0) * sqrt(.Machine$double.xmax)
-      penalty.min.dist <-
-        segment_min_distance.m(pw.dist = grid.dist.pw,
-                               grid.cols = c("grid1", "grid2"),
-                               grid.sel = trt.proposed$grid,
-                               segments = trt.proposed$segment) |>
-        DT(, as.numeric(dist.min < seg.min.dist) * sqrt(.Machine$double.xmax))
-      penalty.oob <- as.numeric(!(x$grid %in% res.grid.dt$grid)) * sqrt(.Machine$double.xmax)
+    # x.decode <- decode_seg(x, n = seg.seed, digits = 0)
+    # x.dt <- as.data.table(x.decode)
+    # x.dt[,
+    #      `:=`(grid.seg = res.grid$grid[st_contains_properly(res.grid,
+    #                                                  st_point(c(x.seg, y.seg)),
+    #                                                  sparse = FALSE)],
+    #           grid.cen = res.grid$grid[st_contains_properly(res.grid,
+    #                                                  st_point(c(x.cen, y.cen)),
+    #                                                  sparse = FALSE)]),
+    #      by = .I]
+    x.decode <- decode_grid_buffer(x, order.c)
+    x.dt <- as.data.table(x.decode)
+    x.dt[, `:=`(
+                grid.seg = fifelse(grid.seg %in% res.grid$grid,
+                                   grid.seg, NA),
+                grid.cen = fifelse(grid.cen %in% res.grid$grid,
+                                   grid.cen, NA))
+             ]
+    # If coordinates out of bounds, return penalty
+    if(any(is.na(x.dt$grid.seg)) | any(is.na(x.dt$grid.cen))) {
       f <-
-        opt.imp.imb * imbalance.loss +
-        opt.imp.area * area.loss +
-        sum(penalty.min.area) + sum(penalty.oob) + sum(penalty.min.dist)
+        sum(c(is.na(x.dt[, c(grid.seg, grid.cen)])))^2 *
+        sqrt(.Machine$double.xmax)
+    } else {
+      trt.proposed <-
+        match_to_segments.m(pw.dist = grid.dist.pw,
+                            segments = x.dt$grid.seg,
+                            centers = x.dt$grid.cen,
+                            buffer = x.dt$buffer,
+                            include.unmatched = FALSE) |>
+        as.data.table()
+      # If empty treatment area, return penalty
+      if(nrow(trt.proposed) == 0) {
+        f <- length(x.decode$grid.seg)^2 * sqrt(.Machine$double.xmax)
+      # Otherwise evaluate function
+      } else {
+        foc.obs <- seg.score[.(trt.proposed$grid), na.omit(score), on = "grid"]
+        rem.obs <- seg.score[!.(trt.proposed$grid), na.omit(score), on = "grid"]
+        foc.freq <-
+          seg.score.bin[.(trt.proposed$grid),
+                        .(n = sum(n.bin)),
+                        by = "score.bin", on = "grid"
+                        ][!is.na(score.bin)
+                          ][order(score.bin), n/sum(n)]
+        rem.freq <-
+          seg.score.bin[!.(trt.proposed$grid),
+                        .(n = sum(n.bin)),
+                        by = "score.bin", on = "grid"
+                        ][!is.na(score.bin)
+                         ][order(score.bin), n/sum(n)]
+        trt.imb <- js_div(foc.freq, rem.freq, type = "raw")
+        trt.a <- 
+          merge(res.grid.dt[.(trt.proposed$grid),
+                            on = "grid"],
+                trt.proposed) |>
+          DT(, .(area = sum(area)), by = "segment")
+        # Any remaining segments without assigned grid polygons?
+        seg.rem <- setdiff(1:seg.seed, trt.a$segment)
+        if(length(seg.rem) > 0) {
+          trt.a <-
+            rbind(trt.a,
+                  data.table(segment = seg.rem,
+                             area = rep(0, length(seg.rem))))
+        }
+        trt.area <- sum(trt.a) / prod(x.dim, y.dim)
+        imbalance.loss <- (trt.imb - imbalance)^2
+        area.loss <-
+          (trt.area - area.prop)^2
+        penalty.min.area <- pmax(-trt.a$area + seg.min.area, 0) * sqrt(.Machine$double.xmax)
+        if(length(unique(trt.proposed$segment)) > 1) {
+          penalty.min.dist <-
+            segment_min_distance.m(pw.dist = grid.dist.pw,
+                                   grid.cols = c("grid1", "grid2"),
+                                   grid.sel = trt.proposed$grid,
+                                   segments = trt.proposed$segment) |>
+            DT(, as.numeric(dist.min < seg.min.dist) * sqrt(.Machine$double.xmax))
+        } else {
+          penalty.min.dist <- 0
+        }
+        # REMOVE
+        # penalty.oob <- as.numeric(!(x$grid %in% res.grid.dt$grid)) * sqrt(.Machine$double.xmax)
+        f <-
+          opt.imp.imb * imbalance.loss +
+          opt.imp.area * area.loss +
+          sum(penalty.min.area) +
+          # REMOVE
+          # sum(penalty.oob) +
+          sum(penalty.min.dist)
+      }
     }
     return(-f)
   }
 
   # Cache function evaluations
-  fm_opt_imb_area <- memoise(f_opt_imb_area)
+  f_opt_imb_area.m <- memoise(f_opt_imb_area)
   match_to_segments.m <- memoise(match_to_segments)
   segment_min_distance.m <- memoise(segment_min_distance)
-  js_div.m <- memoise(js_div)
-  
-  pop.start.mat <- matrix(NA, nrow = opt.pop, ncol = sum(order.c))
+
+  # Starting population
+
+  if(verbose > 0) message("Creating starting population for genetic algorithm …")
+
+  pop.start.mat <- matrix(NA, nrow = opt.pop, ncol = n.bits)
   for(i in 1:opt.pop) {
-    grid <- sample(res.grid.dt$grid, seg.seed)
-    buffer <- round(runif(n = 3,
-                          sqrt(seg.min.area),
-                          sqrt(area.prop * x.dim * y.dim / seg.seed)))
-    pop.start.mat[i,] <- encode_grid_buffer(grid, buffer, order.grid, order.buffer)
+    grid.seg.sam <- sample(res.grid.dt$grid, seg.seed)
+    # xy.seg.sam <- 
+    #   res.grid[res.grid$grid %in% grid.seg.sam,] |>
+    #   st_centroid() |>
+    #   st_coordinates()
+    # xy.seg.sam <- xy.seg.sam[, c("X", "Y")]
+    # colnames(xy.seg.sam) <- c("x.seg", "y.seg")
+    grid.cen.sam <-
+          data.table(grid = 1:nrow(grid.dist.pw),
+                     segment =
+                       apply(grid.dist.pw[, grid.seg.sam, drop = FALSE],
+                             1, which.min) |>
+                       lapply(\(x) ifelse(length(x) > 0, x, 0)) |>
+                       unlist()) |>
+          DT(, .(grid.cen.sam = sample(grid, 1)), by = segment) |>
+          DT(order(segment), grid.cen.sam)
+    # xy.cen.sam <- 
+    #   res.grid[res.grid$grid %in% grid.cen.sam,] |>
+    #   st_centroid() |>
+    #   st_coordinates()
+    # xy.cen.sam <- xy.cen.sam[, c("X", "Y")]
+    # colnames(xy.cen.sam) <- c("x.cen", "y.cen")
+    buffer.sam <- round(runif(n = seg.seed,
+                              sqrt(seg.min.area),
+                              sqrt(area.prop * x.dim * y.dim / seg.seed)))
+    # pop.start.mat[i,] <- c(c(t(cbind(xy.seg.sam, xy.cen.sam))), buffer.sam)
+    pop.start.mat[i,] <- encode_grid_buffer(grid.seg.sam, grid.cen.sam, buffer.sam, order.grid, order.buffer)
   }
+
+
+  # pop.start.mat <-
+  #   pop.start.mat[order(-apply(pop.start.mat, 1, f_opt_imb_area.m))[1:opt.pop],]
+
 
   f_max <- -((opt.imp.imb + opt.imp.area) * opt.prec)
 
-  f_monitor <- ifelse(verbose, gaMonitor, FALSE)
+  f_monitor <- ifelse(verbose > 0, gaMonitor, FALSE)
+
+  # f_lower <- rep(c(rep(1, 4), 0), seg.seed)
+  # f_upper <- rep(c(x.dim, y.dim, x.dim, y.dim,
+  #                  sqrt(x.dim^2 + y.dim^2)),
+  #                times = seg.seed)
+
+  if(verbose > 0) message("Genetic optimization …")
 
   buffer.opt <- NULL
   while(is.null(buffer.opt)) {
     try({
       buffer.opt <-
           ga(type =  "binary",
-             fitness = fm_opt_imb_area,
+             fitness = f_opt_imb_area.m,
              maxFitness = f_max,
-             # lower = rep(0, seg.seed), upper = rep(max(x.dim, y.dim), seg.seed),
-             nBits = sum(order.c), suggestions = pop.start.mat,
-             run = opt.run, popSize = opt.pop, maxiter = opt.max.iter,
-             optim = TRUE, optimArgs = list(poptim = 0.25),
+             # lower = f_lower,
+             # upper = f_upper,
+             nBits = n.bits,
+             suggestions = pop.start.mat,
+             run = opt.run,
+             popSize = opt.pop,
+             maxiter = opt.max.iter,
+             optim = TRUE,
+             optimArgs = list(poptim = 0.25),
              parallel = opt.parallel,
-             pcrossover = opt.pcrossover, pmutation = opt.pmutation,
-             monitor = f_monitor)
+             pcrossover = opt.pcrossover,
+             pmutation = opt.pmutation,
+             monitor = f_monitor,
+             ...)
     })
-    if(verbose & is.null(buffer.opt)) message("Optimization failed. Trying again …")
+    if(verbose > 0 & is.null(buffer.opt)) message("Optimization failed. Trying again …")
   }
 
   imb_area.sol <- decode_grid_buffer(buffer.opt@solution[1,], order.c)
 
   trt.proposed <-
     match_to_segments.m(pw.dist = grid.dist.pw,
-                      center = imb_area.sol$grid,
-                      buffer = imb_area.sol$buffer,
-                      include.unmatched = TRUE) |>
+                        segments = imb_area.sol$grid.seg,
+                        centers = imb_area.sol$grid.cen,
+                        buffer = imb_area.sol$buffer,
+                        include.unmatched = TRUE) |>
   as.data.table()
 
   # Update segment and selection information for grid polygons
@@ -1630,20 +1959,20 @@ generate_areas_poly2 <- function(x.dim,
 
 
   # remove cached functions
-  rm(fm_opt_imb_area, match_to_segments.m, segment_min_distance.m, js_div.m)
+  rm(f_opt_imb_area.m, match_to_segments.m, segment_min_distance.m)
 
-  if(verbose) {
+  if(verbose > 0) {
     message(paste0("Imbalance: ", round(trt.imb, getOption("digits")),
                    ". Area proportion: ", round(trt.area, getOption("digits"))))
   }
 
   if(opt.fine) {
 
-    if(verbose) message("Attempt to further adjust areas (fine tuning) …")
+    if(verbose > 0) message("Attempt to further adjust areas (fine tuning) …")
 
     penalty <- sqrt(opt.imp.imb + opt.imp.area)
-    pen.imb = ifelse(trt.imb < area.lim[1] | trt.imb > area.lim[2],
-                     min(abs(trt.imb - area.lim)) * sqrt(penalty), 0)
+    pen.imb = ifelse(trt.imb < imbalance.lim[1] | trt.imb > imbalance.lim[2],
+                     min(abs(trt.imb - imbalance.lim)) * sqrt(penalty), 0)
     pen.area = ifelse(trt.area < area.lim[1] | trt.area > area.lim[2],
                      min(abs(trt.area - area.lim)) * sqrt(penalty), 0)
     pen.min.area <- sum(pmax(-trt.a + seg.min.area, 0) * sqrt(penalty))
@@ -1811,7 +2140,7 @@ generate_areas_poly2 <- function(x.dim,
         loss.hist[[i]] <- grid.loss
         if((loss.null - grid.loss) > opt.fine.tol) {
           loss.null <- grid.loss
-          if(verbose) {
+          if(verbose > 0) {
             message(paste0("Iteration ", i,
                            ". Imbalance: ", round(trt.imb, getOption("digits")),
                            ". Area proportion: ", round(trt.area, getOption("digits")),
@@ -1825,7 +2154,7 @@ generate_areas_poly2 <- function(x.dim,
         message(paste0("Iteration ", i, ". No further improvement."))
         break
       }
-      if(verbose & i == opt.fine.max.iter) {
+      if(verbose > 0 & i == opt.fine.max.iter) {
         message(paste0("Maximum number of iterations reached (", opt.fine.max.iter,
                        "). Further optimization may be possible."))
       }
@@ -1843,7 +2172,7 @@ generate_areas_poly2 <- function(x.dim,
     st_as_sf()
 
   if(trt.area != area.prop & area.exact == TRUE) {
-    if(verbose) message("Resizing area … ")
+    if(verbose > 0) message("Resizing area … ")
 
     res.grid.seg <- res.grid[res.grid$segment != 0,]
     poly.seg.ex <-
@@ -1891,24 +2220,41 @@ generate_areas_poly2 <- function(x.dim,
   poly.areas <- st_as_sf(rbind(poly.ref, poly.trt))
   poly.areas$type <- factor(c("reference", "treatment"),
                             levels = c("reference", "treatment"))
+  st_agr(poly.areas) <- "constant"
 
   areas.dt <-
     st_rasterize(poly.areas, template = score) |>
     as.data.table() |>
     merge(score, all.x = FALSE, all.y = TRUE)
+
+  areas.dt <-
+    st_geometry(poly.areas[poly.areas$type == "treatment",]) |>
+    st_cast("POLYGON") |>
+    st_as_sf() |>
+    st_set_geometry("geometry") |>
+    st_rasterize(template = generate_empty(x.dim = x.dim,
+                                           y.dim = y.dim)) |>
+    as.data.table() |>
+    setnames(c("x", "y", "poly")) |>
+    merge(score, all.x = FALSE, all.y = TRUE)
+  areas.dt[, type := fifelse(poly == 0, "reference", "treatment")]
+  areas.dt[, type := factor(type, c("reference", "treatment"))]
+
   trt.area <- areas.dt[type == "treatment", length(type) / nrow(areas.dt)]
   trt.imb <-
     js_div(x = areas.dt[type == "treatment", na.omit(score)],
            y = areas.dt[type == "reference", na.omit(score)],
            type = "discrete")
 
-  if(verbose) {
+  if(verbose > 0) {
     message(paste0("Final result: Imbalance: ", round(trt.imb, getOption("digits")),
                    ". Area proportion: ", round(trt.area, getOption("digits"))))
   }
 
-  return(list(shape = poly.areas, table = areas.dt[, .(x, y, type)],
-              performance = c(imbalance = trt.imb, area.prop = trt.area)))
+  return(list(shape = poly.areas,
+              table = areas.dt[, .(x, y, poly, type)],
+              performance = c(imbalance = trt.imb,
+                              area.prop = trt.area)))
 }
 
 
@@ -1952,12 +2298,14 @@ generate_areas_poly2 <- function(x.dim,
 
 generate_z1 <- function(x.dim,
                         y.dim,
-                        fbm.alpha,
-                        fbm.var,
-                        fbm.scale,
-                        fbm.w,
-                        grad.phi,
-                        grad.w,
+                        fbm.alpha = 1,
+                        fbm.var = 1,
+                        fbm.scale = 1,
+                        fbm.w = 1,
+                        fbm.rescale = c(0, 1),
+                        mix = NULL,
+                        mix.w = 0,
+                        mix.rescale = c(0, 1),
                         rescale = c(0, 1),
                         name = "z1") {
   fbm <- generate_fbm(x.dim = x.dim,
@@ -1965,12 +2313,12 @@ generate_z1 <- function(x.dim,
                        alpha = fbm.alpha,
                        var = fbm.var,
                        scale = fbm.scale,
-                       rescale = c(0, 1))
-  grad.lin <- generate_linear_gradient(x.dim = x.dim,
-                                       y.dim = y.dim,
-                                       phi = grad.phi,
-                                       rescale = c(0, 1))
-  z <- fbm.w * fbm + grad.w * grad.lin
+                       rescale = fbm.rescale)
+  if(is.null(mix)) {
+    z <- fbm
+  } else {
+  z <- fbm.w * fbm + mix.w * scale_int(mix, mix.rescale)
+  }
   z <-
     scale_int(z, int = rescale) |>
     setNames(name)
@@ -1980,31 +2328,29 @@ generate_z1 <- function(x.dim,
 
 generate_z2 <- function(x.dim,
                         y.dim,
-                        fbm.alpha,
-                        fbm.var,
-                        fbm.scale,
-                        fbm.w,
-                        grad.phi,
-                        grad.shift,
-                        grad.w,
+                        grad.phi = 0,
+                        grad.shift = 0,
+                        grad.w = 0,
+                        grad.x.scale = 1,
+                        grad.y.scale = 1,
+                        grad.rescale = c(0, 1),
+                        mix = NULL,
+                        mix.w = 1,
+                        mix.rescale = c(0, 1),
                         rescale = c(0, 1),
                         name = "z2") {
-  fbm <- generate_fbm(x.dim = x.dim,
-                    y.dim = y.dim,
-                    alpha = fbm.alpha,
-                    var = fbm.var,
-                    scale = fbm.scale,
-                    rescale = c(0, 1))
-  # grad <- generate_linear_gradient(x.dim = x.dim,
-  #                                  y.dim = y.dim,
-  #                                  phi = grad.phi,
-  #                                  rescale = c(0, 1))
   grad <- generate_exp_gradient(x.dim = x.dim,
-                                   y.dim = y.dim,
-                                   phi = grad.phi,
-                                   shift = grad.shift,
-                                   rescale = c(0, 1))
-  z <- fbm.w * fbm + grad.w * grad
+                                y.dim = y.dim,
+                                phi = grad.phi,
+                                shift = grad.shift,
+                                x.scale = grad.x.scale,
+                                y.scale = grad.y.scale,
+                                rescale = c(0, 1))
+  if(is.null(mix)) {
+    z <- grad
+  } else {
+  z <- grad.w * grad + mix.w * scale_int(mix, mix.rescale)
+  }
   z <-
     scale_int(z, int = rescale) |>
     setNames(name)
@@ -2013,36 +2359,39 @@ generate_z2 <- function(x.dim,
 generate_z3 <- function(
                         x.dim,
                         y.dim,
-                        dist.n,
-                        grad.phi,
-                        grad.prop,
-                        acc = 0.1,
+                        dist.n = 10,
+                        dist.acc = 1,
+                        mix = NULL,
+                        mix.prop = 1,
                         rescale = c(0,1),
                         name = "z3"
                         ) {
   dist <- generate_distance(x.dim = x.dim,
                             y.dim = y.dim,
-                            n = dist.n,
-                            grad.phi = grad.phi,
-                            grad.prop = grad.prop,
-                            dist.acc = acc,
-                            rescale = c(0,1))
-  z <- interpolate_na(dist, method = "gam", nh = "neumann", range = 2)
+                            dist.n = dist.n,
+                            dist.acc = dist.acc,
+                            mix = mix,
+                            mix.prop = mix.prop,
+                            rescale = FALSE)
+  # z <- interpolate_na(dist, method = "gam", nh = "neumann", range = 2)
   z <-
-    scale_int(z, int = rescale) |>
+    scale_int(dist, int = rescale) |>
     setNames(name)
   return(z)
 }
 
 generate_z4 <- function(x.dim,
                         y.dim,
-                        seg.n,
-                        mat.nu,
-                        mat.var,
-                        mat.scale,
-                        mat.w,
-                        grad.phi,
-                        grad.w,
+                        seg.n = 3,
+                        mat.nu = 1,
+                        mat.var = 1,
+                        mat.scale = 1,
+                        mat.mean = 0,
+                        mat.w = 1,
+                        mat.rescale = c(0, 1),
+                        mix = NULL,
+                        mix.w = 0,
+                        mix.rescale = c(0, 1),
                         rescale = c(0,1),
                         name = "z4") {
   seg <- generate_segments(x.dim = x.dim,
@@ -2054,127 +2403,117 @@ generate_z4 <- function(x.dim,
                     nu = mat.nu,
                     scale = mat.scale,
                     var = mat.var,
-                    rescale = c(0, 1)) |>
+                    mean = mat.mean,
+                    rescale = mat.rescale) |>
     segment_field(seg) |>
     scale_int()
-  grad.lin <-
-    generate_linear_gradient(x.dim = x.dim,
-                             y.dim = y.dim,
-                             phi = grad.phi,
-                             rescale = c(0, 1)) |>
-    segment_field(seg) |>
-    scale_int()
-  z <- mat.w * mat + grad.w * grad.lin
-  z <-
-    scale_int(z, int = rescale) |>
-    setNames(name)
+    if(is.null(mix)) {
+      z <- mat
+    } else {
+    mix.seg <-
+      mix |>
+      segment_field(seg) |>
+      scale_int(mix.rescale)
+    z <- mat.w * mat + mix.w * mix.seg
+    }
+    z <-
+      scale_int(z, int = rescale) |>
+      setNames(name)
   return(z)
 }
 
 
-x.dim = 100
-y.dim = 100
-effect.size.sp = 1
-effect.size.bd = 0
-nuclei = 10
-poly = generate_split(100, 100, 200, 0.5)
-phi.range = c(-1, 1)
-shift.range = c(0, 0.5)
-x.scale.range = c(0.5, 1)
-y.scale.range = c(0.5, 1)
-nuc.eff.range = c(0.5, 2)
-name = "treatment"
-
-generate_treatment <- function(x.dim,
-                               y.dim,
-                               effect.size.sp,
-                               effect.size.bd,
-                               nuclei,
-                               poly,
-                               phi.range,
-                               shift.range,
-                               x.scale.range,
-                               y.scale.range,
-                               nuc.eff.range,
-                               name = "treatment") {
-  treatment <- generate_empty(x.dim = x.dim,
-                              y.dim = y.dim)
-  centroids <-
-    st_centroid(poly[1:2,]) |>
-    st_coordinates() |>
-    suppressWarnings()
-  phi.shift <-
-    atan2((centroids[2,2] - centroids[1,2]),
-          (centroids[2,1] - centroids[1,1]))
-  phi.range.trt <- phi.range + phi.shift
-  phi.range.ctr <- phi.range + phi.shift + pi
-  phi.trt <-
-    sample(seq(phi.range.trt[1], phi.range.trt[2], length.out = 2 * nuclei), nuclei)
-  phi.ctr <-
-    sample(seq(phi.range.ctr[1], phi.range.ctr[2], length.out = 2 * nuclei), nuclei)
-  # phi.trt <- runif(n,
-  #                  phi.range[1] + phi.shift,
-  #                  phi.range[2] + phi.shift)
-  # phi.ctr <- runif(n,
-  #                  phi.range[1] + phi.shift + pi,
-  #                  phi.range[2] + phi.shift + pi)
-  shift.trt <- runif(nuclei,
-                     shift.range[1],
-                     shift.range[2])
-  shift.ctr <- runif(nuclei,
-                     shift.range[1],
-                     shift.range[2])
-  x.scale.trt <- runif(nuclei,
-                     x.scale.range[1],
-                     x.scale.range[2])
-  x.scale.ctr <- runif(nuclei,
-                     x.scale.range[1],
-                     x.scale.range[2])
-  y.scale.trt <- runif(nuclei,
-                     y.scale.range[1],
-                     y.scale.range[2])
-  y.scale.ctr <- runif(nuclei,
-                     y.scale.range[1],
-                     y.scale.range[2])
-  trt.eff <- runif(nuclei,
-                   nuc.eff.range[1] * effect.size.sp,
-                   nuc.eff.range[2] * effect.size.sp)
-  ctr.eff <- runif(nuclei,
-                   nuc.eff.range[1] * effect.size.sp,
-                   nuc.eff.range[2] * effect.size.sp)
-  for(i in 1:nuclei) {
-    trt.grad <-
-      generate_exp_gradient(x.dim = x.dim,
-                            y.dim = y.dim,
-                            phi = phi.trt[i],
-                            shift = shift.trt[i],
-                            x.scale = x.scale.trt[i],
-                            y.scale = y.scale.trt[i])
-    ctr.grad <-
-      generate_exp_gradient(x.dim = x.dim,
-                            y.dim = y.dim,
-                            phi = phi.ctr[i],
-                            shift = shift.ctr[i],
-                            x.scale = x.scale.ctr[i],
-                            y.scale = y.scale.ctr[i])
-    treatment <- trt.eff[i] * trt.grad - ctr.eff[i] * ctr.grad + treatment
-  }
-  eff.scale <-
-    effect.size.sp /
-    (mean(treatment[poly[2,]][[1]], na.rm = TRUE) -
-     mean(treatment[poly[1,]][[1]], na.rm = TRUE))
-  treatment <- treatment * eff.scale
-  eff.shift <- mean(treatment[poly[1,]][[1]], na.rm = TRUE)
-  treatment <- treatment - eff.shift
-  treatment <- setNames(treatment, name)
-  poly.bd <-
-    st_geometry(poly[2,]) |>
-    st_as_sf()
-  poly.bd$eff.bd <- effect.size.bd
-  treatment.bd <- st_rasterize(poly.bd, template = generate_empty(x.dim = x.dim, y.dim = y.dim))
-  treatment <- treatment + reset_dim(treatment.bd, treatment)
-  return(treatment)
-}
+# REMOVE
+# generate_treatment.old <- function(x.dim,
+#                                y.dim,
+#                                effect.size.sp,
+#                                effect.size.bd,
+#                                nuclei,
+#                                poly,
+#                                phi.range,
+#                                shift.range,
+#                                x.scale.range,
+#                                y.scale.range,
+#                                nuc.eff.range,
+#                                name = "treatment") {
+#   treatment <- generate_empty(x.dim = x.dim,
+#                               y.dim = y.dim)
+#   centroids <-
+#     st_centroid(poly[1:2,]) |>
+#     st_coordinates() |>
+#     suppressWarnings()
+#   phi.shift <-
+#     atan2((centroids[2,2] - centroids[1,2]),
+#           (centroids[2,1] - centroids[1,1]))
+#   phi.range.trt <- phi.range + phi.shift
+#   phi.range.ctr <- phi.range + phi.shift + pi
+#   phi.trt <-
+#     sample(seq(phi.range.trt[1], phi.range.trt[2], length.out = 2 * nuclei), nuclei)
+#   phi.ctr <-
+#     sample(seq(phi.range.ctr[1], phi.range.ctr[2], length.out = 2 * nuclei), nuclei)
+#   # phi.trt <- runif(n,
+#   #                  phi.range[1] + phi.shift,
+#   #                  phi.range[2] + phi.shift)
+#   # phi.ctr <- runif(n,
+#   #                  phi.range[1] + phi.shift + pi,
+#   #                  phi.range[2] + phi.shift + pi)
+#   shift.trt <- runif(nuclei,
+#                      shift.range[1],
+#                      shift.range[2])
+#   shift.ctr <- runif(nuclei,
+#                      shift.range[1],
+#                      shift.range[2])
+#   x.scale.trt <- runif(nuclei,
+#                      x.scale.range[1],
+#                      x.scale.range[2])
+#   x.scale.ctr <- runif(nuclei,
+#                      x.scale.range[1],
+#                      x.scale.range[2])
+#   y.scale.trt <- runif(nuclei,
+#                      y.scale.range[1],
+#                      y.scale.range[2])
+#   y.scale.ctr <- runif(nuclei,
+#                      y.scale.range[1],
+#                      y.scale.range[2])
+#   trt.eff <- runif(nuclei,
+#                    nuc.eff.range[1] * effect.size.sp,
+#                    nuc.eff.range[2] * effect.size.sp)
+#   ctr.eff <- runif(nuclei,
+#                    nuc.eff.range[1] * effect.size.sp,
+#                    nuc.eff.range[2] * effect.size.sp)
+#   for(i in 1:nuclei) {
+#     trt.grad <-
+#       generate_exp_gradient(x.dim = x.dim,
+#                             y.dim = y.dim,
+#                             phi = phi.trt[i],
+#                             shift = shift.trt[i],
+#                             x.scale = x.scale.trt[i],
+#                             y.scale = y.scale.trt[i])
+#     ctr.grad <-
+#       generate_exp_gradient(x.dim = x.dim,
+#                             y.dim = y.dim,
+#                             phi = phi.ctr[i],
+#                             shift = shift.ctr[i],
+#                             x.scale = x.scale.ctr[i],
+#                             y.scale = y.scale.ctr[i])
+#     treatment <- trt.eff[i] * trt.grad - ctr.eff[i] * ctr.grad + treatment
+#   }
+#   eff.scale <-
+#     effect.size.sp /
+#     (mean(treatment[poly[2,]][[1]], na.rm = TRUE) -
+#      mean(treatment[poly[1,]][[1]], na.rm = TRUE))
+#   treatment <- treatment * eff.scale
+#   eff.shift <- mean(treatment[poly[1,]][[1]], na.rm = TRUE)
+#   treatment <- treatment - eff.shift
+#   treatment <- setNames(treatment, name)
+#   poly.bd <-
+#     st_geometry(poly[2,]) |>
+#     st_as_sf()
+#   poly.bd$eff.bd <- effect.size.bd
+#   treatment.bd <- st_rasterize(poly.bd, template = generate_empty(x.dim = x.dim, y.dim = y.dim))
+#   treatment <- treatment + reset_dim(treatment.bd, treatment)
+#   return(treatment)
+# }
 
 
 # generate_treatment <- function(x.dim,
@@ -2339,36 +2678,130 @@ generate_treatment <- function(x.dim,
 # 
 
 
+generate_treatment <- function(x.dim,
+                               y.dim,
+                               trt.poly,
+                               eff.mean = 1,
+                               mat.nu = 1,
+                               mat.scale = max(x.dim, y.dim) / 10,
+                               mat.var = 1,
+                               damp.infl = 0.2,
+                               damp.scale = 1/(5*pi),
+                               name = "treatment"
+                               ) {
+ 
+  # Prepare treatment areas
+
+  trt.poly <-
+    st_geometry(trt.poly) |>
+    st_as_sf() |>
+    st_set_geometry("geometry")
+
+  trt.dt <-
+    trt.poly |>
+    st_rasterize(template = generate_empty(x.dim = x.dim,
+                                           y.dim = y.dim)) |>
+    as.data.table() |>
+    setnames(c("x", "y", "poly"))
+
+  # Set up grid and calculate distances to polygon boundaries and
+  # centroids.
+
+  grid.coord <-
+    expand.grid(x = (1:x.dim)-0.5,
+                y = (1:y.dim)-0.5)
+
+  grid.pts <-
+    st_as_sf(grid.coord, coords = c(1, 2))
+
+  dist.cen <-
+    st_distance(st_centroid(trt.poly), grid.pts) |>
+    apply(2, min)
+
+  dist.lim <-
+    st_cast(trt.poly, "POLYGON") |>
+    st_cast("LINESTRING") |>
+    st_distance(grid.pts) |>
+    apply(2, min)
+
+  dist.dt <-
+    cbind(grid.coord, dist.cen, dist.lim) |>
+    as.data.table()
+
+  # Calculate dampening due to edge effects
+
+  dist.dt[, damp := plogis(dist.lim / (dist.cen + dist.lim),
+                           location = damp.infl,
+                           scale = damp.scale)]
+
+  dist.dt <- merge(dist.dt, trt.dt)
+
+  dist.dt[poly == 0, damp := 0]
+
+  # Generate raw treatment surface
+
+  matern <-
+    generate_matern(x.dim = x.dim,
+                    y.dim = y.dim,
+                    mean = eff.mean,
+                    nu = mat.nu,
+                    scale = mat.scale,
+                    var = mat.var,
+                    name = "matern",
+                    rescale = FALSE)
+
+  matern <- matern - min(matern$matern, na.rm = TRUE)
+  matern.dt <- as.data.table(matern)
+
+  dist.mat.dt <- merge(dist.dt, matern.dt)
+
+  # Dampen and scale
+
+  eff.raw <- dist.mat.dt[poly != 0, mean(matern * damp)]
+  dist.mat.dt[, treatment := (matern/eff.raw) * damp]
+
+  treat <- st_as_stars(dist.mat.dt[, .(x, y, treatment)])
+  names(treat) <- name
+
+  return(treat)
+}
+
+
 generate_nonlinear_effect <- function(field,
-                                      eff.type = "random",
-                                      eff.range = c(-1, 1),
+                                      type = "random",
+                                      range = 1,
                                       mu = 0,
                                       f.acc = 0.01) {
-  field.rs <- scale_int(field, int = c(-1, 1))
-  if(eff.type == "random") {
-    eff.type <- sample(c("sigmoid", "minimum", "unimodal", "bimodal"), 1)
+  f.min <- min(field[[1]], na.rm = TRUE)
+  f.max <- max(field[[1]], na.rm = TRUE)
+  f.range <- f.max - f.min
+  field.sc <- (field - f.min) / f.range
+  if(type == "random") {
+    type <- sample(c("sigmoid", "minimum", "unimodal", "bimodal"), 1)
   }
-  if(eff.type == "sigmoid") {
-    par <- runif(1, 1, 10)
-    fn <- function(x) 1/(1+exp(par*(-x)))
+  if(type == "sigmoid") {
+    ex <- runif(1, 0, 2)
+    sign <- sample(c(-1, 1), 1)
+    par <- sign * 10^ex
+    fn <- function(x) 1/(1+exp(-par*(x-0.5)))
   }
-  if(eff.type == "minimum") {
+  if(type == "minimum") {
     par <- runif(1, -3/4, -1/4) * pi
     # par <- c(0.25, 1)
-    fn <- function(x) sin(0.5*pi * (x) + par[1])
+    fn <- function(x) sin(0.5*pi * (x-0.5) + par[1])
   }
-  if(eff.type == "unimodal") {
-    par <- c(runif(1, exp(1)/4, exp(1)), runif(1, -0.5, 0.5))
+  if(type == "unimodal") {
+    par <- c(runif(1, exp(1)/4, exp(1)), runif(1, 0, 1))
     fn <- function(x) exp(-((par[1] * (x - par[2]))^2))
   }
-  if(eff.type == "bimodal") {
+  if(type == "bimodal") {
     par <- c(
              runif(1, 1, 2),
              runif(1, 1, 2),
              runif(1, exp(1), 2*exp(1)),
              runif(1, exp(1), 2*exp(1)),
-             runif(1, -0.75, -0.5),
-             runif(1, 0.5, 0.75),
+             runif(1, 0, 0.25),
+             runif(1, 0.75, 1),
              runif(1, 0.5, 1) * sample(c(-1, 1), 1))
     fn <- function(x) {
       par[1] * exp(-((par[3] * (x - par[5]))^2)) +
@@ -2376,17 +2809,19 @@ generate_nonlinear_effect <- function(field,
       par[7] * x
     }
   }
-  effect <-
-    fn(field.rs) |>
-    scale_int(int = c(0, 1))
-  effect <- eff.range * effect
-  effect <- effect - mean(effect[[1]], na.rm = TRUE) + mu
+  effect.sc <- field.sc
+  effect.sc[[1]] <- fn(effect.sc[[1]])
+  eff.min <- min(effect.sc[[1]], na.rm = TRUE)
+  eff.max <- max(effect.sc[[1]], na.rm = TRUE)
+  eff.range <- eff.max - eff.min
+  effect <- (range / eff.range) * (effect.sc - eff.min)
+  eff.mean <- mean(effect[[1]], na.rm = TRUE)
+  effect <- effect - eff.mean + mu
   fun <- data.table(x = seq(0, 1, f.acc))
-  fun[, f.x := eff.range * scale_int(fn((2 * x) - 1), int = c(0, 1))]
-  fun[, f.x := f.x - mean(f.x, na.rm = TRUE) + mu]
+  fun[, f.x := (range / eff.range) * (fn(x) - eff.min) - eff.mean + mu]
+  fun[, x := f.min + (f.range * x)]
   setnames(fun, c("x", "f.x"), c(names(field), paste0("f.", names(field)))) 
-  return(list(effect = effect,
-              fun = fun))
+  return(list(effect = effect, fun = fun))
 }
 
 
@@ -2396,8 +2831,6 @@ generate_interaction_effect <- function(field1,
                                         mu,
                                         nuclei,
                                         f.acc = 0.01) {
-  field1 <- scale_int(field1, int = c(0, 1))
-  field2 <- scale_int(field2, int = c(0, 1))
   centres <- data.table(x = runif(nuclei, 0, 1),
                         y = runif(nuclei, 0, 1),
                         max = runif(nuclei, 0.5, 2),
@@ -2410,12 +2843,35 @@ generate_interaction_effect <- function(field1,
   int.effect <- generate_empty(x.dim = dim(field1)[1],
                                y.dim = dim(field2)[2],
                                name = paste0("f.", names(field1), names(field2)))
-  int.fun <- CJ(x = seq(0, 1, f.acc), y = seq(0, 1, f.acc))
+  f1.min <- min(field1[[1]], na.rm = TRUE)
+  f1.max <- max(field1[[1]], na.rm = TRUE)
+  f1.range <- f1.max - f1.min
+  f2.min <- min(field2[[1]], na.rm = TRUE)
+  f2.max <- max(field2[[1]], na.rm = TRUE)
+  f2.range <- f2.max - f2.min
+  field1.sc <- (field1 - f1.min) / f1.range
+  field2.sc <- (field2 - f2.min) / f2.range
+  fields.c <- c(field1.sc[1], field2.sc[1])
+  names(fields.c) <- c("field1", "field2")
+  fields.dt <- as.data.table(fields.c)
+  fields.dt[,
+            `:=`(x = f.acc * round(field1 / f.acc, 0),
+                 y = f.acc * round(field2 / f.acc, 0))]
+  int.ex <- unique(fields.dt[, .(x, y, exists = TRUE)])
+  int.fun <- CJ(x = seq(min(fields.c[[1]], na.rm = TRUE),
+                        max(fields.c[[1]], na.rm = TRUE),
+                        f.acc),
+                y = seq(min(fields.c[[2]], na.rm = TRUE),
+                        max(fields.c[[2]], na.rm = TRUE),
+                        f.acc))
+  int.fun <-
+    merge(int.fun, int.ex, by = c("x", "y"), all.x = TRUE)
+  int.fun[is.na(exists), exists := FALSE]
   int.fun.com <- matrix(NA, nrow = nrow(int.fun), ncol = nuclei)
   for(i in 1:nrow(centres)){
-    int.effect <-
-      int.effect +
-      fn(field1, field2,
+    int.effect[[1]] <-
+      int.effect[[1]] +
+      fn(field1.sc[[1]], field2.sc[[1]],
          centre.x = centres[i, x],
          centre.y = centres[i, y],
          max = centres[i, max],
@@ -2431,11 +2887,20 @@ generate_interaction_effect <- function(field1,
          scale.x = centres[i, scale.x],
          scale.y = centres[i, scale.y])
   }
-  int.effect <- scale_int(int.effect, c(0, 1)) * range
-  int.effect <- int.effect - mean(int.effect[[1]]) + mu
+  f.min <- min(int.effect[[1]], na.rm = TRUE)
+  f.max <- max(int.effect[[1]], na.rm = TRUE)
+  f.range <- f.max - f.min
+  int.effect <- (range / f.range) * (int.effect - f.min)
+  f.mean <- mean(int.effect[[1]])
+  int.effect <- int.effect - f.mean + mu
   int.fun[, f.xy := apply(int.fun.com, 1, sum)]
-  setnames(int.fun, c(names(field1), names(field2),
-                      paste0("f.", names(field1), names(field2))))
+  int.fun[, f.xy := (range / f.range) * (f.xy - f.min) - f.mean + mu]
+  int.fun[,
+          `:=`(x = f1.min + (f1.range * x),
+               y = f2.min + (f2.range * y))]
+  setnames(int.fun, c(names(field1[1]), names(field2[1]),
+                      "exists",
+                      paste0("f.", names(field1[1]), names(field2[1]))))
   return(list(effect = int.effect, fun = int.fun))
 }
 
@@ -2444,8 +2909,49 @@ generate_landscape_4cov_nl <-
   function(seed = NULL,
            x.dim,
            y.dim,
-           treatment.effect.size.sp,
-           treatment.effect.size.bd,
+           mix.alpha,
+           z1.fbm.alpha,
+           z1.mix.w,
+           z2.grad.phi,
+           z2.mix.w,
+           z3.dist.n,
+           z3.dist.acc,
+           z3.mix.prop,
+           z4.seg.n,
+           z4.mat.nu,
+           z4.mat.scale,
+           z4.mix.w,
+           score.type,
+           areas.seg.seed,
+           areas.score.sam,
+           areas.imbalance,
+           areas.area.prop,
+           areas.area.exact,
+           areas.seg.res,
+           areas.seg.min.dist,
+           areas.seg.min.area,
+           areas.seg.even,
+           areas.seg.prec,
+           areas.min.bound.dist,
+           areas.opt.imp.imb,
+           areas.opt.imp.area,
+           areas.opt.pop,
+           areas.opt.prec,
+           areas.opt.pcrossover,
+           areas.opt.pmutation,
+           areas.opt.max.iter,
+           areas.opt.run,
+           areas.opt.parallel,
+           areas.opt.fine,
+           areas.opt.fine.max.iter,
+           areas.opt.fine.constr,
+           areas.opt.fine.tol,
+           treatment.eff.mean,
+           treatment.mat.nu,
+           treatment.mat.scale,
+           treatment.mat.var,
+           treatment.damp.infl,
+           treatment.damp.scale,
            z1.effect.type,
            z1.effect.range,
            z1.effect.mu,
@@ -2476,75 +2982,56 @@ generate_landscape_4cov_nl <-
            int34.effect.range,
            int34.effect.mu,
            int34.effect.nuclei,
-           treatment.nuclei,
-           treatment.phi.range,
-           treatment.shift.range,
-           treatment.x.scale.range,
-           treatment.y.scale.range,
-           treatment.nuc.eff.range,
-           z1.fbm.alpha,
-           z1.fbm.var,
-           z1.fbm.scale,
-           z1.fbm.w,
-           z1.grad.phi,
-           z1.grad.w,
-           z2.fbm.alpha,
-           z2.fbm.var,
-           z2.fbm.scale,
-           z2.fbm.w,
-           z2.grad.phi,
-           z2.grad.shift,
-           z2.grad.w,
-           z3.dist.n,
-           z3.grad.phi,
-           z3.grad.prop,
-           z3.acc,
-           z4.seg.n,
-           z4.mat.nu,
-           z4.mat.var,
-           z4.mat.scale,
-           z4.mat.w,
-           z4.grad.phi,
-           z4.grad.w,
-           split.n,
-           split.prop,
            e.exp.var,
            e.exp.scale,
            e.nug.var,
-           e.rand.var,
+           verbose = 2,
            ...) {
+
   ls.par <- as.list(match.call(expand.dots=FALSE))
   set.seed(seed)
+ 
+  if(verbose > 0) message("Simulating covariates …") 
+ 
+  fbm.mix <- generate_fbm(x.dim = x.dim,
+                          y.dim = y.dim,
+                          alpha = mix.alpha,
+                          var = 1,
+                          scale = 1,
+                          rescale = c(0,1),
+                          name = "mix")
+
   z1 <- generate_z1(x.dim = x.dim,
                     y.dim = y.dim,
                     fbm.alpha = z1.fbm.alpha,
-                    fbm.var = z1.fbm.var,
-                    fbm.scale = z1.fbm.scale,
-                    fbm.w = z1.fbm.w,
-                    grad.phi = z1.grad.phi,
-                    grad.w = z1.grad.w,
+                    fbm.var = 1,
+                    fbm.scale = 1,
+                    fbm.w = 1-z1.mix.w,
+                    fbm.rescale = FALSE,
+                    mix = fbm.mix,
+                    mix.w = z1.mix.w,
                     rescale = c(0,1),
                     name = "z1")
 
   z2 <- generate_z2(
                     x.dim = x.dim,
                     y.dim = y.dim,
-                    fbm.alpha = z2.fbm.alpha,
-                    fbm.var = z2.fbm.var,
-                    fbm.scale = z2.fbm.scale,
-                    fbm.w = z2.fbm.w,
                     grad.phi = z2.grad.phi,
-                    grad.shift = z2.grad.shift,
-                    grad.w = z2.grad.w,
+                    grad.shift = 0,
+                    grad.x.scale = 2,
+                    grad.y.scale = 2,
+                    grad.w = 1-z2.mix.w,
+                    mix = fbm.mix,
+                    mix.w = z2.mix.w,
                     rescale = c(0,1),
                     name = "z2")
 
   z3 <- generate_z3(x.dim = x.dim,
                     y.dim = y.dim,
                     dist.n = z3.dist.n,
-                    grad.phi = z3.grad.phi,
-                    grad.prop = z3.grad.prop,
-                    acc = z3.acc,
+                    dist.acc = z3.dist.acc,
+                    mix = fbm.mix,
+                    mix.prop = z3.mix.prop,
                     rescale = c(0,1),
                     name = "z3")
 
@@ -2552,38 +3039,85 @@ generate_landscape_4cov_nl <-
                     y.dim = y.dim,
                     seg.n = z4.seg.n,
                     mat.nu = z4.mat.nu,
-                    mat.var = z4.mat.var,
                     mat.scale = z4.mat.scale,
-                    mat.w = z4.mat.w,
-                    grad.phi = z4.grad.phi,
-                    grad.w = z4.grad.w,
+                    mat.var = 1,
+                    mat.mean = 0,
+                    mat.rescale = FALSE,
+                    mat.w = 1-z4.mix.w,
+                    mix = fbm.mix,
+                    mix.w = z4.mix.w,
                     rescale = c(0,1),
                     name = "z4")
 
-  split <- generate_split(x.dim = x.dim, 
-                          y.dim = y.dim,
-                          n = split.n,
-                          prop = split.prop)
-  type <- st_rasterize(split, template = generate_empty(x.dim = x.dim, y.dim = y.dim))
-  type <- reset_dim(type)
-  type <- setNames(type, "type")
+  covariates <- c(z1, z2, z3, z4)
+
+
+  if(verbose > 0) message("Simulating treatment areas …") 
+
+  cov.inv <-
+    invert(covariates,
+            attributes = sample(c(TRUE, FALSE),
+                                size = length(covariates),
+                                replace = TRUE)) |>
+    scale_int()
+
+  score.trt <- score(cov.inv, type = score.type)
+
+  areas.poly <-
+    generate_areas_poly(x.dim = x.dim,
+                        y.dim = y.dim,
+                        seg.seed = areas.seg.seed,
+                        score = score.trt,
+                        score.sam = areas.score.sam,
+                        imbalance = areas.imbalance,
+                        imbalance.tol = NULL,
+                        area.prop = areas.area.prop,
+                        area.tol = NULL,
+                        area.exact = areas.area.exact,
+                        seg.res = areas.seg.res,
+                        seg.min.dist = areas.seg.min.dist,
+                        seg.min.area = areas.seg.min.area,
+                        seg.even = areas.seg.even,
+                        seg.prec = areas.seg.prec,
+                        min.bound.dist = areas.min.bound.dist,
+                        verbose = verbose,
+                        opt.imp.imb = areas.opt.imp.imb,
+                        opt.imp.area = areas.opt.imp.area,
+                        opt.pop = areas.opt.pop,
+                        opt.prec = areas.opt.prec,
+                        opt.pcrossover = areas.opt.pcrossover,
+                        opt.pmutation = areas.opt.pmutation,
+                        opt.max.iter = areas.opt.max.iter,
+                        opt.run = areas.opt.run,
+                        opt.parallel = areas.opt.parallel,
+                        opt.fine = areas.opt.fine,
+                        opt.fine.max.iter = areas.opt.fine.max.iter,
+                        opt.fine.constr = areas.opt.fine.constr,
+                        opt.fine.tol = areas.opt.fine.tol
+                        )
+
+  trt.poly <- 
+    areas.poly$shape[areas.poly$shape$type == "treatment",] |>
+    st_cast("POLYGON")
+
+
+  if(verbose > 0) message("Simulating treatment effect …") 
 
   treatment <-
     generate_treatment(x.dim = x.dim,
                        y.dim = y.dim,
-                       effect.size.sp = treatment.effect.size.sp,
-                       effect.size.bd = treatment.effect.size.bd,
-                       nuclei = treatment.nuclei,
-                       poly = split,
-                       phi.range = treatment.phi.range,
-                       shift.range = treatment.shift.range,
-                       x.scale.range = treatment.x.scale.range,
-                       y.scale.range = treatment.y.scale.range,
-                       nuc.eff.range = treatment.nuc.eff.range,
-                       name = "treatment")
+                       trt.poly = trt.poly,
+                       eff.mean = treatment.eff.mean,
+                       mat.nu = treatment.mat.nu,
+                       mat.scale = treatment.mat.scale,
+                       mat.var = treatment.mat.var,
+                       damp.infl = treatment.damp.infl,
+                       damp.scale = treatment.damp.scale,
+                       name = "treatment"
+                       )
 
-  covariates <- c(z1, z2, z3, z4)
-  
+  if(verbose > 0) message("Simulating covariate effects …") 
+
   cov.main.names <- paste0("z", 1:4)
   cov.main.effect.type <- ls.par[paste0(cov.main.names, ".effect.type")]
   cov.main.effect.range <- ls.par[paste0(cov.main.names, ".effect.range")]
@@ -2592,9 +3126,9 @@ generate_landscape_4cov_nl <-
   cov.main.funs <- list()
   for(i in seq_along(cov.main.names)){
     nl.effect <-
-      generate_nonlinear_effect(covariates[i],
-                                eff.type = cov.main.effect.type[[i]],
-                                eff.range = cov.main.effect.range[[i]],
+      generate_nonlinear_effect(field = covariates[i],
+                                type = cov.main.effect.type[[i]],
+                                range = cov.main.effect.range[[i]],
                                 mu = cov.main.effect.mu[[i]])
     cov.main.effects[[i]] <- nl.effect$effect
     setnames(nl.effect$fun, c("val", "f"))
@@ -2622,7 +3156,7 @@ generate_landscape_4cov_nl <-
                                   mu = cov.int.effect.mu[[i]],
                                   nuclei = cov.int.effect.nuclei[[i]])
     cov.int.effects[[i]] <- int.effect$effect
-    setnames(int.effect$fun, c("val1", "val2", "f"))
+    setnames(int.effect$fun, c("val1", "val2", "exists", "f"))
     int.effect$fun[, `:=`(int = cov.int.names[i],
                           cov1 = cov.main.names[cov.comb[i, 1]],
                           cov2 = cov.main.names[cov.comb[i, 2]])]
@@ -2634,46 +3168,578 @@ generate_landscape_4cov_nl <-
   cov.int.funs <- rbindlist(cov.int.funs)
   setcolorder(cov.int.funs, c("int", "cov1", "cov2", "val1", "val2", "f"))
 
-  mod.error <-
+
+  if(verbose > 0) message("Simulating residuals variation …") 
+
+  mod.residual <-
     RMexp(var = e.exp.var, scale = e.exp.scale) +
     RMnugget(var = e.nug.var)
-  error.sp <- RFsimulate(mod.error, x = 1:x.dim, y = 1:y.dim)
-  error.sp <- reset_dim(st_as_stars(error.sp))
-  error.sp <- setNames(error.sp, "error")
-  error.rand <-
-    matrix(rnorm(prod(x.dim, y.dim), 0, e.rand.var), nrow = x.dim, ncol = y.dim) |>
-    matrix2stars()
-  error <- error.sp + error.rand
+  residual <- RFsimulate(mod.residual, x = 1:x.dim, y = 1:y.dim)
+  residual <- reset_dim(st_as_stars(residual))
+  residual <- setNames(residual, "residual")
+
+
+  if(verbose > 0) message("Building landscape …") 
 
   response <-
-    c(cov.main.effects, treatment, error) |>
+    c(cov.main.effects, treatment, residual) |>
     merge() |>
     st_apply(1:2, sum) |>
     setNames("response")
 
   response.int <-
-    c(cov.main.effects, cov.int.effects, treatment, error) |>
+    c(cov.main.effects, cov.int.effects, treatment, residual) |>
     merge() |>
     st_apply(1:2, sum) |>
     setNames("response.int")
 
-  landscape <- c(response, response.int, type, covariates, treatment, cov.main.effects, cov.int.effects, error)
+  landscape.dt <-
+    c(response,
+      response.int,
+      covariates,
+      treatment,
+      cov.main.effects,
+      cov.int.effects,
+      residual) |>
+    as.data.table()
 
-  landscape.dt <- 
-    as.data.frame(landscape)
-  setDT(landscape.dt)
-  landscape.dt[, type := factor(ifelse(type == 0, "control", "treatment"),
-                        levels = c("control", "treatment"))]
+  landscape.dt <-
+    merge(areas.poly$table,
+          landscape.dt,
+          by = c("x", "y"))
+
   landscape.dt$cell <- 1:nrow(landscape.dt)
+
   setcolorder(landscape.dt, c("x", "y", "cell"))
 
   fun <- list(main = cov.main.funs, interactions = cov.int.funs)
-  
+ 
   return(list(landscape = landscape.dt, fun = fun))
   }
 
 
+plot_landscape_4cov_nl <- function(x,
+                                   type = "landscape",
+                                   select = "overview",
+                                   interactions = TRUE,
+                                   response.type = "interactions",
+                                   ls_theme = NULL,
+                                   ls_guide = NULL,
+                                   title.type = "Area type",
+                                   legend.type = "Area type",
+                                   title.cov = "Covariates",
+                                   legend.cov = "Covariate\nvalue",
+                                   title.resp = "Response",
+                                   legend.resp = "Response",
+                                   title.trt = "Treatment effect",
+                                   legend.trt = "Treatment\neffect",
+                                   title.resid = "Residual variation",
+                                   legend.resid = "Residual\nvariation",
+                                   title.eff.main = "Covariate effects (main)",
+                                   legend.eff.main = "Covariate\neffect",
+                                   title.eff.int = "Covariate effects (interactions)",
+                                   legend.eff.int = "Covariate\neffect"
+                                   ) {
+  # select options for landscape: overview, effects, all
+
+  if(is.null(ls_theme)) {
+    ls_theme <-
+      theme_minimal(base_family = "IBMPlexSansCondensed", base_size = 11) +
+      theme(plot.title = element_text(hjust = 0,
+                                      face = "bold",
+                                      margin = margin(l = 0, b = 5, t = 11)),
+            plot.margin = margin(3, 3, 3, 3),
+            strip.text = element_text(size = rel(0.8),
+                                      hjust = 0.5),
+            strip.background = element_rect(fill = "grey90", color = NA),
+            axis.title = element_blank(),
+            axis.text = element_blank(),
+            axis.ticks = element_blank(),
+            legend.position = "right",
+            legend.justification = "top")
+  }
+
+  if(is.null(ls_guide)) {
+    guide_fill <-
+      guides(fill = guide_colorbar(
+                                   ticks.colour = "grey5",
+                                   ticks.linewidth = 0.2,
+                                   frame.colour = "grey5",
+                                   frame.linewidth = 0.2,
+                                   barwidth = 1,
+                                   barheight = 5,
+                                   label.position = "right",
+                                   label.hjust = 1,
+                                   draw.ulim = TRUE,
+                                   draw.llim = TRUE
+                                   ))
+  } else {
+    guide_fill <- ls_guide
+  }
+
+  if(select == "interactions") interactions <- TRUE
+  
+  plots <- list()
+
+  # Response
+  
+  if(response.type == "interactions") {
+    plots[["resp"]] <-
+      ggplot(x, aes(x = x, y = y, fill = response.int)) +
+      geom_raster() +
+      # scale_fill_viridis_c()
+      scale_fill_continuous_divergingx(palette = "Roma", rev = TRUE, mid = 0) +
+      scale_x_continuous(expand = c(0, 0)) +
+      scale_y_continuous(expand = c(0, 0)) +
+      coord_fixed() +
+      guide_fill +
+      labs(title = title.resp, fill = legend.resp) +
+      ls_theme
+  }
+  if(response.type == "main") {
+    plots[["resp"]] <-
+      ggplot(x, aes(x = x, y = y, fill = response)) +
+      geom_raster() +
+      # scale_fill_viridis_c()
+      scale_fill_continuous_divergingx(palette = "Roma", rev = TRUE, mid = 0) +
+      scale_x_continuous(expand = c(0, 0)) +
+      scale_y_continuous(expand = c(0, 0)) +
+      coord_fixed() +
+      guide_fill +
+      labs(title = title.resp, fill = legend.resp) +
+      ls_theme
+  }
+
+  # Variables: area type
+
+  plots[["type"]] <- 
+    ggplot(x, aes(x = x, y = y)) +
+    geom_raster(aes(fill = type)) +
+    # geom_text(data = lab.coord,
+    #           aes(x = x, y = y,
+    #               # label = capwords(as.character(type)),
+    #               color = type), size = 3)  +
+    scale_fill_manual(breaks = levels(x$type),
+                      values = c("grey20", "grey80"),
+                      labels = capwords(levels(x$type))) +
+    # scale_colour_manual(breaks = levels(x$landscape$type),
+    #                     values = c("grey95", "grey5")) +
+    # scale_x_continuous(expand = c(0, 0)) +
+    # scale_y_continuous(expand = c(0, 0)) +
+    coord_fixed(expand = FALSE) +
+    labs(title = title.type, fill = legend.type) +
+    # guides(color = "none") +
+    ls_theme
+
+  # Variables: covariates
+
+  cov.var <- paste0("z", 1:4)
+  cov.lab <- toupper(cov.var)
+  names(cov.lab) <- cov.var
+
+  cov.dt <-
+    x[,
+      c("x", "y", cov.var),
+      with = FALSE] |>
+    melt(id.vars = c("x", "y"),
+         measure.vars = cov.var,
+         variable.name = "covariate",
+         value.name = "value")
+
+  cov.dt[, label := cov.lab[covariate]]
+
+  # for(i in 1:4) {
+  #   p.title <- switch(i, `1` = "Covariates", " ")
+  #   plots[[cov.var[i]]] <-
+  #     cov.dt[covariate == cov.var[i]] |>
+  #     ggplot() +
+  #     geom_raster(aes(x = x, y = y, fill = value)) +
+  #     scale_fill_continuous_sequential(palette = "Viridis", rev = FALSE, limits = c(0, 1)) +
+  #     scale_x_continuous(expand = c(0, 0)) +
+  #     scale_y_continuous(expand = c(0, 0)) +
+  #     coord_fixed() +
+  #     guide_fill +
+  #     facet_wrap(vars(label)) +
+  #     labs(title = p.title, fill = "Covariate\nvalue") +
+  #     ls_theme
+  # }
+
+  plots[["cov"]] <-
+    ggplot(cov.dt) +
+    geom_raster(aes(x = x, y = y, fill = value)) +
+    scale_fill_continuous_sequential(palette = "Viridis", rev = FALSE, limits = c(0, 1)) +
+    scale_x_continuous(expand = c(0, 0)) +
+    scale_y_continuous(expand = c(0, 0)) +
+    coord_fixed() +
+    guide_fill +
+    facet_wrap(vars(label), ncol = 2, nrow = 2) +
+    labs(title = title.cov, fill = legend.cov) +
+    ls_theme
+
+
+  # Effects: covariates
+
+  eff.main <-  paste0("f.", cov.var)
+  eff.int <- 
+    paste0("f.int", c("12", "13", "14", "23", "24", "34"))
+  eff.var <- c(eff.main, eff.int)
+
+  eff.main.lab <- toupper(cov.var)
+  names(eff.main.lab) <- eff.main
+  eff.int.lab <-
+    c("z1:z2", "z1:z3", "z1:z4",
+      "z2:z3", "z2:z4", "z3:z4") |>
+    toupper()
+  names(eff.int.lab) <- eff.int
+  eff.lab <- c(eff.main.lab, eff.int.lab)
+
+  eff.dt <-
+    x[,
+      c("x", "y", eff.var),
+      with = FALSE] |>
+    melt(id.vars = c("x", "y"),
+         measure.vars = eff.var,
+         variable.name = "effect",
+         value.name = "value")
+
+  eff.dt[, label := eff.lab[effect]]
+
+  lim.effects <-
+    unlist(x[,
+             .(min(as.matrix(.SD)),
+               max(as.matrix(.SD))),
+             .SDcols = c("treatment",
+                         "residual",
+                         eff.var)],
+           use.names = FALSE)
+  lim.effects <- 
+    (floor(lim.effects / 0.25) + c(0, 1)) * 0.25
+
+    # for(i in seq_along(eff.main)) {
+    #   p.title <- switch(i, `1` = "Covariate effects (main)", " ")
+    #   plots[[eff.main[i]]] <-
+    #     eff.dt[effect == eff.main[i]] |>
+    #     ggplot(aes(x = x, y = y, fill = value)) +
+    #     geom_raster() +
+    #     scale_fill_continuous_divergingx(palette = "Roma", rev = TRUE, mid = 0,
+    #                                      limits = lim.effects) +
+    #     scale_x_continuous(expand = c(0, 0)) +
+    #     scale_y_continuous(expand = c(0, 0)) +
+    #     coord_fixed() +
+    #     guide_fill +
+    #     facet_wrap(vars(label)) +
+    #     labs(title = p.title,
+    #          fill = "Covariate\neffects") +
+    #     ls_theme
+    # }
+
+    plots[["eff.main"]] <-
+      eff.dt[effect %in% eff.main] |>
+      ggplot(aes(x = x, y = y, fill = value)) +
+      geom_raster() +
+      scale_fill_continuous_divergingx(palette = "Roma", rev = TRUE, mid = 0,
+                                       limits = lim.effects) +
+      scale_x_continuous(expand = c(0, 0)) +
+      scale_y_continuous(expand = c(0, 0)) +
+      coord_fixed() +
+      guide_fill +
+      facet_wrap(vars(label)) +
+      labs(title = title.eff.main,
+           fill = legend.eff.main) +
+      ls_theme
+
+
+    plots[["eff.int"]] <-
+      eff.dt[effect %in% eff.int] |>
+      ggplot(aes(x = x, y = y, fill = value)) +
+      geom_raster() +
+      scale_fill_continuous_divergingx(palette = "Roma",
+                                       rev = TRUE, mid = 0,
+                                       limits = lim.effects) +
+      scale_x_continuous(expand = c(0, 0)) +
+      scale_y_continuous(expand = c(0, 0)) +
+      coord_fixed() +
+      guide_fill +
+      facet_wrap(vars(label)) +
+      labs(title = title.eff.int,
+           fill = legend.eff.int) +
+      ls_theme
+
+
+    # Effects: treatment
+
+    plots[["trt"]] <-
+      ggplot(x, aes(x = x, y = y, fill = treatment)) +
+      geom_raster() +
+      scale_fill_continuous_divergingx(palette = "Roma", rev = TRUE, mid = 0,
+                                       limits = lim.effects) +
+      scale_x_continuous(expand = c(0, 0)) +
+      scale_y_continuous(expand = c(0, 0)) +
+      coord_fixed() +
+      guide_fill +
+      labs(title = title.trt, fill = legend.trt) +
+      ls_theme
+
+    # Effects: residual
+
+    plots[["resid"]] <-
+      ggplot(x, aes(x = x, y = y, fill = residual)) +
+      geom_raster() +
+      scale_fill_continuous_divergingx(palette = "Roma", rev = TRUE, mid = 0,
+                                       limits = lim.effects) +
+      scale_x_continuous(expand = c(0, 0)) +
+      scale_y_continuous(expand = c(0, 0)) +
+      coord_fixed() +
+      guide_fill +
+      labs(title = title.resid, fill = legend.resid) +
+      ls_theme
+
+
+    # for(i in seq_along(eff.int)) {
+    #   p.title <- switch(i, `1` = "Covariate effects (interactions)", " ")
+    #   plots[[eff.int[i]]] <-
+    #     eff.dt[effect == eff.int[i]] |>
+    #     ggplot(aes(x = x, y = y, fill = value)) +
+    #     geom_raster() +
+    #     scale_fill_continuous_divergingx(palette = "Roma", rev = TRUE, mid = 0,
+    #                                      limits = lim.effects) +
+    #     scale_x_continuous(expand = c(0, 0)) +
+    #     scale_y_continuous(expand = c(0, 0)) +
+    #     coord_fixed() +
+    #     guide_fill +
+    #     facet_wrap(vars(label)) +
+    #     labs(title = p.title,
+    #          fill = "Covariate\neffects") +
+    #     ls_theme
+    # }
+
+
+  if(select == "overview") {
+    layout.overview <-
+      "ACC
+       BCC"
+    p.select <-
+      (plots$type +
+      plots$resp +
+      plots$cov +
+      plot_layout(design = layout.overview, widths = 1, heights = 1, guides = "collect")) &
+      ls_theme
+  }
+
+  if(select == "effects" & interactions) {
+    layout.eff <-
+      "ABB
+       DBB
+       CCC
+       CCC"
+    p.select <-
+      (plots$trt +
+      plots$eff.main +
+      plots$eff.int +
+      plots$resid +
+      plot_layout(design = layout.eff, widths = 1, guides = "collect")) &
+      ls_theme
+  }
+  
+
+  if(select == "effects" & !interactions) {
+    layout.eff.noint <-
+      "ABB
+       CBB"
+    p.select <-
+      (plots$trt +
+      plots$eff.main +
+      plots$resid +
+      plot_layout(design = layout.eff.noint, widths = 1, guides = "collect")) &
+      ls_theme
+  }
+
+  if(select == "all") {
+    layout.all <-
+      "ACC
+       BCC
+       DEE
+       GEE
+       FFF
+       FFF"
+    p.select <-
+      (plots$type +
+      plots$resp +
+      plots$cov +
+      plots$trt +
+      plots$eff.main +
+      plots$eff.int +
+      plots$resid +
+      plot_layout(design = layout.all, widths = 1, guides = "collect")) &
+      ls_theme
+  }
+
+  if(select == "all" & !interactions) {
+    layout.all.noint <-
+      "ACC
+       BCC
+       DEE
+       FEE"
+    p.select <-
+      (plots$type +
+      plots$resp +
+      plots$cov +
+      plots$trt +
+      plots$eff.main +
+      plots$resid +
+      plot_layout(design = layout.all.noint, widths = 1, guides = "collect")) &
+      ls_theme
+  }
+  
+  if(select == "list") {
+    p.select <- plots
+  }
+
+  return(p.select)
+}
+
+
+plot_functions_4cov_nl <- function(x = NULL,
+                                   main = NULL,
+                                   select = "all",
+                                   interactions = NULL,
+                                   exist.only = FALSE,
+                                   title.main = "Covariate effects (main)",
+                                   title.int = "Covariate effects (interactions)",
+                                   legend.int = "Partial\neffect",
+                                   contour.bins = 11,
+                                   fun_theme = NULL,
+                                   fun_guide = NULL) {
+
+  if(!is.null(x)) {
+    main <- x[[1]]
+    interactions <- x[[2]]
+  }
+
+  if(select != "list") {
+    if(!is.null(main) & is.null(interactions))
+      select <- "main"
+    if(is.null(main) & !is.null(interactions))
+      select <- "interactions"
+  }
+
+
+  lim.f <- range(c(main$f, interactions$f), na.rm = TRUE)
+  lim.f <- (floor(lim.f / 0.25) + c(0, 1)) * 0.25
+
+  if(is.null(fun_theme)) {
+    fun_theme <-
+      theme_light(base_family = "IBMPlexSansCondensed", base_size = 11) +
+        theme(
+              plot.title = element_text(hjust = 0,
+                                        face = "bold",
+                                        margin = margin(l = 0, b = 11, t = 11)),
+              axis.line.x = element_line(color = "black",
+                                         linewidth = rel(0.5)),
+              axis.line.y = element_line(color = "black",
+                                         linewidth = rel(0.5)),
+              axis.title.x = element_text(margin = margin(t = 7)),
+              axis.title.y = element_text(margin = margin(r = 7)),
+              panel.grid.major = element_blank(),
+              panel.grid.minor = element_blank(),
+              panel.border = element_blank(),
+              plot.margin = margin(3, 3, 3, 3),
+              strip.text = element_text(size = rel(0.8),
+                                        hjust = 0.5,
+                                        color = "black",
+                                        margin = margin(6, 6, 6, 6)),
+              strip.background = element_rect(fill = "gray90"))
+  }
+
+  if(is.null(fun_guide)) {
+    guide_fill <-
+      guides(fill = guide_colorbar(ticks.colour = "grey5",
+                                   ticks.linewidth = 0.2,
+                                   frame.colour = "grey5",
+                                   frame.linewidth = 0.2,
+                                   barwidth = 1,
+                                   barheight = 5,
+                                   label.position = "right",
+                                   label.hjust = 1,
+                                   draw.ulim = TRUE,
+                                   draw.llim = TRUE))
+  } else {
+    guide_fill <- fun_guide
+  }
+
+
+  plots <- list()
+
+  if(!is.null(main)) {
+    lim.main <- range(main$f, na.rm = TRUE)
+    lim.main <- (floor(lim.main / 0.25) + c(0, 1)) * 0.25
+    cov.lab <- toupper(main$cov)
+    plots[["main"]] <-
+      cbind(main, cov.lab) |>
+      ggplot() +
+        geom_line(aes(x = val, y = f)) +
+        facet_wrap(vars(cov.lab), nrow = 2) +
+        scale_y_continuous(lim = lim.main) +
+        labs(title = title.main,
+             x = "Covariate value",
+             y = "Partial effect") +
+        guide_fill +
+        fun_theme
+  }
+
+  if(!is.null(interactions)) {
+    if(exist.only) {
+      interactions <- interactions[exists == TRUE]
+    }
+    lim.int <- range(interactions$f, na.rm = TRUE)
+    lim.int <- (floor(lim.int / 0.25) + c(0, 1)) * 0.25
+    cov1.lab <- toupper(interactions$cov1)
+    cov2.lab <- toupper(interactions$cov2)
+    plots[["int"]] <-
+      cbind(interactions, cov1.lab, cov2.lab) |>
+      ggplot() +
+        aes(x = val1, y = val2) +
+        geom_raster(aes(fill = f)) +
+        geom_contour(aes(z = f),
+                     bins = contour.bins,
+                     colour = "gray35",
+                     linewidth = 0.2) +
+        facet_grid(cols = vars(cov1.lab),
+                   rows = vars(cov2.lab)) +
+        scale_fill_continuous_diverging(palette = "Tropic",
+                                        lim = lim.int) +
+        scale_x_continuous(n.breaks = 3) +
+        scale_y_continuous(n.breaks = 3) +
+        labs(title = title.int,
+             x = "First covariate",
+             y = "Second covariate",
+             fill = legend.int) +
+        guide_fill +
+        fun_theme
+  }
+
+  if(select == "list") {
+    return(plots)
+  } else {
+    if(select == "all") {
+      p.select <- plots$main + plots$int + plot_layout(nrow = 2)
+    }
+    if(select == "main") {
+      p.select <- plots$main
+    }
+    if(select == "interactions") {
+      p.select <- plots$int
+    }
+    return(p.select)
+  }
+}
+
+
+
 zplot <- function(z, n.colours = 128) {
+  if(is.null(n.colours)) {
+    n.colours <- min(length(unique(z[[1]])), 128)
+  }
   plot(z, nbreaks = n.colours + 1, breaks = "equal", col = hcl.colors(n.colours))
 }
 
@@ -3120,3 +4186,1293 @@ capwords <- function(s, strict = FALSE) {
     sapply(strsplit(s, split = " "), cap, USE.NAMES = !is.null(names(s)))
 }
 
+
+som_init_pc <- function(grid, data) {
+  # Calculate principal components
+  init.pca <- prcomp(x = data, center = FALSE, scale = FALSE)
+  init.max <- apply(init.pca$x[, 1:2], 2, max)
+  init.min <- apply(init.pca$x[, 1:2], 2, min)
+  grid.min <- apply(grid$pts, 2, min)
+  grid.max <- apply(grid$pts, 2, max)
+  grid.scale <- grid.max - grid.min
+  init.scale <- (init.max - init.min) / grid.scale
+  # Scale coordinates
+  init.coord.pc <- t(apply(grid$pts, 1, \(x) init.scale * (x - grid.min) + init.min))
+  # Map to covariate space
+  init.coord.cov <- init.coord.pc %*% t(init.pca$rotation[,1:2])
+  attr(init.coord.cov, "som.dim") <- c(grid$xdim, grid$ydim)
+  return(init.coord.cov)
+}
+
+egp_som <- function(x,
+                    x.dim,
+                    y.dim = x.dim,
+                    vars = NULL,
+                    scale = TRUE,
+                    topo = "hexagonal",
+                    nb.fun = "gaussian",
+                    dist.fun = "sumofsquares",
+                    radius = max(x.dim, y.dim),
+                    epochs = 1000,
+                    init = som_init_pc,
+                    mode = "pbatch",
+                    parallel = 1) {
+
+  if(inherits(x, "matrix")) {
+    if(!is.null(vars)) {
+      x <- x[,vars]
+    }
+  } else {
+    if(is.null(vars)) {
+      x <- as.matrix(as.data.frame(x))
+    } else {
+      x <- as.matrix(as.data.frame(x)[,vars])
+    }
+  }
+
+  x <- na.omit(x)
+
+  if(scale) {
+    x.scaled <- scale(x, center = TRUE, scale = TRUE)
+  }
+
+  scale.att <- list(mean = apply(x, 2, mean, na.rm = TRUE),
+                    sd = apply(x, 2, sd, na.rm = TRUE))
+
+  som.grid <- somgrid(xdim = x.dim,
+                      ydim = y.dim, 
+                      topo = topo)
+
+  if(topo == "hexagonal") {
+    grid.poly <- grid_hex_poly(centroids = som.grid$pts)
+  } else {
+    grid.poly <- grid_rect_poly(centroids = som.grid$pts)
+  }
+
+  grid.nb <-
+    poly2nb(grid.poly, queen = FALSE) |>
+    nb2listw(style = "B") |> 
+    listw2mat() |>
+    Matrix()
+
+  if(epochs * nrow(x.scaled) < 1e6)
+    warning("Number of epochs may be too small for the number of observations.")
+
+  if(is.function(init)) {
+    init <- init(som.grid, x.scaled)
+  }
+ 
+  som.fit <- som(x.scaled,
+                 grid = som.grid, 
+                 rlen = epochs,
+                 radius = radius,
+                 init = init,
+                 dist.fcts = dist.fun,
+                 mode = "pbatch", 
+                 cores = parallel,
+                 normalizeDataLayers = FALSE)
+ 
+  som.fit$grid.poly <- grid.poly
+  som.fit$grid.nb <- grid.nb
+  som.fit$init <- init
+  som.fit$scale <- scale.att
+
+  class(som.fit) <- c(class(som.fit), "egp_som")
+
+  return(som.fit)
+}
+
+
+
+grid_hex_poly <- function(centroids = NULL,
+                          x.dim = NULL,
+                          y.dim = NULL,
+                          d = 1,
+                          phi = 0) {
+  if(phi != 0) {
+    rot <- matrix(c(cos(phi), sin(phi), -sin(phi), cos(phi)), ncol = 2)
+  }
+  if(is.null(centroids)) {
+    x <- 1L:x.dim
+    y <- 1L:y.dim
+    centroids <- as.matrix(expand.grid(x = x, y = y))
+    centroids[, 1L] <- centroids[, 1L] + 0.5 * (centroids[, 2L]%%2)
+    centroids[, 2L] <- sqrt(3)/2 * centroids[, 2L]
+    if(phi != 0) {
+      centroids <- centroids %*% t(rot)
+    }
+  }
+  R <- d/sqrt(3)
+  c30 <- cos(pi/6)
+  s30 <- sin(pi/6)
+  corners <-
+    matrix(c(c30, s30,
+             0, 1,
+             -c30, s30,
+             -c30, -s30,
+             0, -1,
+             c30, -s30,
+             c30, s30),
+          byrow = TRUE, nrow = 7) * R
+  if(phi != 0) {
+    corners <- corners %*% t(rot)
+  }
+  hex <- 
+    apply(centroids, 1,
+          \(x) 
+          st_polygon(list(matrix(rep(x, 7), nrow = 7, byrow = TRUE) + corners)),
+          simplify = FALSE) |>
+    st_sfc() |>
+    st_sf() |>
+    st_set_geometry("geometry")
+  hex$id <- 1:nrow(hex)
+  return(hex)
+}
+
+grid_rect_poly <- function(centroids = NULL,
+                           x.dim = NULL,
+                           y.dim = NULL,
+                           d = 1) {
+  if(is.null(centroids)) {
+    x <- 1L:x.dim
+    y <- 1L:y.dim
+    centroids <- as.matrix(expand.grid(x = x, y = y))
+  }
+  corners <-
+    matrix(c(-0.5, -0.5,
+              0.5, -0.5,
+              0.5,  0.5,
+             -0.5,  0.5,
+             -0.5, -0.5),
+           byrow = TRUE, nrow = 5) * d
+  square <- 
+    apply(centroids, 1,
+          \(x) 
+          st_polygon(list(matrix(rep(x, 5), nrow = 5, byrow = TRUE) + corners)),
+          simplify = FALSE) |>
+    st_sfc() |>
+    st_sf() |>
+    st_set_geometry("geometry")
+  square$id <- 1:nrow(square)
+  return(square)
+}
+
+
+egp_embed <- function(x,
+                      som,
+                      vars = NULL,
+                      scale = TRUE,
+                      bmu.name = "som.unit",
+                      coord = TRUE,
+                      coord.names = c("som.x", "som.y"),
+                      dist = FALSE,
+                      dist.name = "som.dist",
+                      append = FALSE,
+                      list = FALSE) {
+  if(inherits(x, "matrix")) {
+    append.mode <- "mat"
+    if(!is.null(vars)) {
+      x <- x[,vars]
+    }
+  } else {
+    append.mode <- ifelse(is.data.table(x), "dt", "df")
+    if(is.null(vars)) {
+      x <- as.matrix(as.data.frame(x))
+    } else {
+      x <- as.matrix(as.data.frame(x)[,vars])
+    }
+  }
+  x <- na.omit(x)
+  if(scale) {
+    x.scaled <- t(apply(x, 1, \(x) (x - som$scale$mean) / som$scale$sd))
+  }
+  mapped <- map(som, x.scaled)
+  embedding <- mapped$unit.classif
+  if(coord) {
+    coord.mapped <- som$grid$pts[embedding,]
+    colnames(coord.mapped) <- coord.names
+    embedding <- cbind(embedding, coord.mapped)
+  }
+  if(dist) {
+    dist.mapped <- mapped$distances
+    embedding <- cbind(embedding, dist.mapped)
+  }
+  if(is.matrix(embedding)) {
+    colnames(embedding)[1] <- bmu.name
+  }
+  if(append) {
+    embedding <- cbind(x, embedding)
+    if(append.mode %in% c("dt", "df")) {
+      embedding <- as.data.frame(embedding)
+    }
+    if(append.mode == "dt") {
+      setDT(embedding)
+    }
+  }
+  if(list) {
+    embedding <- as.list(as.data.frame(embedding))
+  }
+  return(embedding)
+}
+
+get_bmu <- function(x,
+                    coord = TRUE,
+                    bmu.name = "som.unit",
+                    coord.names = c("som.x", "som.y"),
+                    list = FALSE) {
+  embedding <- x$unit.classif
+  if(coord) {
+    coord.mapped <- x$grid$pts[embedding,]
+    colnames(coord.mapped) <- coord.names
+    embedding <- cbind(embedding, coord.mapped)
+  }
+  if(is.matrix(embedding)) {
+    colnames(embedding)[1] <- bmu.name
+  }
+  if(list) {
+    embedding <- as.list(as.data.frame(embedding))
+    if(coord == FALSE) names(embedding) <- bmu.name
+  }
+  return(embedding)
+}
+
+get_coord <- function(x) {x$grid$pts[x$unit.classif,]}
+get_codes <- function(x) {x$codes}
+get_grid <- function(x) {x$grid}
+get_poly <- function(x) {x$grid.poly}
+get_nb <- function(x) {x$grid.nb}
+
+
+.ids_by_group <- function(data,
+                          id.var,
+                          group.vars = NULL,
+                          group.labels = NULL,
+                          add.label = TRUE,
+                          expand.label = TRUE,
+                          label.prefix = NULL,
+                          ...){
+  data.dt <- as.data.table(data)
+  if(is.null(group.vars)) {
+    groups <-
+        data.dt[,
+                .(id.col = list(id.col)),
+                  env = list(id.col = id.var)]
+  } else {
+    groups <-
+        data.dt[,
+                .(id.col = list(id.col)),
+                  by = group.vars,
+                  env = list(id.col = id.var)]
+    setorderv(groups, group.vars)
+    if(add.label) {
+      labels <- groups[, ..group.vars]
+    }
+  }
+  if(!is.null(group.labels)) {
+    for(i in 1:length(group.vars)) {
+      old.labels <- as.character(groups[[group.vars[i]]])
+      new.labels <- factor(group.labels[[i]][old.labels], 
+                           levels = group.labels[[i]])
+      groups[, (group.vars[i]) := new.labels]
+    }
+    setorderv(groups, group.vars)
+  }
+  if(add.label == TRUE & !is.null(group.vars)) {
+    groups <- .add_group_label(data = groups,
+                               cols = group.vars,
+                               expand.label = expand.label,
+                               ...)
+  }
+  if(is.character(add.label) & !is.null(group.vars)) {
+    groups <- .add_group_label(data = groups,
+                               cols = group.vars,
+                               label.name = add.label,
+                               expand.label = expand.label,
+                               ...)
+  }
+  if(!is.null(label.prefix)) {
+    groups[[add.label]] <- paste0(label.prefix, groups[[add.label]])
+  }
+  return(groups)
+}
+
+
+.add_group_label <- function(data,
+                             cols,
+                             label.name = "group.label",
+                             expand.label = TRUE,
+                             col.sep = ":",
+                             cat.sep = "."
+                             ) {
+    data <- copy(data)
+    labels <- data[, ..cols]
+    if(expand.label) {
+      for(i in 1:length(cols)) {
+        labels[[cols[i]]] <- paste(cols[i], labels[[cols[i]]], sep = cat.sep)
+      }
+    }
+    labels.c <- do.call(paste, c(labels, sep = col.sep))
+    data[, label.col := labels.c, env = list(label.col = label.name)]
+    setorderv(data, c(cols, label.name))
+    setcolorder(data, c(label.name, cols))
+    return(data)
+}
+
+find_neighbourhood <- function(A,
+                               n,
+                               n.min = 1,
+                               deg.max = NULL) {
+
+  if(is.null(deg.max)) {
+    deg.max <- length(n)
+  }
+
+  nbh <- list() 
+
+  n.nbh <- n
+  deg.nbh <- integer(length(n))
+
+  # deg 0 nbh
+
+  bmu.sel <- which(n.nbh >= n.min)
+  nbh[bmu.sel] <- bmu.sel
+
+  deg <- 0
+  while(any(n.nbh < n.min)) {
+    deg <- deg + 1
+    # deg 1 nbh
+    bmu.sel <- which(n.nbh < n.min)
+    if(deg < 2) {
+      A.nbh <- A
+    } else {
+      A.nbh <- A.nbh %*% A
+    }
+    nbh.sel <- apply(A.nbh[bmu.sel,,drop = FALSE], 1,
+                    \(x) which(x > 0),
+                    simplify = FALSE)
+    n.nbh[bmu.sel] <- unlist(lapply(nbh.sel, \(x) sum(n[x])))
+    deg.nbh[bmu.sel] <- deg
+    nbh[bmu.sel] <- nbh.sel
+    if(deg == deg.max) {
+      nbh[which(n.nbh < n.min)] <- NA
+      break
+    }
+  }
+
+  neighbourhood <-
+    list(neighbourhood = nbh,
+         n = n.nbh,
+         degree = deg.nbh)
+
+  return(neighbourhood)
+}
+
+
+egp_define_counterfactual <-
+  function(data,
+           som,
+           cf.ids = NULL,
+           fac.ids = NULL,
+           compare.by = NULL,
+           group.by = NULL,
+           som.var = "som.unit",
+           id.var = "id",
+           group.name = "group.id",
+           unit.name = "cf.unit",
+           assign.name = "assigned",
+           assign.cat = c("counterfactual", "factual"),
+           n.min = 1,
+           deg.max = NULL) {
+
+  data.dt <- as.data.table(data)
+
+  if(!id.var %in% names(data.dt)) {
+    data.dt[, id.col := 1:.N, env = list(id.col = id.var)]
+  }
+
+  if(is.list(group.by)) {
+    group.by.c <- unique(do.call(c, group.by))
+  }
+  if(!is.list(group.by)) {
+    group.by.c <- group.by
+    group.by <- list(group.by)
+  }
+
+  vars.sel <- c(id.var, compare.by, group.by.c, som.var)
+
+  data.dt <- data.dt[, ..vars.sel]
+
+  if(is.null(fac.ids) & is.null(cf.ids)) {
+    stop("Either `fac.ids` or `cf.ids` must be provided")
+  }
+  if(!is.null(fac.ids) & is.null(cf.ids)) {
+    cf.ids <-
+      data.dt[!id.col %in% fac.ids,
+              id.col,
+              env = list(id.col = id.var)]
+  }
+  if(is.null(fac.ids) & !is.null(cf.ids)) {
+    fac.ids <-
+      data.dt[!id.col %in% cf.ids,
+              id.col,
+              env = list(id.col = id.var)]
+  }
+
+  # Reference SOM units
+
+  data.dt <- data.dt[.(id.col = unique(c(fac.ids, cf.ids))),
+                     on = id.var,
+                     env = list(id.col = id.var)]
+  setkeyv(data.dt, id.var)
+
+  bmu.ref <- data.dt[.(cf.ids), on = id.var]
+
+  A <- som.fit$grid.nb
+
+  if(is.null(compare.by)) {
+
+    n.bmu <- integer(nrow(A))
+    n.ref <- bmu.ref[order(som.col),
+                     .(n = .N),
+                     by = som.col,
+                     env = list(som.col = som.var)]
+    n.bmu[n.ref[, som.col, env = list(som.col = som.var)]] <- n.ref$n
+    n.bmu[is.na(n.bmu)] <- 0
+
+    nbh <-
+      find_neighbourhood(A = A, n = n.bmu,
+                         n.min = n.min, deg.max = deg.max)
+
+    cf.bmu.dt <- 
+      data.dt[.(fac.ids),
+              on = id.var
+              ][,
+                .(id.col,
+                  cf.col = nbh$neighbourhood[som.col]),
+                env = list(id.col = id.var,
+                           cf.col = unit.name,
+                           som.col = som.var)]
+
+    cf.ids.dt <-
+      data.dt[.(cf.ids),
+              on = id.var
+              ][order(som.col, id.col),
+                .(id.col = list(id.col)),
+                by = (cf.col = som.col),
+                env = list(id.col = id.var,
+                           som.col = som.var,
+                           cf.col = unit.name)]
+
+  } else {
+
+
+    bmus <- 1:nrow(A)
+
+    bmu.by <-
+      data.dt[,
+              .(som.col = 1:nrow(A)),
+              by = compare.by,
+              env = list(som.col = som.var)]
+
+    comp <-
+      data.dt[, .(.n = .N), by = c(compare.by)]
+    comp[, .cfgrp := 1:.N] 
+
+    comp.bmu.cf <-
+      data.dt[.(cf.ids), on = id.var
+              ][, .(.n = .N), by = c(som.var, compare.by)] |>
+      merge(bmu.by, by = c(som.var, compare.by), all = TRUE)
+ 
+    nbh.l <- list()
+    cf.ids.l <- list()
+    for(i in 1:nrow(comp)) {
+      
+      n.ref <- comp.bmu.cf[comp[i, compare.by, with = FALSE],
+                           on = compare.by
+                           ][order(som.col),
+                             .(som.col, .n),
+                             env = list(som.col = som.var)]
+
+      n.bmu <- integer(nrow(A))
+      n.bmu[n.ref[, som.col, env = list(som.col = som.var)]] <- n.ref$.n
+      n.bmu[is.na(n.bmu)] <- 0
+
+      nbh.l[[i]] <-
+        find_neighbourhood(A = A, n = n.bmu,
+                           n.min = n.min, deg.max = deg.max)$neighbourhood
+      
+      cf.ids.l[[i]] <-
+        data.dt[.(cf.ids),
+                on = id.var
+                ][comp[i, compare.by, with = FALSE],
+                  on = compare.by
+                  ][order(som.col, id.col),
+                    .(id.col = list(id.col)),
+                    by = .(cf.col = som.col),
+                    env = list(id.col = id.var,
+                               som.col = som.var,
+                               cf.col = unit.name)]
+
+    }
+
+    comp[, `:=`(.nbh = nbh.l)]
+
+    comp.cf <-
+      comp[,
+           .(cf.col = unlist(.nbh, recursive = FALSE),
+             som.col = bmus),
+           by = c(".cfgrp", compare.by),
+           env = list(som.col = som.var,
+                      cf.col = unit.name)
+           ]
+
+    cf.bmu.dt <-
+      cbind(
+            data.dt[.(fac.ids),
+                    on = id.var
+                    ][order(id.col),
+                      env = list(id.col = id.var)
+                      ][,
+                        c(id.var, compare.by), with = FALSE],
+            comp.cf[data.dt[.(fac.ids),
+                            on = id.var
+                            ][order(id.col),
+                              env = list(id.col = id.var)
+                              ][,
+                                c(compare.by, som.var),
+                                with = FALSE],
+                                .(cf.col),
+                                on = c(compare.by, som.var),
+                                env = list(cf.col = unit.name)])
+ 
+    cf.ids.dt <- 
+      rbindlist(cf.ids.l, idcol = ".cfgrp") |>
+      merge(comp[, -c(".n", ".nbh")], by = ".cfgrp") |>
+      setcolorder(c(compare.by, unit.name, id.var)) |>
+      DT(, -".cfgrp")
+
+  }
+
+  data.cf <- data.dt[.(cf.ids), on = id.var ]
+  data.cf[,
+          assign.col := assign.cat[1],
+          env = list(assign.col = assign.name)]
+
+  data.fac <- data.dt[.(fac.ids), on = id.var]
+  data.fac[,
+           assign.col := assign.cat[2],
+           env = list(assign.col = assign.name)]
+  
+  data.ret <- rbind(data.fac, data.cf)
+
+  # Groups
+
+  groups.l <- list()
+  for(i in seq_along(group.by)){
+    groups.l[[i]] <-
+      .ids_by_group(data.dt[.(fac.ids)],
+                    id.var = id.var,
+                    group.vars = group.by[[i]],
+                    add.label = FALSE)
+  }
+
+  groups <- rbindlist(groups.l, fill = TRUE)
+
+  groups[,
+         group.col := 1:nrow(groups),
+         env = list(group.col = group.name)]
+  setcolorder(groups, c(group.name, group.by.c, id.var)) 
+
+  counterfactual <- list(data = data.ret,
+                         assignment = cf.bmu.dt,
+                         groups = groups,
+                         units = cf.ids.dt,
+                         compare.by = compare.by,
+                         group.by = group.by,
+                         group.by.c = group.by.c,
+                         id.var = id.var,
+                         som.var = som.var,
+                         group.var = group.name,
+                         unit.var = unit.name,
+                         assign.var = assign.name,
+                         assign.cat = assign.cat)
+
+  class(counterfactual) <- c(class(counterfactual), "egp_cf_def")
+
+  return(counterfactual)
+}
+
+
+get_influence <- function(x) {
+  counts <-
+    merge(
+          x$units[,
+                  .(.w = 1/unlist(lapply(id.col, length)),
+                  id.col = unlist(id.col)),
+                  by = c(x$unit.var, x$compare.by),
+                  env = list(id.col = x$id.var)] ,
+          x$assignment[,
+                       .(cf.col = unlist(cf.col)),
+                       by = eval(x$compare.by),
+                       env = list(cf.col = x$unit.var)
+                       ][,
+                         .(.n = .N),
+                         by = c(x$unit.var, x$compare.by)],
+          all.x = TRUE)
+  counts[is.na(.n), .n := 0]
+  counts[, .influence := .n * .w]
+  influence <-
+    counts[,
+           c(x$compare.by, x$unit.var, x$id.var, ".influence"),
+           with = FALSE] |>
+      setorderv(c(x$compare.by, ".influence", x$id.var),
+                order = c(rep(1, length(x$compare.by)), -1, 1))
+  return(influence)
+}
+
+
+chunk_seq <- function(from, to, size = to) {
+  chunk.from <- seq(from, to, size)
+  if(length(chunk.from) > 1) {
+    chunk.to <- c(chunk.from[2:length(chunk.from)]-1, to)
+  } else {
+    chunk.to <- to
+  }
+  chunk.size <- chunk.to - c(0, chunk.to[-length(chunk.to)])
+  return(list(from = chunk.from,
+              to = chunk.to,
+              size = chunk.size))
+}
+
+
+egp_posterior_draw <- function(model,
+                               n = 1000,
+                               unconditional = TRUE,
+                               package = "mgcv",
+                               parallel = 1) {
+  if(package == "mgcv") {
+    post <-
+        mgcv::rmvn(n = n,
+                   mu = coef(model),
+                   V = vcov(model, unconditional = unconditional))
+  }
+  if(package == "mvnfast") {
+    post <-
+      mvnfast::rmvn(n = n,
+                 mu = coef(model),
+                 sigma = vcov(model, unconditional = unconditional),
+                 ncores = parallel)
+  }
+  colnames(post) <- names(coef(model))
+  post <- as_draws_matrix(post)
+  return(post)
+}
+
+
+.evaluate_posterior <- 
+  function(
+           model, 
+           posterior,
+           data,
+           id.var = "id",
+           draw.name = ".draw",
+           pred.name = "predicted",
+           type = "link",
+           obs = NULL,
+           coef = NULL,
+           marginals = NULL,
+           marginal.ids = NULL,
+           predict.chunk = NULL,
+           post.chunk = NULL,
+           progress = TRUE
+           ) {
+  posterior <- Matrix(posterior)
+  data.dt <- as.data.table(copy(data))
+  if(!id.var %in% names(data.dt)) {
+    data.dt[, id.col := 1:.N, env = list(id.col = id.var)]
+  }
+  if(!is.null(obs)) {
+    no.obs <-
+      data.dt[id.col %in% obs, length(id.col) < 1, env = list(id.col = id.var)]
+    if(no.obs) return(NULL)
+    data.dt <- copy(data.dt[.(obs), on = id.var])
+  }
+  setkeyv(data.dt, id.var)
+  data.dt
+  n <- nrow(data.dt)
+  m <- nrow(posterior)
+  if(is.null(predict.chunk)) predict.chunk <- n
+  if(is.null(post.chunk)) post.chunk <- m
+  predict.chunks <- chunk_seq(1, n, predict.chunk)
+  post.chunks <- chunk_seq(1, m, post.chunk)
+  # Set excluded coefficients to 0
+  if(!is.null(coef)) {
+    posterior[,-coef] <- 0
+  }
+  if(is.null(marginals)) {
+    marginals <- list(marginal = 1:ncol(posterior))
+  }
+  if(is.null(marginal.ids)) {
+    marginal.ids <- list(marginal = data.dt[[id.var]])
+  }
+  if(length(marginals) != length(marginal.ids))
+    stop("Number of elements in `marginals` and `marginal.ids` must match.")
+  id.lu <- cbind(data.dt[[id.var]], 1:nrow(data.dt))
+  colnames(id.lu) <- c(id.var, ".row")
+  id.lu <- as.data.table(id.lu)
+  setorder(id.lu, .row)
+  mar.lu <- list()
+  for(i in seq_along(marginal.ids)) {
+    mar.lu[[i]] <- id.lu[id.col %in% marginal.ids[[i]],
+                         env = list(id.col = id.var)]
+    mar.lu[[i]][, marginal := names(marginals)[i]]
+  }
+  mar.lu <- rbindlist(mar.lu)
+  mar.lu$chunk <-
+    cut(mar.lu$.row,
+        with(predict.chunks, c(to[1] - size[1], to)),
+        labels = FALSE)
+  mar.lu <-
+    mar.lu[,
+           .(n = .N,
+             row.ids = list(mar.lu$.row[.I]),
+             ids = list(mar.lu[[id.var]][.I])),
+           by = c("marginal", "chunk")]
+  mar.lu[, `:=`(eval.id.from = 1 + cumsum(n) - n, eval.id.to = cumsum(n)), marginal]
+  evaluated <- list()
+  for(i in seq_along(marginals)) {
+      # idx <- id.lu[eval(parse(text = paste(id.col, "%in% marginal.ids[[i]]")))]
+      idx <- id.lu[id.col %in% marginal.ids[[i]],
+                   env = list(id.col = id.var)]
+      evaluated[[i]] <- Matrix(numeric(0), nrow = nrow(idx), ncol = m)
+      dimnames(evaluated[[i]])[1] <- list(paste0(id.var, ":", idx[[id.var]]))
+  }
+  if(length(predict.chunks$from) < 2) progress <- FALSE
+  if(progress) {
+    prog <- txtProgressBar(min = 0, max = length(predict.chunks$from), initial = 0,
+                           char = "=", width = NA, title = "Progress", style = 3)
+  }
+  for(i in 1:length(predict.chunks$from)) {
+    Xp <-
+      predict(model,
+              newdata = data.dt[predict.chunks$from[i]:predict.chunks$to[i],],
+              type = "lpmatrix",
+              block.size = predict.chunks$size[i],
+              newdata.guaranteed = TRUE,
+              discrete = FALSE) |>
+      Matrix()
+    for(j in 1:length(marginals)) {
+      chunk.lu <- mar.lu[chunk == i & marginal == names(marginals)[j]]
+      if(nrow(chunk.lu) < 1) next
+      pc.rows <- unlist(chunk.lu$row.ids) - with(predict.chunks, to[i] - size[i])
+      eval.rows <- with(chunk.lu, eval.id.from:eval.id.to)
+      m.predict.chunk <- Matrix(numeric(0), nrow = chunk.lu$n, ncol = m)
+      for(k in 1:length(post.chunks$from)) {
+        lp <-
+          Xp[pc.rows, marginals[[j]]] %*%
+          t(posterior[post.chunks$from[k]:post.chunks$to[k], marginals[[j]]])
+        if(type == "response") {
+          fam <- model$family
+          m.predict.chunk[, post.chunks$from[k]:post.chunks$to[k]] <- fam$linkinv(lp)
+        } else {
+          m.predict.chunk[, post.chunks$from[k]:post.chunks$to[k]] <- lp
+        }
+        rm(lp)
+      }
+      evaluated[[j]][eval.rows,] <- m.predict.chunk
+      rm(m.predict.chunk)
+    }
+    rm(Xp)
+    gc()
+    if(progress) {
+      setTxtProgressBar(prog, i)
+    }
+  }
+  if(progress) close(prog)
+  evaluated.dt <- list()
+  for(i in seq_along(evaluated)) {
+    eval.dt <- as.data.table(as.matrix(t(evaluated[[i]])))
+    eval.dt[, draw.col := 1:nrow(eval.dt), env = list(draw.col = draw.name)]
+    toid <- list(as.integer)
+    names(toid) <- id.var
+    evaluated.dt[[i]] <-
+      melt(eval.dt,
+           measure.vars = measurev(toid, pattern = paste0(id.var, ":(.*)")),
+           value.name = pred.name)
+    setkeyv(evaluated.dt[[i]], id.var)
+    setindexv(evaluated.dt[[i]], draw.name)
+    setorderv(evaluated.dt[[i]], c(draw.name, id.var))
+  }
+  if(length(marginals) == 1) {
+    return(evaluated.dt[[1]])
+  } else {
+    names(evaluated.dt) <- names(marginals)
+    return(evaluated.dt)
+  }
+}
+
+
+egp_posterior_predict <- function(model,
+                                  posterior,
+                                  data = NULL,
+                                  id.var = "id",
+                                  type = "response",
+                                  ids = NULL,
+                                  pred.name = NULL,
+                                  predict.chunk = NULL,
+                                  post.chunk = NULL,
+                                  progress = TRUE,
+                                  ...
+                                  ) {
+  if(is.null(pred.name)) {
+    if(type == "response") {
+      pred.name <- all.vars(update(model$formula, . ~ 1))
+    } else {
+      pred.name <- ".eta"
+    }
+  }
+  predicted <-
+    .evaluate_posterior(model = model,
+                        posterior = posterior,
+                        data = data,
+                        id.var = id.var,
+                        pred.name = pred.name,
+                        type = type,
+                        obs = ids,
+                        predict.chunk = predict.chunk,
+                        post.chunk = post.chunk,
+                        progress = progress,
+                        ...)
+  return(predicted)
+}
+
+# predictions = pred
+# ids <- cf$groups$cell
+# trans.fun = NULL
+# agg.fun = E
+# pred.var = "response.int"
+# draw.var = ".draw"
+# id.var = "cell"
+# # ids = NULL
+# draw.ids = NULL
+# draw.chunk = NULL
+# agg.size = 3500
+# clamp = NULL
+# parallel = NULL
+# progress = TRUE
+
+.aggregate_variables <- function(predictions, ...) {
+  UseMethod(".aggregate_variables", predictions)
+}
+
+
+
+.aggregate_variables.data.table <- 
+  function(predictions,
+           agg.fun = E,
+           trans.fun = NULL,
+           ids = NULL,
+           pred.var = "predicted",
+           draw.var = ".draw",
+           id.var = "id",
+           agg.name = "aggregated",
+           group.name = "group.id",
+           draw.ids = NULL,
+           draw.chunk = NULL,
+           agg.size = NULL,
+           parallel = NULL,
+           progress = TRUE,
+           ...) {
+  predictions.dt <- as.data.table(predictions)
+  setkeyv(predictions.dt, id.var)
+  setindexv(predictions.dt, draw.var)
+  if(is.numeric(parallel)) {
+    dt.threads.old <- getDTthreads()
+    arrow.threads.old <- cpu_count()
+    setDTthreads(parallel)
+    set_cpu_count(parallel)
+  }
+  if(is.null(draw.ids)) {
+    draw.ids <- predictions.dt[, unique(draw.col), env = list(draw.col = draw.var)]
+  }
+  if(is.null(draw.chunk)) {
+    draw.chunk <- length(draw.ids)
+  }
+  if(is.null(ids)) {
+    ids <- list(predictions.dt[, unique(id.col), env = list(id.col = id.var)])
+  }
+  draw.chunks <- chunk_seq(1, length(draw.ids), draw.chunk)
+  if(is.null(agg.size))
+    agg.size <- min(unlist(lapply(ids, length)))
+  ids.dt <-
+    list(1:length(ids), ids) |>
+    as.data.table() |>
+    setnames(c(group.name, id.var))
+  setorderv(ids.dt, group.name)
+  ids.dt[,N := as.numeric(unname(unlist(lapply(ids, length))))]
+  ids.dt[order(-N), Nc := cumsum(N)]
+  ids.dt[,
+         `:=`(aggregate = ifelse(N < agg.size, TRUE, FALSE))
+         ][aggregate == TRUE, 
+           agg.id := ceiling(Nc / agg.size)]
+  setkeyv(ids.dt, group.name)
+  agg.ids <- na.omit(unique(ids.dt[order(agg.id), agg.id]))
+  single.ids <- ids.dt[aggregate == FALSE,
+                       group.col,
+                       env = list(group.col = group.name)]
+  if(all(ids.dt$N == 0)) return(NULL)
+  ids.dt.l <-
+    ids.dt[order(-N),
+           .(id.col = unlist(id.col)),
+           by = c(group.name, "agg.id"),
+           env = list(id.col = id.var)]
+  setkeyv(ids.dt.l, id.var)
+  setindexv(ids.dt.l, list(group.name, "agg.id"))
+  if(!is.null(trans.fun)) {
+    predictions.dt[,
+                   pred.col := trans(pred.col),
+                   env = list(pred.col = pred.var,
+                              trans = trans.fun)]
+  }
+  if(progress) {
+    prog <- txtProgressBar(min = 0, max = max(ids.dt$Nc) * length(draw.chunks$from), initial = 0,
+                           char = "=", width = NA, title = "Progress", style = 3)
+    prog.counter <- 0
+  }
+  draws.agg.l <- list()
+  for(i in seq_along(draw.chunks$from)) {
+    draws.sum <- draw.ids[draw.chunks$from[i]:draw.chunks$to[i]]
+    predictions.draws <- predictions.dt[.(draws.sum),
+                                        on = draw.var,
+                                        nomatch = NULL]
+    setkeyv(predictions.draws, id.var)
+    single.l <- list()
+    for(j in seq_along(single.ids)) {
+      ids.sum <- ids.dt.l[.(single.ids[j]), on = group.name]
+      single.l[[j]] <-
+        predictions.draws[.(ids.sum),
+                          nomatch = NULL,
+                          on = id.var
+                          ][order(draw.col, group.col),
+                            .(agg.col = agg(pred.col)),
+                            by = c(draw.var, group.name),
+                            env = list(group.col = group.name,
+                                       draw.col = draw.var,
+                                       pred.col = pred.var,
+                                       agg.col = agg.name,
+                                       agg = agg.fun)]
+      if(progress) {
+        prog.counter <- prog.counter + ids.dt[group.col == single.ids[j],
+                                              N,
+                                              env = list(group.col = group.name)]
+        setTxtProgressBar(prog, prog.counter)
+      }
+    }
+    agg.l <- list()
+    for(k in seq_along(agg.ids)) {
+      match.ids.groups <- ids.dt.l[.(agg.ids[k]), on = "agg.id"]
+      agg.l[[k]] <-
+        predictions.draws[match.ids.groups,
+                          nomatch = NULL,
+                          on = id.col,
+                          allow.cartesian = TRUE
+                          ][order(draw.col, group.col),
+                            .(agg.col = agg(pred.col)),
+                            by = c(draw.var, group.name),
+                            env = list(group.col = group.name,
+                                       draw.col = draw.var,
+                                       pred.col = pred.var,
+                                       agg.col = agg.name,
+                                       agg = agg.fun)]
+      if(progress) {
+        prog.counter <- prog.counter + sum(ids.dt[agg.id == agg.ids[k], N])
+        setTxtProgressBar(prog, prog.counter)
+      }
+    }
+    draws.agg.l[[i]] <- rbindlist(c(single.l, agg.l), fill = TRUE)
+  }
+  draws.agg <- rbindlist(draws.agg.l, fill = TRUE)
+  setorderv(draws.agg, c(draw.var, group.name))
+  if(progress) close(prog)
+  if(is.numeric(parallel)) {
+    setDTthreads(dt.threads.old)
+  }
+  return(draws.agg)
+}
+
+
+egp_summarize_units <- function(predictions,
+                                cf.def,
+                                pred.var = NULL,
+                                draw.chunk = NULL,
+                                agg.size = NULL,
+                                parallel = NULL,
+                                progress = TRUE,
+                                ...
+                                ){
+
+  predictions.dt <- as.data.table(predictions)
+
+  id.var <- cf.def$id.var
+  unit.var <- cf.def$unit.var
+  compare.by <- cf.def$compare.by
+  units <- copy(cf$units)
+
+  if(is.null(pred.var)) {
+    pred.sel <- which(!names(predictions.dt) %in% c(id.var, ".draw"))[1]
+    pred.var <- names(predictions.dt)[pred.sel]
+  }
+
+  unit.sum <-
+    .aggregate_variables(predictions.dt,
+               agg.fun = E,
+               ids = units[[id.var]],
+               pred.var = pred.var,
+               draw.var = ".draw",
+               id.var = id.var,
+               agg.name = pred.var,
+               group.name = ".uid",
+               draw.chunk = draw.chunk,
+               agg.size = agg.size,
+               parallel = parallel,
+               progress = progress)
+
+  units[, .uid := 1:.N]
+
+  unit.sum <-
+    merge(units[, -id.var, with = FALSE], unit.sum, all.x = FALSE) |>
+    DT(, -".uid", with = FALSE)
+  setindexv(unit.sum, ".draw")
+  setorderv(unit.sum, c(compare.by, unit.var, ".draw"))
+  return(unit.sum)
+}
+
+
+egp_evaluate_factual <- function(predictions,
+                                 cf.def,
+                                 name = "factual",
+                                 group.eval = NULL,
+                                 pred.var = NULL,
+                                 draw.chunk = NULL,
+                                 agg.size = NULL,
+                                 parallel = NULL,
+                                 progress = TRUE,
+                                 ...
+                                 ){
+
+  predictions.dt <- as.data.table(predictions)
+
+  id.var <- cf.def$id.var
+  group.var <- cf.def$group.var
+
+  if(is.null(pred.var)) {
+    pred.sel <- which(!names(predictions.dt) %in% c(id.var, ".draw"))[1]
+    pred.var <- names(predictions.dt)[pred.sel]
+  }
+
+  if(is.null(group.eval)) {
+    group.eval <- cf.def$groups[[group.var]]
+  }
+
+  factual <-
+    .aggregate_variables(predictions.dt,
+               agg.fun = E,
+               ids = cf.def$groups[.(group.eval),
+                                   id.col,
+                                   on = group.var,
+                                   env = list(id.col = id.var)],
+               pred.var = pred.var,
+               draw.var = ".draw",
+               id.var = id.var,
+               agg.name = name,
+               group.name = group.var,
+               draw.chunk = draw.chunk,
+               agg.size = agg.size,
+               parallel = parallel,
+               progress = progress)
+
+  factual[,
+          group.col := group.eval[group.col],
+          env = list(group.col = group.var)]
+  factual.aug <-
+    merge(cf$groups[, -id.var, with = FALSE], factual, all.x = FALSE)
+
+  setkeyv(factual.aug, group.var)
+  setindexv(factual.aug, ".draw")
+  return(factual.aug)
+}
+
+
+egp_evaluate_counterfactual <- function(predictions,
+                                        cf.def,
+                                        units = NULL,
+                                        name = "counterfactual",
+                                        group.eval = NULL,
+                                        pred.var = NULL,
+                                        draw.chunk = NULL,
+                                        progress = TRUE,
+                                        ...) {
+  predictions.dt <- copy(predictions)
+
+  id.var <- cf.def$id.var
+  group.var <- cf.def$group.var
+  unit.var <- cf.def$unit.var
+  compare.by <- cf.def$compare.by
+
+  if(is.null(units)) {
+    units <-
+      egp_summarize_units(predictions = predictions,
+                          cf.def = cf.def,,
+                          pred.var = pred.var,
+                          draw.chunk = draw.chunk,
+                          progress = progress,
+                          ...)
+  }
+   
+  draw.ids <- predictions.dt[, unique(.draw)]
+  if(is.null(draw.chunk)) {
+    draw.chunk <- length(draw.ids)
+  }
+  draw.chunks <- chunk_seq(1, length(draw.ids), draw.chunk)
+
+  if(is.null(group.eval)) {
+    group.eval <- cf.def$groups[[group.var]]
+  }
+
+  if(is.null(pred.var)) {
+    pred.sel <- which(!names(predictions.dt) %in% c(id.var, ".draw"))[1]
+    pred.var <- names(predictions.dt)[pred.sel]
+  }
+
+  assigned <- copy(cf.def$assignment)
+  groups <- copy(cf.def$groups[.(group.eval), on = group.var])
+  unit.def <- copy(cf.def$units)
+  unit.sum <- copy(units)
+  setkeyv(unit.sum, unit.var)
+  setindexv(unit.sum, ".draw")
+
+  assigned.l <-
+    assigned[,
+             .(unit.col = unlist(unit.col)),
+             by = c(id.var, compare.by),
+             env = list(id.col = id.var,
+                        unit.col = unit.var)]
+  setindexv(assigned.l, unit.var)
+
+  unit.def[,
+           .n := unlist(lapply(id.col, length)),
+           env = list(id.col = id.var)]
+  setkeyv(unit.def, unit.var)
+
+  assigned.l <-
+    merge(assigned.l,
+          unit.def[, c(compare.by, unit.var, ".n"), with = FALSE],
+          by = c(compare.by, unit.var))
+
+  assigned.l[,
+             .ntotal := sum(.n),
+             by = id.var]
+  assigned.l <-
+    assigned.l[,
+               .w := .n/.ntotal
+               ][, -c(".n", ".ntotal")]
+  setkeyv(assigned.l, id.var)
+  setindexv(assigned.l, unit.var)
+
+  groups.n <- unlist(lapply(groups[[id.var]], length))
+  draws.n <- predictions[, length(unique(.draw))]
+  total.prog <- sum(groups.n * draws.n)
+
+  if(progress) {
+    prog <- txtProgressBar(min = 0,
+                           max = total.prog,
+                           char = "=", width = NA, title = "Progress", style = 3)
+    prog.counter <- 0
+  }
+  
+  group.eval.l <- list()
+  for(i in 1:nrow(groups)) {
+    ass.gr <-
+      assigned.l[.(unlist(groups[[id.var]][i])),
+                 on = id.var,
+                 .(.w = sum(.w)),
+                 by = c(compare.by, unit.var)
+                 ][, .w := .w/sum(.w)]
+    setkeyv(ass.gr, unit.var)
+    draws.eval.l <- list()
+    for(j in seq_along(draw.chunks$from)) {
+      units.sum.draw <-
+        unit.sum[.(draw.chunks$from[j]:draw.chunks$to[j]),
+                 on = ".draw"]
+      setindexv(units.sum.draw, c(compare.by, unit.var))
+      draw.chunk <-
+        merge(ass.gr,
+              units.sum.draw,
+              by = c(compare.by, unit.var),
+              allow.cartesian = TRUE)
+      draws.eval.l[[j]] <-
+        draw.chunk[,
+                   .(name.col = sum(.w * pred.col)),
+                   by = c(".draw"),
+                   env = list(pred.col = pred.var,
+                              name.col = name)]
+      if(progress) {
+        prog.counter <- prog.counter + groups.n[i] * draw.chunks$size[j]
+        setTxtProgressBar(prog, prog.counter)
+      }
+    }
+    group.eval.l[[i]] <- rbindlist(draws.eval.l)
+  } 
+
+  counterfactual <- rbindlist(group.eval.l, idcol = group.var)
+  counterfactual[,
+                 group.col := group.eval[group.col],
+                 env = list(group.col = group.var)]
+  counterfactual.aug <-
+      merge(cf$groups[, -id.var, with = FALSE], counterfactual, all.x = FALSE)
+  setkeyv(counterfactual.aug, group.var)
+  setindexv(counterfactual.aug, ".draw")
+
+
+  return(counterfactual.aug)
+}
+
+
+egp_marginal <- function(factual,
+                         counterfactual,
+                         marginal.name = "ATE",
+                         type = "absolute",
+                         fac.var = NULL,
+                         cf.var = NULL) {
+
+  names.com <- intersect(names(factual),
+                         names(counterfactual))
+  if(is.null(fac.var)) {
+    fac.var <-
+      names(factual)[which(!names(factual) %in% names.com)[1]]
+  }
+  if(is.null(cf.var)) {
+    cf.var <-
+      names(counterfactual)[which(!names(counterfactual) %in% names.com)[1]]
+  }
+
+  marginal <-
+    merge(factual, counterfactual, by = names.com)
+
+  if(type == "absolute") {
+    marginal[,
+             marginal.col := fac.col - cf.col,
+             env = list(marginal.col = marginal.name,
+                        fac.col = fac.var,
+                        cf.col = cf.var)]
+  }
+  if(type == "relative") {
+    marginal[,
+             marginal.col := fac.col / cf.col,
+             env = list(marginal.col = marginal.name,
+                        fac.col = fac.var,
+                        cf.col = cf.var)]
+  }
+  
+  return(marginal)
+}

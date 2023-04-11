@@ -20,13 +20,20 @@ install.packages(c(
                    "pdp",
                    "posterior",
                    "ranger",
-                   "RandomFields",
-                   "RandomFieldsUtils",
+                   # "RandomFields",
+                   # "RandomFieldsUtils",
                    "raster",
                    "sf",
                    "spdep",
                    "stars",
                    "stringi"
                    ))
-                   
- devtools::install_github("cran/RandomFields")
+
+
+# install.packages("~/projects/pkgarchive/RandomFieldsUtils_1.2.5.tar.gz",
+#                  repos = NULL, type = "source")
+# install.packages("~/projects/pkgarchive/RandomFields_3.3.14.tar.gz",
+#                  repos = NULL, type = "source")
+
+devtools::install_github("cran/RandomFields")
+devtools::install_github("cran/RandomFieldsUtils")
