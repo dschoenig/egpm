@@ -10,8 +10,6 @@ ls.dim <- as.integer(args[3])
 ls.imbalance <- as.numeric(args[4])
 task.id <- as.integer(args[5])
 task.count <- as.integer(args[6])
-task.cores <- as.integer(args[7])
-if(is.na(task.cores)) task.cores <- 1
 
 # ls.name <- "imbalance_medium"
 # n <- 1000
@@ -24,8 +22,7 @@ if(is.na(task.cores)) task.cores <- 1
 paste0("SETTINGS\n",
        "N: ", n, "\n",
        "Dimension: ", ls.dim, "\n",
-       "Imbalance: ", ls.imbalance, "\n",
-       "Cores: ", task.cores) |>
+       "Imbalance: ", ls.imbalance) |>
 message()
 
 path.base <- "../"
@@ -134,7 +131,7 @@ parameters <-
              areas.opt.pmutation = 0.5,
              areas.opt.max.iter = 500,
              areas.opt.run = 100,
-             areas.opt.parallel = task.cores,
+             areas.opt.parallel = FALSE,
              areas.opt.fine = TRUE,
              areas.opt.fine.max.iter = 100,
              areas.opt.fine.constr = TRUE,
