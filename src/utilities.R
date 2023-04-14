@@ -1837,14 +1837,13 @@ generate_areas_poly <- function(x.dim,
     # xy.seg.sam <- xy.seg.sam[, c("X", "Y")]
     # colnames(xy.seg.sam) <- c("x.seg", "y.seg")
     grid.cen.sam <-
-          data.table(grid = 1:nrow(grid.dist.pw),
-                     segment =
-                       apply(grid.dist.pw[, grid.seg.sam, drop = FALSE],
-                             1, which.min) |>
-                       lapply(\(x) ifelse(length(x) > 0, x, 0)) |>
-                       unlist()) |>
-          DT(, .(grid.cen.sam = sample(grid, 1)), by = segment) |>
-          DT(order(segment), grid.cen.sam)
+      grid.dist.dt[grid2 %in% grid.seg.sam,
+                   .SD[which.min(dist)],
+                   by = grid1
+                   ][,
+                     .SD[sample(1:.N, 1)],
+                     by = grid2
+                     ][, grid1]
     # xy.cen.sam <- 
     #   res.grid[res.grid$grid %in% grid.cen.sam,] |>
     #   st_centroid() |>
@@ -1855,7 +1854,12 @@ generate_areas_poly <- function(x.dim,
                               sqrt(seg.min.area),
                               sqrt(area.prop * x.dim * y.dim / seg.seed)))
     # pop.start.mat[i,] <- c(c(t(cbind(xy.seg.sam, xy.cen.sam))), buffer.sam)
-    pop.start.mat[i,] <- encode_grid_buffer(grid.seg.sam, grid.cen.sam, buffer.sam, order.grid, order.buffer)
+    pop.start.mat[i,] <-
+      encode_grid_buffer(grid.seg.sam,
+                         grid.cen.sam,
+                         buffer.sam,
+                         order.grid,
+                         order.buffer)
   }
 
 

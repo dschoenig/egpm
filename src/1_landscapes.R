@@ -11,12 +11,12 @@ ls.imbalance <- as.numeric(args[4])
 task.id <- as.integer(args[5])
 task.count <- as.integer(args[6])
 
-# ls.name <- "imbalance_medium"
-# n <- 1000
-# ls.dim <- 1000
-# ls.imbalance <- 0.3
-# task.id <- 1
-# task.count <- 100
+ls.name <- "imbalance_medium"
+n <- 1000
+ls.dim <- 1000
+ls.imbalance <- 0.3
+task.id <- 1
+task.count <- 100
 
 
 paste0("SETTINGS\n",
