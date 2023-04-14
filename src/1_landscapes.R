@@ -114,7 +114,7 @@ parameters <-
              z4.mix.w = z4.mix.w,
              # Parameters for defining treatment and reference areas
              score.type = "mahalanobis",
-             areas.seg.seed = 3,
+             areas.seg.seed = sample(1:3, n, replace = TRUE),
              areas.score.sam = 1e5,
              areas.imbalance.tol = 0,
              areas.area.prop = runif(n, 0.35, 0.65),
