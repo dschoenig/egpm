@@ -1366,8 +1366,11 @@ match_to_segments <- function(pw.dist,
       matched.l[[i]] <- grid.seg[segment == i & dist <= buffer[i], grid]
     }
     matched.grid <- do.call(c, matched.l)
-    matched.segment <- do.call(c, mapply(\(x, y) rep(y, length(x)),
-                                         matched.l, 1:n.seg))
+    matched.segment <-
+      do.call(c, mapply(\(x, y) rep(y, length(x)),
+                                         matched.l,
+                                         1:n.seg,
+                                         SIMPLIFY = FALSE))
     if(include.unmatched) {
       unmatched.grid <-  (1:nrow(pw.dist))[!1:nrow(pw.dist) %in% matched.grid]
       unmatched.segment <- rep(0, length(unmatched.grid))

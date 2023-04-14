@@ -21,6 +21,8 @@ c(
   "Matrix") |>
 install.packages()
 
+data.table::update_dev_pkg()
+
 # install.packages("~/projects/pkgarchive/RandomFieldsUtils_1.2.5.tar.gz",
 #                  repos = NULL, type = "source")
 # install.packages("~/projects/pkgarchive/RandomFields_3.3.14.tar.gz",
