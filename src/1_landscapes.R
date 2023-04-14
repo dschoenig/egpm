@@ -19,10 +19,10 @@ task.id <- 1
 task.count <- 100
 
 
-paste0("SETTINGS\n",
-       "    N: ", n, "\n",
-       "    Dimension: ", ls.dim, "\n",
-       "    Imbalance: ", ls.imbalance) |>
+paste0("Settings\n",
+       "  N: ", n, "\n",
+       "  Dimension: ", ls.dim, "\n",
+       "  Imbalance: ", ls.imbalance) |>
 message()
 
 path.base <- "../"

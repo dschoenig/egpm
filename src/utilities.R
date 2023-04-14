@@ -1967,8 +1967,9 @@ generate_areas_poly <- function(x.dim,
   rm(f_opt_imb_area.m, match_to_segments.m, segment_min_distance.m)
 
   if(verbose > 0) {
-    message(paste0("Imbalance: ", round(trt.imb, getOption("digits")),
-                   ". Area proportion: ", round(trt.area, getOption("digits"))))
+    message(paste0("Imbalance (approx.) ", round(trt.imb, getOption("digits")),
+                   ". Area proportion (approx.) ", round(trt.area, getOption("digits")),
+                   "."))
   }
 
   if(opt.fine) {
@@ -2252,8 +2253,8 @@ generate_areas_poly <- function(x.dim,
            type = "discrete")
 
   if(verbose > 0) {
-    message(paste0("Final result: Imbalance: ", round(trt.imb, getOption("digits")),
-                   ". Area proportion: ", round(trt.area, getOption("digits"))))
+    message(paste0("Final result (exact): Imbalance ", round(trt.imb, getOption("digits")),
+                   ". Area proportion ", round(trt.area, getOption("digits")), "."))
   }
 
   return(list(shape = poly.areas,
