@@ -1,34 +1,25 @@
-# module load StdEnv/2020 gcc/9.3.0 gdal/3.4.3 geos/3.10.2 python/3.10 udunits/2.2.28 r/4.2.1
+# module load StdEnv/2020 gcc/9.3.0 gdal/3.5.1 geos/3.10.2 python/3.10 udunits/2.2.28 r/4.2.2
 
-install.packages(c(
-                   "bayesplot",
-                   "colorspace",
-                   "data.table",
-                   "devtools",
-                   "doParallel",
-                   "dplyr",
-                   "ggdist",
-                   "ggpattern",
-                   "ggplot2",
-                   "igraph",
-                   "KernSmooth",
-                   "kohonen",
-                   "MatchIt",
-                   "mgcv",
-                   "mvnfast",
-                   "patchwork",
-                   "pdp",
-                   "posterior",
-                   "ranger",
-                   # "RandomFields",
-                   # "RandomFieldsUtils",
-                   "raster",
-                   "sf",
-                   "spdep",
-                   "stars",
-                   "stringi"
-                   ))
-
+c(
+  "mgcv",
+  # "RandomFields",
+  # "RandomFieldsUtils",
+  "sf",
+  "stars",
+  "lwgeom",
+  "spdep",
+  "igraph",
+  "data.table",
+  "mvnfast",
+  "colorspace",
+  "stringi",
+  "ggplot2",
+  "patchwork",
+  "kohonen",
+  "GA",
+  "memoise",
+  "Matrix") |>
+install.packages()
 
 # install.packages("~/projects/pkgarchive/RandomFieldsUtils_1.2.5.tar.gz",
 #                  repos = NULL, type = "source")
