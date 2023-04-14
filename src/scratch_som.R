@@ -1,54 +1,190 @@
-library(RandomFields)
-library(RandomFieldsUtils)
-library(raster)
-library(sf)
-library(stars)
-library(spdep)
-library(igraph)
-library(data.table)
-library(mvnfast)
-library(colorspace)
-library(stringi)
-library(ggplot2)
-library(patchwork)
-library(kohonen)
-library(MatchIt)
+# library(RandomFields)
+# library(RandomFieldsUtils)
+# library(raster)
+# library(sf)
+# library(stars)
+# library(spdep)
+# library(igraph)
+# library(data.table)
+# library(mvnfast)
+# library(colorspace)
+# library(stringi)
+# library(ggplot2)
+# library(patchwork)
+# library(kohonen)
+# library(MatchIt)
 
-RFoptions(install="no")
 
-source("utilities_fcne.R")
+# source("utilities_fcne.R")
 source("utilities.R")
 
 
+set.seed(19010511+1) # Rose Ausländer
+n <- 1000
+ls.dim <- 1000
+cov.effect.mu <- c(-2, 2)
+cov.effect.range <- c(0.2, 5)
+z1.mix.w <- runif(n, 0.2, 0.5)
+z2.mix.w <- runif(n, 0.2, 0.5)
+z3.mix.prop <- runif(n, 0.2, 0.5)
+z4.mix.w <- runif(n, 0.2, 0.5)
+parameters <-
+  data.table(
+             id = 1:n,
+             seed = sample(1:1e8, n),
+             x.dim = ls.dim,
+             y.dim = ls.dim,
+             # Imbalance
+             areas.imbalance = 0.1,
+             # Effects
+             treatment.eff.mean = 1,
+             z1.effect.type = sample(c("sigmoid", "minimum", "unimodal", "bimodal"), n,
+                                     replace = TRUE),
+             z1.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]),
+             z1.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             z2.effect.type = sample(c("sigmoid", "minimum", "unimodal", "bimodal"), n,
+                                     replace = TRUE),
+             z2.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]),
+             z2.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             z3.effect.type = sample(c("sigmoid", "minimum", "unimodal", "bimodal"), n,
+                                     replace = TRUE),
+             z3.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]),
+             z3.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             z4.effect.type = sample(c("sigmoid", "minimum", "unimodal", "bimodal"), n,
+                                     replace = TRUE),
+             z4.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]),
+             z4.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             int12.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]) ,
+             int12.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             int12.effect.nuclei = sample(20:50, n, replace = TRUE),
+             int13.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]) ,
+             int13.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             int13.effect.nuclei = sample(20:50, n, replace = TRUE),
+             int14.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]) ,
+             int14.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             int14.effect.nuclei = sample(20:50, n, replace = TRUE),
+             int23.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]) ,
+             int23.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             int23.effect.nuclei = sample(20:50, n, replace = TRUE),
+             int24.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]) ,
+             int24.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             int24.effect.nuclei = sample(20:50, n, replace = TRUE),
+             int34.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]) ,
+             int34.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             int34.effect.nuclei = sample(20:50, n, replace = TRUE),
+             # Residual variation
+             e.exp.var = 0.2,
+             e.exp.scale = runif(n, 0.1*ls.dim, ls.dim),
+             e.nug.var = 0.2,
+             # Parameters for generating functions
+             treatment.mat.nu = runif(n, 1, 1.5),
+             treatment.mat.scale = runif(n, 0.05*ls.dim, 0.25*ls.dim),
+             treatment.mat.var = runif(n, 0.5, 2),
+             treatment.damp.infl = 0.2,
+             treatment.damp.scale = runif(n, 1/(5*pi), 1/(2*pi)),
+             mix.alpha = runif(n, 0.5, 1.5),
+             z1.fbm.alpha = runif(n, 0.5, 1.5),
+             z1.mix.w = z1.mix.w,
+             z2.grad.phi = runif(n, 0, 2*pi),
+             z2.mix.w = z2.mix.w,
+             z3.dist.n = sample(10:25, n, replace = TRUE),
+             z3.dist.acc = ls.dim/100,
+             z3.mix.prop = z3.mix.prop,
+             z4.seg.n = sample(10:25, n, replace = TRUE),
+             z4.mat.nu = runif(n, 1, 2),
+             z4.mat.scale = runif(n, 0.1, 1),
+             z4.mix.w = z4.mix.w,
+             # Parameters for defining treatment and reference areas
+             score.type = "mahalanobis",
+             areas.seg.seed = 3,
+             areas.score.sam = 1e5,
+             areas.imbalance.tol = 0,
+             areas.area.prop = runif(n, 0.35, 0.65),
+             areas.area.tol = list(NULL),
+             areas.area.exact = FALSE,
+             areas.seg.res = 0.05 * ls.dim,
+             areas.seg.min.dist = 0.03*ls.dim,
+             areas.seg.min.area = (ls.dim/10)^2,
+             areas.seg.even = 2,
+             areas.seg.prec = 5e-4 * ls.dim,
+             areas.min.bound.dist = 0,
+             areas.opt.imp.imb = 5,
+             areas.opt.imp.area = 1,
+             areas.opt.pop = 100,
+             areas.opt.prec = 1e-4,
+             areas.opt.pcrossover = 0.9,
+             areas.opt.pmutation = 0.5,
+             areas.opt.max.iter = 500,
+             areas.opt.run = 100,
+             areas.opt.parallel = 4,
+             areas.opt.fine = TRUE,
+             areas.opt.fine.max.iter = 100,
+             areas.opt.fine.constr = TRUE,
+             areas.opt.fine.tol = 1e-6,
+             verbose = 2
+             )
+rm(z1.mix.w, z2.mix.w, z3.mix.prop, z4.mix.w)
+
+# attach(as.list(parameters[id == 1]))
+# detach(as.list(parameters[id == 1]))
+
+# ls.par <-
+# parameters[z1.effect.type != z2.effect.type &
+#            z1.effect.type != z3.effect.type &
+#            z1.effect.type != z4.effect.type &
+#            z2.effect.type != z3.effect.type &
+#            z2.effect.type != z4.effect.type &
+#            z3.effect.type != z4.effect.type][1] |>
+#          as.list()
+
+ls.par <- as.list(parameters[id == 1])
+# ls.par$areas.imbalance <- 0.3
+ls.par <- lapply(ls.par, unlist)
+
+ls <- do.call(generate_landscape_4cov_nl, ls.par)
+# ls <- readRDS("landscape.rds")
+
+plot_landscape_4cov_nl(ls$landscape, select = "overview")
+plot_functions_4cov_nl(ls$fun)
+
 
 data <- ls$landscape
-ls$landscape[, type := factor(type, levels = levels(type), ordered = TRUE)]
-data[, zone := fifelse(x < 50, 1, 2)]
+data[, type.o := factor(type, levels = levels(type), ordered = TRUE)]
+# data[, zone := fifelse(x < 50, 1, 2)]
+
+ls.sam <- sample(1:nrow(ls$landscape), 2e4)
+data <- data[ls.sam]
+
+
+# EGP NEW -----------------------------------------------------------
 
 som.fit <-
-  egp_som(ls$landscape,
-          x.dim = 20,
-          y.dim = 20,
+  egp_som(data,
+          x.dim = 25,
+          y.dim = 25,
           epochs = 1000,
           vars = c("z1", "z2", "z3", "z4"),
           parallel = 4)
 
 
-
 data[, c("som.unit", "som.x", "som.y") := get_bmu(som.fit, coord = TRUE, list = TRUE)]
 
+mod.egp <- bam(response ~
+               # s(x, y, bs = "gp", k = 250,
+               #   xt = list(max.knots = 2500)) +
+               # s(x, y, by = type.o, bs = "gp", k = 250,
+               #   xt = list(max.knots = 2500)) +
+               s(x, y, by = type, bs = "gp", k = 250,
+                 xt = list(max.knots = 2500)) +
+               s(som.x, som.y, bs = "gp", k = 250,
+                 xt = list(max.knots = 625)),
+               data = data,
+               select = TRUE,
+               discrete = TRUE,
+               nthreads = 4
+               )
 
-ls$landscape[, type := factor(type, levels = levels(type), ordered = TRUE)]
-
-mod.gam <- 
-  bam(response.int ~
-        s(x, y, bs = "gp", m = 3, k = 100) +
-        s(x, y, by = type, bs = "gp", m = 3, k = 100) + 
-        s(som.x, som.y, bs = "gp", m = 3, k = 100),
-      discrete = TRUE,
-      data = ls$landscape)
-
-summary(mod.gam)
+summary(mod.egp)
 
 
 # ls$landscape[, type := factor(type, levels = levels(type), ordered = FALSE)]
@@ -64,26 +200,56 @@ summary(mod.gam)
 # summary(mod.gam)
 
 mod.post <-
-  egp_posterior_draw(mod.gam, 1000, unconditional = TRUE, package = "mgcv")
+  egp_posterior_draw(mod.egp, 1000, unconditional = TRUE, package = "mgcv")
 
 
 pred <-
   egp_posterior_predict(
-                        model = mod.gam,
+                        model = mod.egp,
                         data = data,
                         id.var = "cell",
                         # pred.name = "response",
                         # ids = sam2,
                         posterior = mod.post)
 
-data[, cell2 := cell]
+# data[, cell2 := cell]
 
 cf <-
   egp_define_counterfactual(
                             data = data,
+                            som = som.fit,
                             fac.ids = data[type == "treatment", cell],
                             cf.ids = data[type == "reference", cell],
                             # compare.by = "zone",
+                            nb.strategy = "sequential",
+                            # nb.strategy = "expand",
+                            group.by = list(NULL, "poly"),
+                            som.var = "som.unit",
+                            id.var = "cell",
+                            deg.max = NULL,
+                            n.min = 1)
+
+units <- egp_summarize_units(pred, cf)
+fac <- egp_evaluate_factual(pred, cf, agg.size = 1e2)
+count <- egp_evaluate_counterfactual(pred, cf, units)
+mar <- egp_marginal(fac, count)
+
+mar[, .(mean(marginal), sd(marginal)), by =  .(group.id = group.id)]
+
+
+cf2$assignment
+cf$assignment
+
+data[, mean(treatment), by = poly]
+
+cf2 <-
+  egp_define_counterfactual(
+                            data = data,
+                            som = som.fit,
+                            fac.ids = data[type == "treatment", cell],
+                            cf.ids = data[type == "reference", cell],
+                            # compare.by = "zone",
+                            nb.strategy = "expand",
                             group.by = list(NULL, "poly"),
                             som.var = "som.unit",
                             id.var = "cell",
@@ -91,12 +257,339 @@ cf <-
                             n.min = 1)
 
 
+units <- egp_summarize_units(pred, cf2)
+fac <- egp_evaluate_factual(pred, cf2, agg.size = 1e2)
+count <- egp_evaluate_counterfactual(pred, cf2, units)
+mar <- egp_marginal(fac, count)
+
+mar[, .(mean(ATE), sd(ATE)), by =  .(group.id = group.id)]
+
+
+# EGP NEW -----------------------------------------------------------
+
+som2 <-
+  egp_som(data,
+          x.dim = 10,
+          y.dim = 10,
+          epochs = 1000,
+          vars = c("z1", "z2", "z3", "z4"),
+          parallel = 4)
+
+
+data[, c("som.unit", "som.x", "som.y") := get_bmu(som2, coord = TRUE, list = TRUE)]
+
+mod.egp <- bam(response ~
+               s(x, y, bs = "gp", k = 250,
+                 xt = list(max.knots = 2500)) +
+               s(x, y, by = type.o, bs = "gp", k = 250,
+                 xt = list(max.knots = 2500)) +
+               s(som.x, som.y, bs = "gp", k = 250,
+                 xt = list(max.knots = 625)),
+               data = data,
+               select = TRUE,
+               discrete = TRUE,
+               nthreads = 4
+               )
+
+summary(mod.egp)
+
+
+# ls$landscape[, type := factor(type, levels = levels(type), ordered = FALSE)]
+# mod.gam <- 
+#   gam(response.int ~
+#         s(x, y, bs = "sz", k = 100, xt = list(bs = "gp", m = 3)) +
+#         s(type, x, y, bs = "sz", k = 100, xt = list(bs = "gp", m = 3)) +
+#         s(som.x, som.y, bs = "gp", m = 3, k = 100),
+#       method = "REML",
+#       optimizer = "efs",
+#       data = ls$landscape)
+
+# summary(mod.gam)
+
+mod.post <-
+  egp_posterior_draw(mod.egp, 1000, unconditional = TRUE, package = "mgcv")
+
+
+pred <-
+  egp_posterior_predict(
+                        model = mod.egp,
+                        data = data,
+                        id.var = "cell",
+                        # pred.name = "response",
+                        # ids = sam2,
+                        posterior = mod.post)
+
+# data[, cell2 := cell]
+
+cf <-
+  egp_define_counterfactual(
+                            data = data,
+                            som = som.fit,
+                            fac.ids = data[,cell],
+                            cf.ids = data[type == "reference", cell],
+                            # compare.by = "zone",
+                            nb.strategy = "expand",
+                            group.by = list("type", "poly"),
+                            som.var = "som.unit",
+                            id.var = "cell",
+                            deg.max = NULL,
+                            n.min = 1)
+
 units <- egp_summarize_units(pred, cf)
 fac <- egp_evaluate_factual(pred, cf, agg.size = 1e2)
 count <- egp_evaluate_counterfactual(pred, cf, units)
 mar <- egp_marginal(fac, count)
 
-mar[, .(mean(ATE), sd(ATE)), by =  .(group.id = group.id)]
+mar[, .(mean(marginal), sd(marginal)), by =  .(group.id = group.id)]
+
+# EGP old -----------------------------------------------------------
+
+
+som.dim <- 25
+som.rlen <- 1000
+egp.k.som <- 250
+egp.k.geo <- 250
+egp.max.knots.som <- som.dim^2
+egp.max.knots.geo <- egp.k.geo*10
+egp.approx <- TRUE
+egp.basis <- "gp"
+egp.select <- TRUE
+n.threads = 4
+
+
+
+
+  ## SOM #######################################################################
+
+  message(paste0("Fitting SOM …"))
+
+  ls.sam <- data
+
+  grid <- somgrid(xdim = som.dim, ydim = som.dim, 
+                  topo = "rectangular", 
+                  neighbourhood.fct = "gaussian")
+  cov.z <- scale(ls.sam[, .(z1, z2, z3, z4)],
+                 center = TRUE, scale = TRUE)
+
+  som.fit <- som(cov.z,
+                 grid = grid, 
+                 rlen = som.rlen,
+                 radius = som.dim,
+                 init = init_som(na.omit(cov.z), som.dim, som.dim),
+                 mode = "pbatch", 
+                 cores = n.threads,
+                 normalizeDataLayers = FALSE)
+  som.fit$scale <- list(mean = attr(cov.z, "scaled:center"),
+                        sd = attr(cov.z, "scaled:scale"))
+  # file.som <- paste0(path.mod, "egp_sam0.01_som50_", stri_pad_left(ls.par$id, 4, 0), ".rds")
+  # som.fit <- readRDS(file.som)$som
+
+  mapped <- 
+      ls.sam[, .(z1, z2, z3, z4)] |>
+      scale_data_som(som = som.fit) |>
+      embed_som(som = som.fit,
+                grid.coord = TRUE)
+  ls.sam[,
+           `:=`(som_bmu = mapped$bmu[,1],
+                som_x = mapped$grid.coordinates$bmu.1[,"x"],
+                som_y = mapped$grid.coordinates$bmu.1[,"y"])
+           ]
+
+  ls.sam[, id := cell]
+  ls.sam <- ls.sam[, !"cell"]
+  setcolorder(ls.sam, "id")
+  
+  # # results.mod[["sample"]] <- ls.sam
+  # results.mod[["som"]] <- som.fit
+
+  egp.k.som <- min(nrow(unique(mapped[[1]])), egp.k.som)
+
+  # if(som.eval) {
+  #   quality <-
+  #     evaluate_embedding(ls.sam[, .(z1, z2, z3, z4)],
+  #                        mapped = as.matrix(ls.sam[, .(som_x, som_y)]),
+  #                        k.max = egp.k,
+  #                        combined = FALSE)
+  #   som.quality[[i]] <-
+  #     data.table(id = parameters[i, id],
+  #                rec = mean(quality$dev.expl^-1)^-1,
+  #                ve = variance_explained(som.fit),
+  #                te = topological_error(som.fit))
+  # }
+
+
+  ## EGP (LANDSCAPE WITHOUT INTERACTIONS) ######################################
+
+  # if(is.null(egp.k)) {
+  #   egp.k <- min(nrow(unique(ls.sam[, .(som_x, som_y)]) - 1),
+  #                floor((nrow(ls.sam) * (0.25))))
+  # }
+
+
+  message("Fitting GAM (response without interactions) …")
+
+    mod.egp <- bam(response ~
+                   s(x, y, by = type.o, bs = egp.basis, k = egp.k.geo,
+                     xt = list(max.knots = egp.max.knots.geo)) +
+                   s(som_x, som_y, bs = egp.basis, k = egp.k.som,
+                     xt = list(max.knots = egp.max.knots.som)),
+                   data = ls.sam,
+                   select = TRUE,
+                   discrete = TRUE,
+                   nthreads = n.threads
+                   )
+  # summary(mod.egp)
+  # AIC(mod.egp)
+  # summary(mod.egp)
+  # AIC(mod.egp)
+
+  
+  # Estimate marginal effect
+
+  message("Estimating marginal effect …")
+
+  data.bl <- assign_bl_som(ls.sam,
+                           som = som.fit,
+                           bl.level = "reference",
+                           cov.col = c("z1", "z2", "z3", "z4"),
+                           id.col = "id")
+
+  post <- rmvn(1000, coef(mod.egp), vcov(mod.egp, unconditional = TRUE))
+  colnames(post) <- names(coef(mod.egp))
+  post <- as_draws_matrix(post)
+
+  lp <-
+    evaluate_posterior(model = mod.egp,
+                       posterior = post,
+                       newdata = ls.sam,
+                       id.col = "id",
+                       type = "response",
+                       progress = FALSE)
+
+  groups.type <-
+      ls.sam |>
+      ids_by_group(id.col = "id", group.vars = "type")
+
+  id.list.type <- groups.type$ids
+  names(id.list.type) <- groups.type$type
+  yhat.type <- aggregate_variables(lp,
+                      agg.fun = mean,
+                      ids = id.list.type,
+                      progress = FALSE
+                      )
+
+  groups.som <-
+      ls.sam[type == "reference"] |>
+      ids_by_group(id.col = "id", group.vars = "som_bmu")
+
+  id.list.som <- groups.som$ids
+  names(id.list.som) <- groups.som$som_bmu
+  yhat.som <- aggregate_variables(lp,
+                      agg.fun = mean,
+                      ids = id.list.som,
+                      agg.size = 1e5,
+                      progress = FALSE
+                      )
+
+  ids.units <- data.bl[,
+                         .(id,
+                           som_bmu.bl,
+                           som_bmu.bl.w)
+                         ][,
+                           lapply(.SD, unlist), c("id")
+                           ][,
+                             .(id,
+                               som_bmu.bl,
+                               som_bmu.bl.w)]
+  setkey(ids.units, id)
+
+  # Reweigh baseline SOM units for each group, based on what points they where
+  # assigned to
+  w.points <-
+    lapply(id.list.type,
+           \(x) {
+                 extract_weights(ids.units[.(x)],
+                                 w.col = "som_bmu.bl.w",
+                                 by.col = "som_bmu.bl",
+                                 standardize = TRUE)
+                })
+  yhat.bl.type <- reweigh_posterior(yhat.som, w = w.points)
+
+  eff.mar <- arc(yhat.type, yhat.bl.type)
+
+ls.sam[, type := factor(type, ordered = FALSE)]
+
+# Match --------------------------------------------------------------
+
+    mod.lm <- lm(response ~ type, data = ls.sam)
+    mod.lmcov <- lm(response ~ type + z1 + z2 + z3 + z4, data = ls.sam)
+
+    matched.cem.st <- matchit(type ~ z1 + z2 + z3 + z4,
+                           method = "cem", cutpoints = "st",
+                           data = ls.sam)
+    md.cem.st <- match.data(matched.cem.st)
+    mod.cem.st <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights,
+                          data = md.cem.st)
+    rm(matched.cem.st, md.cem.st)
+
+    matched.cem.sc <- matchit(type ~ z1 + z2 + z3 + z4,
+                           method = "cem", cutpoints = "sc",
+                           data = ls.sam)
+    md.cem.sc <- match.data(matched.cem.sc)
+    mod.cem.sc <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights,
+                  data = md.cem.sc)
+    rm(matched.cem.sc, md.cem.sc)
+
+    matched.cem.fd <- matchit(type ~ z1 + z2 + z3 + z4,
+                           method = "cem", cutpoints = "fd",
+                           data = ls.sam)
+    md.cem.fd <- match.data(matched.cem.fd)
+    mod.cem.fd <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights,
+                     data = md.cem.fd)
+    rm(matched.cem.fd, md.cem.fd)
+
+    matched.nn.ps.nr <-
+      matchit(type ~ z1 + z2 + z3 + z4,
+              method = "nearest", distance = "glm", replace = FALSE,
+              data = ls.sam)
+    md.nn.ps.nr <- match.data(matched.nn.ps.nr)
+    mod.nn.ps.nr <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.nn.ps.nr)
+    rm(matched.nn.ps.nr, md.nn.ps.nr)
+
+    matched.nn.ps.re <-
+      matchit(type ~ z1 + z2 + z3 + z4,
+              method = "nearest", distance = "glm", replace = TRUE,
+              data = ls.sam)
+    md.nn.ps.re <- match.data(matched.nn.ps.re)
+    mod.nn.ps.re <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.nn.ps.re)
+    rm(matched.nn.ps.re, md.nn.ps.re)
+
+    matched.nn.mh.nr <-
+      matchit(type ~ z1 + z2 + z3 + z4, replace = FALSE,
+              method = "nearest", distance = "mahalanobis",
+              data = ls.sam)
+    md.nn.mh.nr <- match.data(matched.nn.mh.nr)
+    mod.nn.mh.nr <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.nn.mh.nr)
+    rm(matched.nn.mh.nr, md.nn.mh.nr)
+
+    matched.nn.mh.re <-
+      matchit(type ~ z1 + z2 + z3 + z4, replace = TRUE,
+              method = "nearest", distance = "mahalanobis",
+              data = ls.sam)
+    md.nn.mh.re <- match.data(matched.nn.mh.re)
+    mod.nn.mh.re <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.nn.mh.re)
+
+    rm(matched.nn.mh.re, md.nn.mh.re)
+
+
+
+
+
+
+
+
+
+
 
 dev.new()
 
@@ -111,7 +604,7 @@ matched.nn.mh.re <- matchit(type ~ z1 + z2 + z3 + z4,
                             # data = ls$landscape[sample(1:1e4, 500)], method = "cem")
                             data = ls$landscape, method = "cem")
     md.nn.mh.re <- match.data(matched.nn.mh.re)
-    mod.nn.mh.re <- lm(response.int ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.nn.mh.re)
+    mod.nn.mh.re <- lm(response ~ type + z1 + z2 + z3 + z4, weights = weights, data = md.nn.mh.re)
 
 
 data[, mean(treatment), by = poly]

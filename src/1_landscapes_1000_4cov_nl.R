@@ -152,7 +152,8 @@ for(i in chunk) {
     as.list(parameters[i,]) |>
     lapply(unlist)
   file.ls <- paste0(path.ls.data,
-                    stri_pad_left(ls.par$id, 4, 0), ".rds")
+                    stri_pad_left(ls.par$id, ceiling(log10(n))+1, 0),
+                    ".rds")
   ls <- do.call(generate_landscape_4cov_nl, ls.par)
   saveRDS(ls, file.ls)
 

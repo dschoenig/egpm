@@ -1,8 +1,9 @@
 library(mgcv)
-library(posterior)
 library(RandomFields)
 library(RandomFieldsUtils)
-library(raster)
+RFoptions(install="no")
+RFoptions(spConform=FALSE)
+# library(raster)
 library(sf)
 library(stars)
 library(lwgeom)
@@ -19,7 +20,6 @@ library(GA)
 library(memoise)
 library(Matrix)
 
-RFoptions(install="no")
 
 equilibrate <- function(x, ...) {
   UseMethod("equilibrate", x)
@@ -2925,7 +2925,9 @@ generate_landscape_4cov_nl <-
            areas.seg.seed,
            areas.score.sam,
            areas.imbalance,
+           areas.imbalance.tol,
            areas.area.prop,
+           areas.area.tol,
            areas.area.exact,
            areas.seg.res,
            areas.seg.min.dist,
@@ -3070,9 +3072,9 @@ generate_landscape_4cov_nl <-
                         score = score.trt,
                         score.sam = areas.score.sam,
                         imbalance = areas.imbalance,
-                        imbalance.tol = NULL,
+                        imbalance.tol = areas.imbalance.tol,
                         area.prop = areas.area.prop,
-                        area.tol = NULL,
+                        area.tol = areas.area.tol,
                         area.exact = areas.area.exact,
                         seg.res = areas.seg.res,
                         seg.min.dist = areas.seg.min.dist,
@@ -3169,7 +3171,7 @@ generate_landscape_4cov_nl <-
   setcolorder(cov.int.funs, c("int", "cov1", "cov2", "val1", "val2", "f"))
 
 
-  if(verbose > 0) message("Simulating residuals variation …") 
+  if(verbose > 0) message("Simulating residual variation …") 
 
   mod.residual <-
     RMexp(var = e.exp.var, scale = e.exp.scale) +
@@ -3181,21 +3183,20 @@ generate_landscape_4cov_nl <-
 
   if(verbose > 0) message("Building landscape …") 
 
+  # response <-
+  #   c(cov.main.effects, treatment, residual) |>
+  #   merge() |>
+  #   st_apply(1:2, sum) |>
+  #   setNames("response")
+
   response <-
-    c(cov.main.effects, treatment, residual) |>
+    c(cov.main.effects, cov.int.effects, treatment, residual) |>
     merge() |>
     st_apply(1:2, sum) |>
     setNames("response")
 
-  response.int <-
-    c(cov.main.effects, cov.int.effects, treatment, residual) |>
-    merge() |>
-    st_apply(1:2, sum) |>
-    setNames("response.int")
-
   landscape.dt <-
     c(response,
-      response.int,
       covariates,
       treatment,
       cov.main.effects,
@@ -3222,7 +3223,6 @@ plot_landscape_4cov_nl <- function(x,
                                    type = "landscape",
                                    select = "overview",
                                    interactions = TRUE,
-                                   response.type = "interactions",
                                    ls_theme = NULL,
                                    ls_guide = NULL,
                                    title.type = "Area type",
@@ -3283,32 +3283,17 @@ plot_landscape_4cov_nl <- function(x,
 
   # Response
   
-  if(response.type == "interactions") {
-    plots[["resp"]] <-
-      ggplot(x, aes(x = x, y = y, fill = response.int)) +
-      geom_raster() +
-      # scale_fill_viridis_c()
-      scale_fill_continuous_divergingx(palette = "Roma", rev = TRUE, mid = 0) +
-      scale_x_continuous(expand = c(0, 0)) +
-      scale_y_continuous(expand = c(0, 0)) +
-      coord_fixed() +
-      guide_fill +
-      labs(title = title.resp, fill = legend.resp) +
-      ls_theme
-  }
-  if(response.type == "main") {
-    plots[["resp"]] <-
-      ggplot(x, aes(x = x, y = y, fill = response)) +
-      geom_raster() +
-      # scale_fill_viridis_c()
-      scale_fill_continuous_divergingx(palette = "Roma", rev = TRUE, mid = 0) +
-      scale_x_continuous(expand = c(0, 0)) +
-      scale_y_continuous(expand = c(0, 0)) +
-      coord_fixed() +
-      guide_fill +
-      labs(title = title.resp, fill = legend.resp) +
-      ls_theme
-  }
+  plots[["resp"]] <-
+    ggplot(x, aes(x = x, y = y, fill = response)) +
+    geom_raster() +
+    # scale_fill_viridis_c()
+    scale_fill_continuous_divergingx(palette = "Roma", rev = TRUE, mid = 0) +
+    scale_x_continuous(expand = c(0, 0)) +
+    scale_y_continuous(expand = c(0, 0)) +
+    coord_fixed() +
+    guide_fill +
+    labs(title = title.resp, fill = legend.resp) +
+    ls_theme
 
   # Variables: area type
 
@@ -4271,7 +4256,35 @@ egp_som <- function(x,
                  mode = "pbatch", 
                  cores = parallel,
                  normalizeDataLayers = FALSE)
- 
+  
+  if(dist.fun == "sumofsquares") {
+    dist.mat <-
+      dist(som.fit$codes[[1]], method = "euclidean") |>
+      as.matrix()
+    dimnames(dist.mat) <- list(NULL, NULL)
+    dist.mat <- dist.mat^2
+  }
+
+  if(dist.fun %in% c("euclidean", "manhattan")) {
+    dist.mat <-
+      dist(som.fit$codes[[1]], method = dist.fun) |>
+      as.matrix()
+    dimnames(dist.mat) <- list(NULL, NULL)
+  }
+
+  if(dist.fun == "tanimoto") {
+    dist.mat <-
+      dist(som.fit$codes[[1]], method = "binary") |>
+      as.matrix()
+    dimnames(dist.mat) <- list(NULL, NULL)
+    dist.mat <- dist.mat^2
+  }
+
+  som.fit$unit.dist <-
+    apply(dist.mat, 1, \(x) data.table(id.to = 1:length(x),
+                                       dist = x)) |>
+    rbindlist(idcol = "id.from")
+
   som.fit$grid.poly <- grid.poly
   som.fit$grid.nb <- grid.nb
   som.fit$init <- init
@@ -4518,10 +4531,54 @@ get_nb <- function(x) {x$grid.nb}
     return(data)
 }
 
-find_neighbourhood <- function(A,
-                               n,
-                               n.min = 1,
-                               deg.max = NULL) {
+
+.nb_sequential <- function(dist,
+                           n,
+                           n.min = 1,
+                           deg.max = NULL) {
+
+  if(is.null(deg.max)) {
+    deg.max <- length(n)
+  }
+
+  unit.n <- data.table(id.to = 1:length(n),
+                       n = n)
+
+  dist <-
+    copy(dist) |>
+    merge(unit.n, by = "id.to")
+  setkey(dist, id.from)
+
+  dist.ord <-
+    dist[order(id.from, dist, n)
+         ][n > 0,
+           .(id.to,
+             n,
+             deg = 1:length(dist),
+             nc = cumsum(n),
+             dist),
+           by = id.from
+           ]
+
+  nb.dt <-
+    merge(dist.ord,
+          dist.ord[nc >= n.min,
+                   .(n.min.u = min(nc)),
+                   by = id.from]) |>
+    DT(nc <= n.min.u,
+       .(neighbourhood = list(id.to),
+         n = unique(n.min.u),
+         degree = max(deg)),
+       by = id.from)
+
+  return(as.list(nb.dt[, -"id.from"]))
+}
+
+
+.nb_expand <- function(A,
+                       n,
+                       n.min = 1,
+                       deg.max = NULL) {
 
   if(is.null(deg.max)) {
     deg.max <- length(n)
@@ -4547,6 +4604,7 @@ find_neighbourhood <- function(A,
     } else {
       A.nbh <- A.nbh %*% A
     }
+
     nbh.sel <- apply(A.nbh[bmu.sel,,drop = FALSE], 1,
                     \(x) which(x > 0),
                     simplify = FALSE)
@@ -4582,6 +4640,7 @@ egp_define_counterfactual <-
            assign.name = "assigned",
            assign.cat = c("counterfactual", "factual"),
            n.min = 1,
+           nb.strategy = "sequential",
            deg.max = NULL) {
 
   data.dt <- as.data.table(data)
@@ -4627,11 +4686,9 @@ egp_define_counterfactual <-
 
   bmu.ref <- data.dt[.(cf.ids), on = id.var]
 
-  A <- som.fit$grid.nb
-
   if(is.null(compare.by)) {
 
-    n.bmu <- integer(nrow(A))
+    n.bmu <- integer(nrow(som$grid.nb))
     n.ref <- bmu.ref[order(som.col),
                      .(n = .N),
                      by = som.col,
@@ -4639,9 +4696,21 @@ egp_define_counterfactual <-
     n.bmu[n.ref[, som.col, env = list(som.col = som.var)]] <- n.ref$n
     n.bmu[is.na(n.bmu)] <- 0
 
-    nbh <-
-      find_neighbourhood(A = A, n = n.bmu,
-                         n.min = n.min, deg.max = deg.max)
+
+    if(nb.strategy == "sequential") {
+      nbh <-
+        .nb_sequential(dist = som$unit.dist,
+                       n = n.bmu,
+                       n.min = n.min,
+                       deg.max = deg.max)
+    }
+    if(nb.strategy == "expand") {
+      nbh <-
+        .nb_expand(A = som$grid.nb,
+                   n = n.bmu,
+                   n.min = n.min,
+                   deg.max = deg.max)
+    }
 
     cf.bmu.dt <- 
       data.dt[.(fac.ids),
@@ -4666,11 +4735,11 @@ egp_define_counterfactual <-
   } else {
 
 
-    bmus <- 1:nrow(A)
+    bmus <- 1:nrow(som$grid.nb)
 
     bmu.by <-
       data.dt[,
-              .(som.col = 1:nrow(A)),
+              .(som.col = 1:nrow(som$grid.nb)),
               by = compare.by,
               env = list(som.col = som.var)]
 
@@ -4693,13 +4762,24 @@ egp_define_counterfactual <-
                              .(som.col, .n),
                              env = list(som.col = som.var)]
 
-      n.bmu <- integer(nrow(A))
+      n.bmu <- integer(nrow(som$grid.nb))
       n.bmu[n.ref[, som.col, env = list(som.col = som.var)]] <- n.ref$.n
       n.bmu[is.na(n.bmu)] <- 0
 
-      nbh.l[[i]] <-
-        find_neighbourhood(A = A, n = n.bmu,
-                           n.min = n.min, deg.max = deg.max)$neighbourhood
+      if(nb.strategy == "expand") {
+        nbh.l[[i]] <-
+          .nb_expand(A = som$grid.nb,
+                     n = n.bmu,
+                     n.min = n.min,
+                     deg.max = deg.max)$neighbourhood
+      }
+      if(nb.strategy == "expand") {
+        nbh.l[[i]] <-
+          .nb_sequential(dist = som$unit.dist,
+                         n = n.bmu,
+                         n.min = n.min,
+                         deg.max = deg.max)$neighbourhood
+      }
       
       cf.ids.l[[i]] <-
         data.dt[.(cf.ids),
@@ -4864,7 +4944,7 @@ egp_posterior_draw <- function(model,
                  ncores = parallel)
   }
   colnames(post) <- names(coef(model))
-  post <- as_draws_matrix(post)
+  post <- Matrix(post)
   return(post)
 }
 
@@ -5069,7 +5149,7 @@ egp_posterior_predict <- function(model,
 
 .aggregate_variables.data.table <- 
   function(predictions,
-           agg.fun = E,
+           agg.fun = mean,
            trans.fun = NULL,
            ids = NULL,
            pred.var = "predicted",
@@ -5225,7 +5305,7 @@ egp_summarize_units <- function(predictions,
 
   unit.sum <-
     .aggregate_variables(predictions.dt,
-               agg.fun = E,
+               agg.fun = mean,
                ids = units[[id.var]],
                pred.var = pred.var,
                draw.var = ".draw",
@@ -5276,7 +5356,7 @@ egp_evaluate_factual <- function(predictions,
 
   factual <-
     .aggregate_variables(predictions.dt,
-               agg.fun = E,
+               agg.fun = mean,
                ids = cf.def$groups[.(group.eval),
                                    id.col,
                                    on = group.var,
@@ -5440,8 +5520,8 @@ egp_evaluate_counterfactual <- function(predictions,
 
 egp_marginal <- function(factual,
                          counterfactual,
-                         marginal.name = "ATE",
                          type = "absolute",
+                         marginal.name = "marginal",
                          fac.var = NULL,
                          cf.var = NULL) {
 
