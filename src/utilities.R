@@ -1810,8 +1810,6 @@ generate_areas_poly <- function(x.dim,
           opt.imp.imb * imbalance.loss +
           opt.imp.area * area.loss +
           sum(penalty.min.area) +
-          # REMOVE
-          # sum(penalty.oob) +
           sum(penalty.min.dist)
       }
     }
@@ -1869,7 +1867,7 @@ generate_areas_poly <- function(x.dim,
 
   f_max <- -((opt.imp.imb + opt.imp.area) * opt.prec)
 
-  f_monitor <- ifelse(verbose > 0, gaMonitor, FALSE)
+  f_monitor <- ifelse(verbose > 1, gaMonitor, FALSE)
 
   # f_lower <- rep(c(rep(1, 4), 0), seg.seed)
   # f_upper <- rep(c(x.dim, y.dim, x.dim, y.dim,

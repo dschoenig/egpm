@@ -20,9 +20,9 @@ task.count <- 100
 
 
 paste0("SETTINGS\n",
-       "N: ", n, "\n",
-       "Dimension: ", ls.dim, "\n",
-       "Imbalance: ", ls.imbalance) |>
+       "    N: ", n, "\n",
+       "    Dimension: ", ls.dim, "\n",
+       "    Imbalance: ", ls.imbalance) |>
 message()
 
 path.base <- "../"
@@ -131,7 +131,7 @@ parameters <-
              areas.opt.pmutation = 0.5,
              areas.opt.max.iter = 500,
              areas.opt.run = 100,
-             areas.opt.parallel = FALSE,
+             areas.opt.parallel = 1,
              areas.opt.fine = TRUE,
              areas.opt.fine.max.iter = 100,
              areas.opt.fine.constr = TRUE,
@@ -155,7 +155,7 @@ for(i in chunk) {
   ls.par <- 
     as.list(parameters[i,]) |>
     lapply(unlist)
-  ls.par$verbose <- 2
+  ls.par$verbose <- 1
   file.ls <- paste0(path.ls.data,
                     stri_pad_left(ls.par$id, ceiling(log10(n))+1, 0),
                     ".rds")
