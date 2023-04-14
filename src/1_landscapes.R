@@ -38,7 +38,9 @@ file.par <- paste0(path.ls, "parameters.rds")
 set.seed(19010511) # Rose Ausländer
 ls.seeds <- round(runif(n, 0, ls.imbalance) * 1e8)
 cov.effect.mu <- c(-2, 2)
-cov.effect.range <- c(0.2, 5)
+cov.int.effect.mu <- c(-2, 2)
+cov.effect.range <- c(0.25, 4)
+cov.int.effect.range <- c(0.25, 4)
 z1.mix.w <- runif(n, 0.2, 0.5)
 z2.mix.w <- runif(n, 0.2, 0.5)
 z3.mix.prop <- runif(n, 0.2, 0.5)
@@ -69,23 +71,23 @@ parameters <-
                                      replace = TRUE),
              z4.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]),
              z4.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
-             int12.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]) ,
-             int12.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             int12.effect.range = runif(n, cov.int.effect.range[1], cov.int.effect.range[2]) ,
+             int12.effect.mu = runif(n, cov.int.effect.mu[1], cov.int.effect.mu[2]),
              int12.effect.nuclei = sample(20:50, n, replace = TRUE),
-             int13.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]) ,
-             int13.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             int13.effect.range = runif(n, cov.int.effect.range[1], cov.int.effect.range[2]) ,
+             int13.effect.mu = runif(n, cov.int.effect.mu[1], cov.int.effect.mu[2]),
              int13.effect.nuclei = sample(20:50, n, replace = TRUE),
-             int14.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]) ,
-             int14.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             int14.effect.range = runif(n, cov.int.effect.range[1], cov.int.effect.range[2]) ,
+             int14.effect.mu = runif(n, cov.int.effect.mu[1], cov.int.effect.mu[2]),
              int14.effect.nuclei = sample(20:50, n, replace = TRUE),
-             int23.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]) ,
-             int23.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             int23.effect.range = runif(n, cov.int.effect.range[1], cov.int.effect.range[2]) ,
+             int23.effect.mu = runif(n, cov.int.effect.mu[1], cov.int.effect.mu[2]),
              int23.effect.nuclei = sample(20:50, n, replace = TRUE),
-             int24.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]) ,
-             int24.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             int24.effect.range = runif(n, cov.int.effect.range[1], cov.int.effect.range[2]) ,
+             int24.effect.mu = runif(n, cov.int.effect.mu[1], cov.int.effect.mu[2]),
              int24.effect.nuclei = sample(20:50, n, replace = TRUE),
-             int34.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]) ,
-             int34.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             int34.effect.range = runif(n, cov.int.effect.range[1], cov.int.effect.range[2]) ,
+             int34.effect.mu = runif(n, cov.int.effect.mu[1], cov.int.effect.mu[2]),
              int34.effect.nuclei = sample(20:50, n, replace = TRUE),
              # Residual variation
              e.exp.var = 0.2,
@@ -129,9 +131,9 @@ parameters <-
              areas.opt.prec = 1e-4,
              areas.opt.pcrossover = 0.9,
              areas.opt.pmutation = 0.5,
-             areas.opt.max.iter = 500,
+             areas.opt.max.iter = 250,
              areas.opt.run = 100,
-             areas.opt.parallel = 1,
+             areas.opt.parallel = FALSE,
              areas.opt.fine = TRUE,
              areas.opt.fine.max.iter = 100,
              areas.opt.fine.constr = TRUE,

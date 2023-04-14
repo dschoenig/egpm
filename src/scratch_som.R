@@ -521,6 +521,9 @@ ls.sam[, type := factor(type, ordered = FALSE)]
 
 # Match --------------------------------------------------------------
 
+
+  ls.sam <- data
+
     mod.lm <- lm(response ~ type, data = ls.sam)
     mod.lmcov <- lm(response ~ type + z1 + z2 + z3 + z4, data = ls.sam)
 
