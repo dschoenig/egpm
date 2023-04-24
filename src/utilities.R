@@ -21,6 +21,14 @@ library(memoise)
 library(Matrix)
 
 
+cloglog <- function(mu) {
+  log(-log(1 - mu))
+}
+
+inv_cloglog <- function(eta) {
+  pmax(pmin(-expm1(-exp(eta)), 1 - .Machine$double.eps), .Machine$double.eps)
+}
+
 equilibrate <- function(x, ...) {
   UseMethod("equilibrate", x)
 }
@@ -1551,7 +1559,6 @@ generate_areas_poly <- function(x.dim,
                                 opt.imp.imb = 1,
                                 opt.imp.area = 1,
                                 opt.pop = 50,
-                                # opt.pop.try = 10*opt.pop,
                                 opt.prec = 1e-4,
                                 opt.pcrossover = 0.8,
                                 opt.pmutation = 0.1,
@@ -1562,6 +1569,7 @@ generate_areas_poly <- function(x.dim,
                                 opt.fine.max.iter = 25,
                                 opt.fine.constr = TRUE,
                                 opt.fine.tol = 1e-4,
+                                opt.cache = TRUE,
                                 ...
                                 ) {
 
@@ -1815,11 +1823,17 @@ generate_areas_poly <- function(x.dim,
     }
     return(-f)
   }
-
-  # Cache function evaluations
-  f_opt_imb_area.m <- memoise(f_opt_imb_area)
-  match_to_segments.m <- memoise(match_to_segments)
-  segment_min_distance.m <- memoise(segment_min_distance)
+  
+  if(opt.cache) {
+    # Cache function evaluations
+    f_opt_imb_area.m <- memoise(f_opt_imb_area)
+    match_to_segments.m <- memoise(match_to_segments)
+    segment_min_distance.m <- memoise(segment_min_distance)
+  } else {
+    f_opt_imb_area.m <- f_opt_imb_area
+    match_to_segments.m <- match_to_segments
+    segment_min_distance.m <- segment_min_distance
+  }
 
   # Starting population
 
@@ -1828,12 +1842,6 @@ generate_areas_poly <- function(x.dim,
   pop.start.mat <- matrix(NA, nrow = opt.pop, ncol = n.bits)
   for(i in 1:opt.pop) {
     grid.seg.sam <- sample(res.grid.dt$grid, seg.seed)
-    # xy.seg.sam <- 
-    #   res.grid[res.grid$grid %in% grid.seg.sam,] |>
-    #   st_centroid() |>
-    #   st_coordinates()
-    # xy.seg.sam <- xy.seg.sam[, c("X", "Y")]
-    # colnames(xy.seg.sam) <- c("x.seg", "y.seg")
     grid.cen.sam <-
       grid.dist.dt[grid2 %in% grid.seg.sam,
                    .SD[which.min(dist)],
@@ -1842,16 +1850,9 @@ generate_areas_poly <- function(x.dim,
                      .SD[sample(1:.N, 1)],
                      by = grid2
                      ][, grid1]
-    # xy.cen.sam <- 
-    #   res.grid[res.grid$grid %in% grid.cen.sam,] |>
-    #   st_centroid() |>
-    #   st_coordinates()
-    # xy.cen.sam <- xy.cen.sam[, c("X", "Y")]
-    # colnames(xy.cen.sam) <- c("x.cen", "y.cen")
     buffer.sam <- round(runif(n = seg.seed,
                               sqrt(seg.min.area),
                               sqrt(area.prop * x.dim * y.dim / seg.seed)))
-    # pop.start.mat[i,] <- c(c(t(cbind(xy.seg.sam, xy.cen.sam))), buffer.sam)
     pop.start.mat[i,] <-
       encode_grid_buffer(grid.seg.sam,
                          grid.cen.sam,
@@ -1861,18 +1862,8 @@ generate_areas_poly <- function(x.dim,
   }
 
 
-  # pop.start.mat <-
-  #   pop.start.mat[order(-apply(pop.start.mat, 1, f_opt_imb_area.m))[1:opt.pop],]
-
-
   f_max <- -((opt.imp.imb + opt.imp.area) * opt.prec)
-
   f_monitor <- ifelse(verbose > 1, gaMonitor, FALSE)
-
-  # f_lower <- rep(c(rep(1, 4), 0), seg.seed)
-  # f_upper <- rep(c(x.dim, y.dim, x.dim, y.dim,
-  #                  sqrt(x.dim^2 + y.dim^2)),
-  #                times = seg.seed)
 
   if(verbose > 0) message("Genetic optimization …")
 
@@ -2691,6 +2682,7 @@ generate_treatment <- function(x.dim,
                                mat.nu = 1,
                                mat.scale = max(x.dim, y.dim) / 10,
                                mat.var = 1,
+                               damp.type = "asymmetric",
                                damp.infl = 0.2,
                                damp.scale = 1/(5*pi),
                                name = "treatment"
@@ -2736,9 +2728,14 @@ generate_treatment <- function(x.dim,
 
   # Calculate dampening due to edge effects
 
-  dist.dt[, damp := plogis(dist.lim / (dist.cen + dist.lim),
-                           location = damp.infl,
-                           scale = damp.scale)]
+  if(damp.type == "asymmetric") {
+    dist.dt[, damp := inv_cloglog(((dist.lim / (dist.cen + dist.lim)) - damp.infl) / damp.scale)]
+  }
+  if(damp.type == "symmetric") {
+    dist.dt[, damp := plogis(dist.lim / (dist.cen + dist.lim),
+                             location = damp.infl,
+                             scale = damp.scale)]
+  }
 
   dist.dt <- merge(dist.dt, trt.dt)
 
@@ -2764,7 +2761,7 @@ generate_treatment <- function(x.dim,
   # Dampen and scale
 
   eff.raw <- dist.mat.dt[poly != 0, mean(matern * damp)]
-  dist.mat.dt[, treatment := (matern/eff.raw) * damp]
+  dist.mat.dt[, treatment := (eff.mean/eff.raw) * matern * damp]
 
   treat <- st_as_stars(dist.mat.dt[, .(x, y, treatment)])
   names(treat) <- name
@@ -2958,6 +2955,7 @@ generate_landscape_4cov_nl <-
            treatment.mat.nu,
            treatment.mat.scale,
            treatment.mat.var,
+           treatment.damp.type,
            treatment.damp.infl,
            treatment.damp.scale,
            z1.effect.type,
@@ -3016,7 +3014,7 @@ generate_landscape_4cov_nl <-
                     fbm.scale = 1,
                     fbm.w = 1-z1.mix.w,
                     fbm.rescale = FALSE,
-                    mix = fbm.mix,
+                    mix = scale_int((sample(c(-1, 1), 1) * fbm.mix)),
                     mix.w = z1.mix.w,
                     rescale = c(0,1),
                     name = "z1")
@@ -3029,7 +3027,7 @@ generate_landscape_4cov_nl <-
                     grad.x.scale = 2,
                     grad.y.scale = 2,
                     grad.w = 1-z2.mix.w,
-                    mix = fbm.mix,
+                    mix = scale_int((sample(c(-1, 1), 1) * fbm.mix)),
                     mix.w = z2.mix.w,
                     rescale = c(0,1),
                     name = "z2")
@@ -3038,7 +3036,7 @@ generate_landscape_4cov_nl <-
                     y.dim = y.dim,
                     dist.n = z3.dist.n,
                     dist.acc = z3.dist.acc,
-                    mix = fbm.mix,
+                    mix = scale_int((sample(c(-1, 1), 1) * fbm.mix)),
                     mix.prop = z3.mix.prop,
                     rescale = c(0,1),
                     name = "z3")
@@ -3052,7 +3050,7 @@ generate_landscape_4cov_nl <-
                     mat.mean = 0,
                     mat.rescale = FALSE,
                     mat.w = 1-z4.mix.w,
-                    mix = fbm.mix,
+                    mix = scale_int((sample(c(-1, 1), 1) * fbm.mix)),
                     mix.w = z4.mix.w,
                     rescale = c(0,1),
                     name = "z4")
@@ -3119,10 +3117,13 @@ generate_landscape_4cov_nl <-
                        mat.nu = treatment.mat.nu,
                        mat.scale = treatment.mat.scale,
                        mat.var = treatment.mat.var,
+                       damp.type = treatment.damp.type,
                        damp.infl = treatment.damp.infl,
                        damp.scale = treatment.damp.scale,
                        name = "treatment"
                        )
+  zplot(treatment)
+
 
   if(verbose > 0) message("Simulating covariate effects …") 
 

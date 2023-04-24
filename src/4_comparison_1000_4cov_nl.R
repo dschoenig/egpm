@@ -167,6 +167,7 @@ mod.brm <- brm(bf(mean ~ method + (1|id), sigma ~ method),
                warmup = 1000,
                iter = 2000)
 
+saveRDS(mod.brm, "../results/esa_brm.rds")
 
 comp.methods <- c("egp", "rf", "nn.mh.re", "nn.ps.re", "cem.st")
 
@@ -178,6 +179,17 @@ pred.dt <-
   melt(pred.dt, measure.vars = grep("draw", names(pred.dt)),
       variable.name = "draw", value.name = "yhat")
 pred.dt[, draw := as.integer(stri_replace_first_fixed(draw, "draw.", ""))]
+
+
+# Difference in RMSE
+comp.rmse <-
+  pred.dt[, .(rmse = sqrt(mean((yhat-1)^2))), by = c("method", "draw")] |>
+  dcast(draw ~ method, value.var = "rmse")
+comp.rmse <-
+  cbind(comp.rmse[, .(draw)],
+        comp.rmse[, lapply(.SD, \(x) egp - x), .SDcols = comp.methods]) |>
+  melt(id.vars = "draw", variable.name = "method", value.name = "rmse.diff")
+
 
 # Difference in relative bias
 comp.bias <-
@@ -217,6 +229,34 @@ comp.neg <-
   cbind(comp.neg[, .(draw)],
         comp.neg[, lapply(.SD, \(x) egp -x), .SDcols = comp.methods]) |>
   melt(id.vars = "draw", variable.name = "method", value.name = "neg.prop")
+
+
+svg(paste0(path.results, "diff_rmse.svg"), width= 7, height = 6)
+ggplot(comp.rmse[method != "egp"]) +
+stat_halfeye(aes(y = method, x = rmse.diff, fill = method,
+                 fill_ramp = stat(cut_cdf_qi(cdf))),
+             alpha = 0.8,
+             point_interval = mean_qi,
+             n = 1001) +
+geom_vline(xintercept = 0, colour = "grey5", alpha = 0.8, size = 0.5) +
+scale_fill_ramp_discrete(na.translate = FALSE, from = "white", range = c(1,0.2)) +
+scale_fill_manual(values = col.method) +
+scale_x_continuous(limits = c(-0.75, 0.25),
+                   breaks = round(seq(-0.75, 0.5, 0.25), 2)) +
+scale_y_discrete(labels = c("vs Random forest\n(1000 trees)",
+                            "vs Nearest neighbour\nmatching\n(Mh., w/ repl.)",
+                            "vs Nearest neighbour\nmatching\n(PS, w/ repl.)",
+                            "vs Coarsened exact\nmatching\n(Sturges)"
+                            )) +
+# coord_cartesian(xlim = c(-2, 3)) +
+guides(fill_ramp = "none", fill = "none") +
+theme_light(base_family = "IBMPlexSans") +
+labs(title = "Comparison: RMSE",
+     caption = "For differences < 0, EGP performs better.",
+     x = "Difference in RMSE (EGP vs other methods)") +
+dist.theme
+dev.off()
+
 
 
 svg(paste0(path.results, "diff_neg.svg"), width= 7, height = 6)
