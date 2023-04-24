@@ -1569,7 +1569,7 @@ generate_areas_poly <- function(x.dim,
                                 opt.fine.max.iter = 25,
                                 opt.fine.constr = TRUE,
                                 opt.fine.tol = 1e-4,
-                                opt.cache = FALSE,
+                                opt.cache = TRUE,
                                 ...
                                 ) {
 
@@ -5302,7 +5302,7 @@ egp_summarize_units <- function(predictions,
   id.var <- cf.def$id.var
   unit.var <- cf.def$unit.var
   compare.by <- cf.def$compare.by
-  units <- copy(cf$units)
+  units <- copy(cf.def$units)
 
   if(is.null(pred.var)) {
     pred.sel <- which(!names(predictions.dt) %in% c(id.var, ".draw"))[1]
@@ -5381,7 +5381,7 @@ egp_evaluate_factual <- function(predictions,
           group.col := group.eval[group.col],
           env = list(group.col = group.var)]
   factual.aug <-
-    merge(cf$groups[, -id.var, with = FALSE], factual, all.x = FALSE)
+    merge(cf.def$groups[, -id.var, with = FALSE], factual, all.x = FALSE)
 
   setkeyv(factual.aug, group.var)
   setindexv(factual.aug, ".draw")
@@ -5515,7 +5515,7 @@ egp_evaluate_counterfactual <- function(predictions,
                  group.col := group.eval[group.col],
                  env = list(group.col = group.var)]
   counterfactual.aug <-
-      merge(cf$groups[, -id.var, with = FALSE], counterfactual, all.x = FALSE)
+      merge(cf.def$groups[, -id.var, with = FALSE], counterfactual, all.x = FALSE)
   setkeyv(counterfactual.aug, group.var)
   setindexv(counterfactual.aug, ".draw")
 

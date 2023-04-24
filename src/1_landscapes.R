@@ -184,7 +184,7 @@ for(i in chunk) {
     if(is.null(ls)) message("Simulation failed. Trying again …")
   }
 
-  message(paste0("Saving to ", file.ls, "…"))
+  message(paste0("Saving to ", file.ls, " …"))
   saveRDS(ls, file.ls)
 
   rm(ls)
@@ -193,7 +193,7 @@ for(i in chunk) {
   te <- tb-ta
   print(te)
 
-  system(paste0('echo "', chunk, '" >> ', file.log), intern = TRUE)
+  system(paste0('echo "', i, '" >> ', file.log), intern = TRUE)
 
 }
 
