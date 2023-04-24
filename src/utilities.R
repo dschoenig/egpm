@@ -1837,7 +1837,7 @@ generate_areas_poly <- function(x.dim,
 
   # Starting population
 
-  if(verbose > 0) message("Creating starting population for genetic algorithm …")
+  if(verbose > 0) message("Creating starting population for genetic optimization …")
 
   pop.start.mat <- matrix(NA, nrow = opt.pop, ncol = n.bits)
   for(i in 1:opt.pop) {
@@ -1864,6 +1864,7 @@ generate_areas_poly <- function(x.dim,
 
   f_max <- -((opt.imp.imb + opt.imp.area) * opt.prec)
   f_monitor <- ifelse(verbose > 1, gaMonitor, FALSE)
+
 
   if(verbose > 0) message("Genetic optimization …")
 
@@ -3122,8 +3123,6 @@ generate_landscape_4cov_nl <-
                        damp.scale = treatment.damp.scale,
                        name = "treatment"
                        )
-  zplot(treatment)
-
 
   if(verbose > 0) message("Simulating covariate effects …") 
 

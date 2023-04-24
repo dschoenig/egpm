@@ -13,10 +13,10 @@ task.count <- as.integer(args[6])
 
 # ls.name <- "imbalance_medium"
 # n <- 1000
-# ls.dim <- 1000
-# ls.imbalance <- 0.3
+# ls.dim <- 100
+# ls.imbalance <- 0.1
 # task.id <- 1
-# task.count <- 100
+# task.count <- 1000
 
 
 paste0("Settings:\n",
@@ -144,10 +144,18 @@ parameters <-
 
 if(!file.exists(file.par) | task.id == 1) saveRDS(parameters, file.par)
 
+if(file.exists(file.log)) {
+  simulated <- as.integer(read.table(file.log)[,1])
+} else {
+  simulated <- integer(0)
+}
+
 row.chunks <- chunk_seq(1,
                         nrow(parameters),
                         ceiling(nrow(parameters) / task.count))
 chunk <- row.chunks$from[task.id]:row.chunks$to[task.id]
+
+chunk <- setdiff(chunk, simulated)
 
 for(i in chunk) {
 
@@ -156,25 +164,20 @@ for(i in chunk) {
   ta <- Sys.time()
 
   ls.par <- 
-    as.list(parameters[i,]) |>
+    as.list(parameters[id == i,]) |>
     lapply(unlist)
   ls.par$verbose <- 1
   file.ls <- paste0(path.ls.data,
                     stri_pad_left(ls.par$id, ceiling(log10(n))+1, 0),
                     ".rds")
 
-  ls <- do.call(generate_landscape_4cov_nl, ls.par)
-
-
   ls <- NULL
   while(is.null(ls)) {
-    try({
-      ls <- do.call(generate_landscape_4cov_nl, ls.par)
-    })
+    try({ls <- do.call(generate_landscape_4cov_nl, ls.par)})
     if(is.null(ls)) message("Simulation failed. Trying again …")
   }
 
-
+  message(paste0("Saving to ", file.ls, "…"))
   saveRDS(ls, file.ls)
 
   rm(ls)
@@ -183,7 +186,7 @@ for(i in chunk) {
   te <- tb-ta
   print(te)
 
-  system(paste0('echo "', chunk, '" >> ', file.log))
+  system(paste0('echo "', chunk, '" >> ', file.log), intern = TRUE)
 
 }
 
