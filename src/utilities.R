@@ -1569,7 +1569,7 @@ generate_areas_poly <- function(x.dim,
                                 opt.fine.max.iter = 25,
                                 opt.fine.constr = TRUE,
                                 opt.fine.tol = 1e-4,
-                                opt.cache = TRUE,
+                                opt.cache = FALSE,
                                 ...
                                 ) {
 

@@ -10,11 +10,13 @@ ls.dim <- as.integer(args[3])
 ls.imbalance <- as.numeric(args[4])
 task.id <- as.integer(args[5])
 task.count <- as.integer(args[6])
+parallel <- as.integer(args[7])
+if(is.na(parallel)) parallel <- FALSE
 
 # ls.name <- "imbalance_medium"
 # n <- 1000
-# ls.dim <- 100
-# ls.imbalance <- 0.1
+# ls.dim <- 1000
+# ls.imbalance <- 0.3
 # task.id <- 1
 # task.count <- 1000
 
@@ -22,7 +24,8 @@ task.count <- as.integer(args[6])
 paste0("Settings:\n",
        "N ", n, "\n",
        "Dimension ", ls.dim, "\n",
-       "Imbalance ", ls.imbalance) |>
+       "Imbalance ", ls.imbalance, "\n",
+       "Parallel ", parallel) |>
 message()
 
 path.base <- "../"
@@ -135,12 +138,16 @@ parameters <-
              areas.opt.pmutation = 0.5,
              areas.opt.max.iter = 250,
              areas.opt.run = 100,
-             areas.opt.parallel = 1,
+             areas.opt.parallel = parallel,
              areas.opt.fine = TRUE,
              areas.opt.fine.max.iter = 100,
              areas.opt.fine.constr = TRUE,
              areas.opt.fine.tol = 1e-6
              )
+
+parameters[, file.name := stri_pad_left(id, ceiling(log10(n))+1, 0)]
+parameters[, file.path := paste0(path.ls.data, file.name, ".rds")]
+
 
 if(!file.exists(file.par) | task.id == 1) saveRDS(parameters, file.par)
 
