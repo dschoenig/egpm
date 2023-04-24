@@ -135,7 +135,7 @@ parameters <-
              areas.opt.pmutation = 0.5,
              areas.opt.max.iter = 250,
              areas.opt.run = 100,
-             areas.opt.parallel = 4,
+             areas.opt.parallel = 1,
              areas.opt.fine = TRUE,
              areas.opt.fine.max.iter = 100,
              areas.opt.fine.constr = TRUE,
