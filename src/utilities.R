@@ -1733,24 +1733,10 @@ generate_areas_poly <- function(x.dim,
   n.bits <- sum(order.c)
 
   f_opt_imb_area <- function(x) {
-    # x.decode <- decode_seg(x, n = seg.seed, digits = 0)
-    # x.dt <- as.data.table(x.decode)
-    # x.dt[,
-    #      `:=`(grid.seg = res.grid$grid[st_contains_properly(res.grid,
-    #                                                  st_point(c(x.seg, y.seg)),
-    #                                                  sparse = FALSE)],
-    #           grid.cen = res.grid$grid[st_contains_properly(res.grid,
-    #                                                  st_point(c(x.cen, y.cen)),
-    #                                                  sparse = FALSE)]),
-    #      by = .I]
     x.decode <- decode_grid_buffer(x, order.c)
     x.dt <- as.data.table(x.decode)
-    x.dt[, `:=`(
-                grid.seg = fifelse(grid.seg %in% res.grid$grid,
-                                   grid.seg, NA),
-                grid.cen = fifelse(grid.cen %in% res.grid$grid,
-                                   grid.cen, NA))
-             ]
+    x.dt[!grid.seg %in% res.grid$grid, grid.seg := NA]
+    x.dt[!grid.cen %in% res.grid$grid, grid.cen := NA]
     # If coordinates out of bounds, return penalty
     if(any(is.na(x.dt$grid.seg)) | any(is.na(x.dt$grid.cen))) {
       f <-
@@ -1783,7 +1769,12 @@ generate_areas_poly <- function(x.dim,
                         by = "score.bin", on = "grid"
                         ][!is.na(score.bin)
                          ][order(score.bin), n/sum(n)]
-        trt.imb <- js_div(foc.freq, rem.freq, type = "raw")
+          seg.score.bin[!.(trt.proposed$grid), on = "grid"]
+        if(length(rem.freq > 0)) {
+          trt.imb <- js_div(foc.freq, rem.freq, type = "raw")
+        } else {
+          trt.imb <- 0
+        }
         trt.a <- 
           merge(res.grid.dt[.(trt.proposed$grid),
                             on = "grid"],
@@ -1861,10 +1852,8 @@ generate_areas_poly <- function(x.dim,
                          order.buffer)
   }
 
-
   f_max <- -((opt.imp.imb + opt.imp.area) * opt.prec)
   f_monitor <- ifelse(verbose > 1, gaMonitor, FALSE)
-
 
   if(verbose > 0) message("Genetic optimization …")
 
@@ -2952,6 +2941,7 @@ generate_landscape_4cov_nl <-
            areas.opt.fine.max.iter,
            areas.opt.fine.constr,
            areas.opt.fine.tol,
+           areas.opt.cache,
            treatment.eff.mean,
            treatment.mat.nu,
            treatment.mat.scale,
@@ -3069,6 +3059,7 @@ generate_landscape_4cov_nl <-
     scale_int()
 
   score.trt <- score(cov.inv, type = score.type)
+  score.trt <- setNames(score.trt, "imb.score")
 
   areas.poly <-
     generate_areas_poly(x.dim = x.dim,
@@ -3100,7 +3091,8 @@ generate_landscape_4cov_nl <-
                         opt.fine = areas.opt.fine,
                         opt.fine.max.iter = areas.opt.fine.max.iter,
                         opt.fine.constr = areas.opt.fine.constr,
-                        opt.fine.tol = areas.opt.fine.tol
+                        opt.fine.tol = areas.opt.fine.tol,
+                        opt.cache = areas.opt.cache
                         )
 
   trt.poly <- 
@@ -3207,7 +3199,8 @@ generate_landscape_4cov_nl <-
       treatment,
       cov.main.effects,
       cov.int.effects,
-      residual) |>
+      residual,
+      score.trt) |>
     as.data.table()
 
   landscape.dt <-
@@ -3221,7 +3214,7 @@ generate_landscape_4cov_nl <-
 
   fun <- list(main = cov.main.funs, interactions = cov.int.funs)
  
-  return(list(landscape = landscape.dt, fun = fun))
+  return(list(landscape = landscape.dt, fun = fun, optim = areas.poly$performance))
   }
 
 
