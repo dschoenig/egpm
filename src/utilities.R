@@ -1699,6 +1699,7 @@ generate_areas_poly <- function(x.dim,
   grid.dist.dt[,
               c("grid1", "grid2") := lapply(.SD, \(x) as.integer(as.character(x))),
               .SDcols = c("grid1", "grid2")]
+  grid.dist.dt[grid1 == grid2, dist := -1e-6]
   setindex(grid.dist.dt, grid1)
   setindex(grid.dist.dt, grid2)
 
@@ -1835,12 +1836,13 @@ generate_areas_poly <- function(x.dim,
     grid.seg.sam <- sample(res.grid.dt$grid, seg.seed)
     grid.cen.sam <-
       grid.dist.dt[grid2 %in% grid.seg.sam,
-                   .SD[which.min(dist)],
-                   by = grid1
+                   .SD[which.min(dist)][1],
+                   by = grid1,
+                   .SDcols = c("grid2", "dist")
                    ][,
                      .SD[sample(1:.N, 1)],
                      by = grid2
-                     ][, grid1]
+                     ][.(grid.seg.sam), grid1, on = "grid2"]
     buffer.sam <- round(runif(n = seg.seed,
                               sqrt(seg.min.area),
                               sqrt(area.prop * x.dim * y.dim / seg.seed)))

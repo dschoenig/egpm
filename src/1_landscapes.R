@@ -19,8 +19,8 @@ if(is.na(parallel)) parallel <- FALSE
 # n <- 1000
 # ls.dim <- 1000
 # ls.imbalance <- 0.3
-# task.id <- 7
-# task.count <- 1000
+# task.id <- 98
+# task.count <- 100
 
 paste0("Settings:\n",
        "N ", n, "\n",
