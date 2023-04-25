@@ -8,4 +8,4 @@
 
 module load StdEnv/2020 gcc/9.3.0 gdal/3.4.3 geos/3.10.2 python/3.10 udunits/2.2.28 r/4.2.1
 
-Rscript 2_egp_som25.R imbalance_medium egp_som25 1 100
+Rscript 2_egp_som25.R imbalance_medium egp_som25 $SLURM_CPUS_PER_TASK 1 100
