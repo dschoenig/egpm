@@ -4,6 +4,8 @@ args <- commandArgs(trailingOnly = TRUE)
 
 source("utilities.R")
 
+overwrite <- TRUE
+
 ls.name <- args[1]
 n <- as.integer(args[2])
 ls.dim <- as.integer(args[3])
@@ -17,9 +19,8 @@ if(is.na(parallel)) parallel <- FALSE
 # n <- 1000
 # ls.dim <- 1000
 # ls.imbalance <- 0.3
-# task.id <- 1
+# task.id <- 7
 # task.count <- 1000
-
 
 paste0("Settings:\n",
        "N ", n, "\n",
@@ -49,6 +50,7 @@ z1.mix.w <- runif(n, 0.2, 0.5)
 z2.mix.w <- runif(n, 0.2, 0.5)
 z3.mix.prop <- runif(n, 0.2, 0.5)
 z4.mix.w <- runif(n, 0.2, 0.5)
+opt.iter <- ifelse(ls.imbalance <= 0.3, 250, 500)
 parameters <-
   data.table(
              id = 1:n,
@@ -94,9 +96,9 @@ parameters <-
              int34.effect.mu = runif(n, cov.int.effect.mu[1], cov.int.effect.mu[2]),
              int34.effect.nuclei = sample(20:50, n, replace = TRUE),
              # Residual variation
-             e.exp.var = 1,
+             e.exp.var = 0.5,
              e.exp.scale = runif(n, 0.01*ls.dim, ls.dim),
-             e.nug.var = 1,
+             e.nug.var = 0.5,
              # Parameters for generating functions
              treatment.mat.nu = 1,
              treatment.mat.scale = runif(n, 0.01*ls.dim, 0.5*ls.dim),
@@ -136,13 +138,14 @@ parameters <-
              areas.opt.prec = 1e-3,
              areas.opt.pcrossover = 0.9,
              areas.opt.pmutation = 0.5,
-             areas.opt.max.iter = 250,
+             areas.opt.max.iter = opt.iter,
              areas.opt.run = 100,
              areas.opt.parallel = parallel,
              areas.opt.fine = TRUE,
              areas.opt.fine.max.iter = 100,
              areas.opt.fine.constr = TRUE,
-             areas.opt.fine.tol = 1e-6
+             areas.opt.fine.tol = 1e-6,
+             areas.opt.cache = TRUE
              )
 
 parameters[, file.name := stri_pad_left(id, ceiling(log10(n))+1, 0)]
@@ -151,7 +154,7 @@ parameters[, file.path := paste0(path.ls.data, file.name, ".rds")]
 
 if(!file.exists(file.par) | task.id == 1) saveRDS(parameters, file.par)
 
-if(file.exists(file.log)) {
+if(!overwrite & file.exists(file.log)) {
   simulated <- as.integer(read.table(file.log)[,1])
 } else {
   simulated <- integer(0)
@@ -173,7 +176,7 @@ for(i in chunk) {
   ls.par <- 
     as.list(parameters[id == i,]) |>
     lapply(unlist)
-  ls.par$verbose <- 1
+  ls.par$verbose <- 2
   file.ls <- paste0(path.ls.data,
                     stri_pad_left(ls.par$id, ceiling(log10(n))+1, 0),
                     ".rds")
