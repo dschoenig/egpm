@@ -15,12 +15,13 @@ task.count <- as.integer(args[6])
 parallel <- as.integer(args[7])
 if(is.na(parallel)) parallel <- FALSE
 
-# ls.name <- "imbalance_medium"
+# ls.name <- "imbalance_high"
 # n <- 1000
-# ls.dim <- 1000
-# ls.imbalance <- 0.3
+# ls.dim <- 100
+# ls.imbalance <- 0.5
 # task.id <- 1
 # task.count <- 1000
+# parallel <- 4
 
 paste0("Settings:\n",
        "N ", n, "\n",

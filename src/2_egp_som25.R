@@ -124,8 +124,13 @@ for(i in chunk) {
 
     message("Fitting GAM …")
 
+
+    ls.fit[, type := factor(type, levels = levels(type), ordered = TRUE)]
+
     if(egp.approx) {
        mod.egp <- bam(response ~
+                      s(x, y, bs = "gp", k = egp.k.geo,
+                        xt = list(max.knots = egp.max.knots.geo)) +
                       s(x, y, by = type, bs = "gp", k = egp.k.geo,
                         xt = list(max.knots = egp.max.knots.geo)) +
                       s(som.x, som.y, bs = "gp", k = egp.k.som,
@@ -137,7 +142,9 @@ for(i in chunk) {
                       )
      } else {
        mod.egp <- gam(response ~
-                      s(x, y, by = type, bs = egp.basis, k = egp.k.geo,
+                      s(x, y, bs = "gp", k = egp.k.geo,
+                        xt = list(max.knots = egp.max.knots.geo)) +
+                      s(x, y, by = type, bs = "gp", k = egp.k.geo,
                         xt = list(max.knots = egp.max.knots.geo)) +
                       s(som.x, som.y, bs = egp.basis, k = egp.k.som,
                         xt = list(max.knots = egp.max.knots.som)),
