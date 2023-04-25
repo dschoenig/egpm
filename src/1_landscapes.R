@@ -19,8 +19,8 @@ if(is.na(parallel)) parallel <- FALSE
 # n <- 1000
 # ls.dim <- 1000
 # ls.imbalance <- 0.3
-# task.id <- 98
-# task.count <- 100
+# task.id <- 1
+# task.count <- 1000
 
 paste0("Settings:\n",
        "N ", n, "\n",
@@ -51,6 +51,7 @@ z2.mix.w <- runif(n, 0.2, 0.5)
 z3.mix.prop <- runif(n, 0.2, 0.5)
 z4.mix.w <- runif(n, 0.2, 0.5)
 opt.iter <- ifelse(ls.imbalance <= 0.3, 250, 500)
+opt.run <- ifelse(ls.imbalance <= 0.3, 100, 200)
 parameters <-
   data.table(
              id = 1:n,
@@ -127,7 +128,7 @@ parameters <-
              areas.area.tol = list(NULL),
              areas.area.exact = FALSE,
              areas.seg.res = 0.05 * ls.dim,
-             areas.seg.min.dist = 0.025*ls.dim,
+             areas.seg.min.dist = 0.025 * ls.dim,
              areas.seg.min.area = (ls.dim/10)^2,
              areas.seg.even = runif(n, 1, 2),
              areas.seg.prec = 5e-4 * ls.dim,
@@ -139,7 +140,7 @@ parameters <-
              areas.opt.pcrossover = 0.9,
              areas.opt.pmutation = 0.5,
              areas.opt.max.iter = opt.iter,
-             areas.opt.run = 100,
+             areas.opt.run = opt.run,
              areas.opt.parallel = parallel,
              areas.opt.fine = TRUE,
              areas.opt.fine.max.iter = 100,
