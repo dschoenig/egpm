@@ -11,10 +11,10 @@ task_id <- as.integer(args[4])
 task_count <- as.integer(args[5])
 
 # ls.type <- "imbalance_medium"
-# mod.type <- "egp_som10"
+# mod.type <- "egp_som25"
 # n.threads <- 4
-# task_id <- 1
-# task_count <- 200
+# task_id <- 5
+# task_count <- 1000
 
 sam.frac <- 0.01
 som.dim <- 10
@@ -124,8 +124,13 @@ for(i in chunk) {
 
     message("Fitting GAM …")
 
+
+    ls.fit[, type := factor(type, levels = levels(type), ordered = TRUE)]
+
     if(egp.approx) {
        mod.egp <- bam(response ~
+                      s(x, y, bs = "gp", k = egp.k.geo,
+                        xt = list(max.knots = egp.max.knots.geo)) +
                       s(x, y, by = type, bs = "gp", k = egp.k.geo,
                         xt = list(max.knots = egp.max.knots.geo)) +
                       s(som.x, som.y, bs = "gp", k = egp.k.som,
@@ -137,7 +142,9 @@ for(i in chunk) {
                       )
      } else {
        mod.egp <- gam(response ~
-                      s(x, y, by = type, bs = egp.basis, k = egp.k.geo,
+                      s(x, y, bs = "gp", k = egp.k.geo,
+                        xt = list(max.knots = egp.max.knots.geo)) +
+                      s(x, y, by = type, bs = "gp", k = egp.k.geo,
                         xt = list(max.knots = egp.max.knots.geo)) +
                       s(som.x, som.y, bs = egp.basis, k = egp.k.som,
                         xt = list(max.knots = egp.max.knots.som)),
@@ -198,11 +205,11 @@ for(i in chunk) {
 
   }
 
-  mars <- numeric(0)
-  for(k in seq_along(results.ls$models)) {
-    mars[k] <-
-      results.ls$models[[k]]$marginal[group.id == 1, mean(marginal)]
-  }
+  # mars <- numeric(0)
+  # for(k in seq_along(results.ls$models)) {
+  #   mars[k] <-
+  #     results.ls$models[[k]]$marginal[group.id == 1, mean(marginal)]
+  # }
   
   results.ls <-
     list(parameters = mod.para,
