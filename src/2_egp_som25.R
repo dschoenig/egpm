@@ -14,7 +14,7 @@ task_count <- as.integer(args[5])
 # mod.type <- "egp_som25"
 # n.threads <- 4
 # task_id <- 5
-# task_count <- 1000
+# task_count <- 100
 
 sam.frac <- 0.01
 som.dim <- 25

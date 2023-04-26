@@ -5255,7 +5255,7 @@ egp_posterior_predict <- function(model,
       agg.l[[k]] <-
         predictions.draws[match.ids.groups,
                           nomatch = NULL,
-                          on = id.col,
+                          on = id.var,
                           allow.cartesian = TRUE
                           ][order(draw.col, group.col),
                             .(agg.col = agg(pred.col)),
