@@ -5615,6 +5615,10 @@ egp_evaluate_counterfactual <- function(predictions,
     group.eval.l[[i]] <- rbindlist(draws.eval.l)
   } 
 
+  if(progress) {
+    close(prog)
+  }
+
   counterfactual <- rbindlist(group.eval.l, idcol = group.var)
   counterfactual[,
                  group.col := group.eval[group.col],
