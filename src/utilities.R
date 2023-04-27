@@ -1538,6 +1538,19 @@ exclude_bridges <- function(x, a, b) {
   return(to_exclude)
 }
 
+gmean <- function(x, na.rm = FALSE, zero.allow = TRUE) {
+  if(any(x == 0)) {
+    if(zero.allow) {
+      return(0)
+    } else {
+      stop("Values of `x` must be strictly positive when `zero.allow = FALSE`.")
+    }
+  }
+  gmean <- exp(mean(log(x), na.rm = na.rm))
+  return(gmean)
+}
+
+
 
 generate_areas_poly <- function(x.dim,
                                 y.dim,
@@ -1557,7 +1570,9 @@ generate_areas_poly <- function(x.dim,
                                 min.bound.dist = 0,
                                 verbose = 2,
                                 opt.imp.imb = 1,
+                                opt.imp.even = 1,
                                 opt.imp.area = 1,
+                                opt.imb.agg = gmean,
                                 opt.pop = 50,
                                 opt.prec = 1e-4,
                                 opt.pcrossover = 0.8,
@@ -1573,7 +1588,6 @@ generate_areas_poly <- function(x.dim,
                                 ...
                                 ) {
 
-# for(m in 1:20){
   if(verbose > 0) message("Setting up candidate polygons …")
 
   if(is.null(area.tol)) {
@@ -1595,15 +1609,15 @@ generate_areas_poly <- function(x.dim,
       imbalance.lim <- imbalance + imbalance.tol
     }
   }
-
+  
   # if(is.null(score)) {
   #   score <- generate_empty(x.dim = x.dim, y.dim = y.dim) + 1
   #   score.prop <- 0
   # } else {
   # }
-  score <- score[1]
-  names(score)[1] <- "score"
-  score <- scale_int(score, int = c(0, 1))
+  # score <- score[1]
+  # names(score)[1] <- "score"
+  # score <- scale_int(score, int = c(0, 1))
 
   poly.lim <- limit_polygon(x.dim, y.dim)
   
@@ -1704,27 +1718,74 @@ generate_areas_poly <- function(x.dim,
   setindex(grid.dist.dt, grid2)
 
 
-  seg.score <- 
+  cov.names <- paste0("cov", 1:length(score))
+  score <- setNames(score, cov.names)
+  cov.dt <- as.data.table(score)
+
+  seg.cov <- 
     st_rasterize(res.grid[, "grid"],
                  template = generate_empty(x.dim = x.dim, y.dim = y.dim)) |>
     as.data.table() |>
-    merge(as.data.table(score), all.x = FALSE, all.y = TRUE)
-  if(score.sam < nrow(seg.score)) {
-    seg.score <- seg.score[sample(1:nrow(seg.score), score.sam)][order(x, y)]
+    merge(as.data.table(cov.dt), all.x = FALSE, all.y = TRUE)
+  if(score.sam < nrow(seg.cov)) {
+    seg.cov <- seg.cov[sample(1:nrow(seg.cov), score.sam)][order(x, y)]
   }
-  setindex(seg.score, grid)
-  score.breaks <- get_breaks(seg.score$score, breaks = "FD")
-  seg.score[, score.bin := assign_breaks(score, breaks = score.breaks)]
+  seg.cov <-
+    melt(seg.cov,
+         measure.vars = cov.names,
+         variable.name = "var", value.name = "value")
+  setindex(seg.cov, grid)
 
-  seg.score.bin <-
-    merge(seg.score[, .(n.bin = .N), by = c("grid", "score.bin")],
-          expand.grid(grid = unique(seg.score$grid),
-                      score.bin = 1:length(score.breaks)),
-          by = c("grid", "score.bin"), all = TRUE)
-  seg.score.bin[is.na(n.bin), n.bin := 0]
-  setindex(seg.score.bin, grid)
-  setindex(seg.score.bin, score.bin)
+  seg.cov.obs <- seg.cov[var == cov.names[1], .(x, y, grid)]
+  setindex(seg.cov.obs, grid)
 
+  cov.bins <- list()
+  for(i in seq_along(cov.names)) {
+    cov.breaks <- get_breaks(seg.cov[var == cov.names[i], value], breaks = "FD")
+    seg.cov[var == cov.names[i],
+            value.bin := assign_breaks(value, breaks = cov.breaks)]
+    cov.bins[[i]] <- 
+      expand.grid(var = cov.names[i],
+                  grid = unique(seg.cov$grid),
+                  value.bin = 1:length(cov.breaks)) |>
+      as.data.table()
+  }
+
+  cov.bins <- rbindlist(cov.bins)
+
+  seg.cov.bin <-
+    merge(seg.cov[, .(n.bin = .N), by = c("var", "grid", "value.bin")],
+          cov.bins,
+          by = c("var", "grid", "value.bin"),
+          all = TRUE)
+  seg.cov.bin[is.na(n.bin), n.bin := 0]
+  setindex(seg.cov.bin, var)
+  setindex(seg.cov.bin, grid)
+  setindex(seg.cov.bin, value.bin)
+
+  get_freq <- function(x) {
+    foc.freq <- 
+      seg.cov.bin[.(x),
+                    .(n = sum(n.bin)),
+                    by = c("value.bin", "var"),
+                    on = "grid"
+                    ][!is.na(value.bin)
+                      ][order(var, value.bin),
+                        .(value.bin,
+                          foc = n/sum(n)),
+                        by = "var"]
+    ref.freq <- 
+      seg.cov.bin[!.(x),
+                    .(n = sum(n.bin)),
+                    by = c("value.bin", "var"),
+                    on = "grid"
+                    ][!is.na(value.bin)
+                      ][order(var, value.bin),
+                        .(value.bin,
+                          ref = n/sum(n)),
+                        by = "var"]
+    return(list(foc.freq = foc.freq, ref.freq = ref.freq))
+  }
 
   if(verbose > 0) message("Building areas (optimisation) …")
 
@@ -1756,25 +1817,37 @@ generate_areas_poly <- function(x.dim,
         f <- length(x.decode$grid.seg)^2 * sqrt(.Machine$double.xmax)
       # Otherwise evaluate function
       } else {
-        foc.obs <- seg.score[.(trt.proposed$grid), na.omit(score), on = "grid"]
-        rem.obs <- seg.score[!.(trt.proposed$grid), na.omit(score), on = "grid"]
-        foc.freq <-
-          seg.score.bin[.(trt.proposed$grid),
-                        .(n = sum(n.bin)),
-                        by = "score.bin", on = "grid"
-                        ][!is.na(score.bin)
-                          ][order(score.bin), n/sum(n)]
-        rem.freq <-
-          seg.score.bin[!.(trt.proposed$grid),
-                        .(n = sum(n.bin)),
-                        by = "score.bin", on = "grid"
-                        ][!is.na(score.bin)
-                         ][order(score.bin), n/sum(n)]
-          seg.score.bin[!.(trt.proposed$grid), on = "grid"]
-        if(length(rem.freq > 0)) {
-          trt.imb <- js_div(foc.freq, rem.freq, type = "raw")
+        freqs <- get_freq.m(trt.proposed$grid)
+        # foc.freq <- frq
+        #   seg.cov.bin[.(trt.proposed$grid),
+        #                 .(n = sum(n.bin)),
+        #                 by = c("value.bin", "var"),
+        #                 on = "grid"
+        #                 ][!is.na(value.bin)
+        #                   ][order(var, value.bin),
+        #                     .(value.bin,
+        #                       foc = n/sum(n)),
+        #                     by = "var"]
+        # ref.freq <- 
+        #   seg.cov.bin[!.(trt.proposed$grid),
+        #                 .(n = sum(n.bin)),
+        #                 by = c("value.bin", "var"),
+        #                 on = "grid"
+        #                 ][!is.na(value.bin)
+        #                   ][order(var, value.bin),
+        #                     .(value.bin,
+        #                       ref = n/sum(n)),
+        #                     by = "var"]
+        if(nrow(freqs$ref.freq) > 0) {
+          js.dt <-
+            merge(freqs$foc.freq, freqs$ref.freq, by = c("var", "value.bin"))
+          trt.imb <-
+            js.dt[, 
+                  .(js_div = js_div(foc, ref, type = "raw")),
+                  by = "var"
+                  ][,js_div]
         } else {
-          trt.imb <- 0
+          trt.imb <- rep(0, length(unique(freqs$foc.freq$var)))
         }
         trt.a <- 
           merge(res.grid.dt[.(trt.proposed$grid),
@@ -1790,9 +1863,9 @@ generate_areas_poly <- function(x.dim,
                              area = rep(0, length(seg.rem))))
         }
         trt.area <- sum(trt.a) / prod(x.dim, y.dim)
-        imbalance.loss <- (trt.imb - imbalance)^2
-        area.loss <-
-          (trt.area - area.prop)^2
+        imbalance.loss <- (opt.imb.agg(trt.imb) - imbalance)^2
+        even.loss <- var(trt.imb)
+        area.loss <- (trt.area - area.prop)^2
         penalty.min.area <- pmax(-trt.a$area + seg.min.area, 0) * sqrt(.Machine$double.xmax)
         if(length(unique(trt.proposed$segment)) > 1) {
           penalty.min.dist <-
@@ -1808,6 +1881,7 @@ generate_areas_poly <- function(x.dim,
         # penalty.oob <- as.numeric(!(x$grid %in% res.grid.dt$grid)) * sqrt(.Machine$double.xmax)
         f <-
           opt.imp.imb * imbalance.loss +
+          opt.imp.even * even.loss +
           opt.imp.area * area.loss +
           sum(penalty.min.area) +
           sum(penalty.min.dist)
@@ -1821,10 +1895,12 @@ generate_areas_poly <- function(x.dim,
     f_opt_imb_area.m <- memoise(f_opt_imb_area)
     match_to_segments.m <- memoise(match_to_segments)
     segment_min_distance.m <- memoise(segment_min_distance)
+    get_freq.m <- memoise(get_freq)
   } else {
     f_opt_imb_area.m <- f_opt_imb_area
     match_to_segments.m <- match_to_segments
     segment_min_distance.m <- segment_min_distance
+    get_freq.m <- get_freq
   }
 
   # Starting population
@@ -1854,10 +1930,14 @@ generate_areas_poly <- function(x.dim,
                          order.buffer)
   }
 
-  f_max <- -((opt.imp.imb + opt.imp.area) * opt.prec)
+  f_max <- -((opt.imp.imb + opt.imp.even + opt.imp.area) * opt.prec)
   f_monitor <- ifelse(verbose > 1, gaMonitor, FALSE)
 
   if(verbose > 0) message("Genetic optimization …")
+
+  x <- round(runif(n.bits))
+  f_opt_imb_area(x)
+
 
   buffer.opt <- NULL
   while(is.null(buffer.opt)) {
@@ -1892,7 +1972,7 @@ generate_areas_poly <- function(x.dim,
                         centers = imb_area.sol$grid.cen,
                         buffer = imb_area.sol$buffer,
                         include.unmatched = TRUE) |>
-  as.data.table()
+    as.data.table()
 
   # Update segment and selection information for grid polygons
 
@@ -1939,31 +2019,39 @@ generate_areas_poly <- function(x.dim,
                 on = "grid"
                 ][, area]
 
-  trt.area <- seg.score[.(grid.trt), length(grid) / nrow(seg.score), on = "grid"]
+  trt.area <-
+    res.grid.dt[selected == TRUE, sum(area)] / res.grid.dt[, sum(area)]
   trt.imb <-
-    js_div(x = seg.score[.(grid.trt), na.omit(score), on = "grid"],
-           y = seg.score[!.(grid.trt), na.omit(score), on = "grid"],
-           type = "discrete")
-
+    seg.cov[,
+            .(js = js_div(x = .SD[grid %in% grid.trt, value],
+                          y = .SD[!grid %in% grid.trt, value],
+                          type = "discrete")),
+            by = "var",
+            .SDcols = c("grid", "value")
+            ][, js]
 
   # remove cached functions
   rm(f_opt_imb_area.m, match_to_segments.m, segment_min_distance.m)
 
   if(verbose > 0) {
-    message(paste0("Imbalance (approx.) ", round(trt.imb, getOption("digits")),
-                   ". Area proportion (approx.) ", round(trt.area, getOption("digits")),
+    message(paste0("Imbalance (approx.) ",
+                   paste(round(trt.imb, getOption("digits")), collapse = ", "),
+                   "; aggregate ",
+                   round(opt.imb.agg(trt.imb), getOption("digits")),
+                   ".\nArea proportion (approx.) ",
+                   round(trt.area, getOption("digits")),
                    "."))
   }
 
   if(opt.fine) {
 
     if(verbose > 0) message("Attempt to further adjust areas (fine tuning) …")
-
-    penalty <- sqrt(opt.imp.imb + opt.imp.area)
-    pen.imb = ifelse(trt.imb < imbalance.lim[1] | trt.imb > imbalance.lim[2],
-                     min(abs(trt.imb - imbalance.lim)) * sqrt(penalty), 0)
+    penalty <- sqrt(opt.imp.imb + opt.imp.even + opt.imp.area)
+    pen.imb = ifelse(opt.imb.agg(trt.imb) < imbalance.lim[1] |
+                     opt.imb.agg(trt.imb) > imbalance.lim[2],
+                     abs(opt.imb.agg(trt.imb) - imbalance.lim) * sqrt(penalty), 0)
     pen.area = ifelse(trt.area < area.lim[1] | trt.area > area.lim[2],
-                     min(abs(trt.area - area.lim)) * sqrt(penalty), 0)
+                      abs(trt.area - area.lim) * sqrt(penalty), 0)
     pen.min.area <- sum(pmax(-trt.a + seg.min.area, 0) * sqrt(penalty))
     pen.min.dist <-
       grid.dist.dt[grid1 %in% grid.trt & grid2 %in% grid.trt,
@@ -1971,15 +2059,24 @@ generate_areas_poly <- function(x.dim,
                    by = c("segment1", "segment2")
                    ][segment1 != segment2,
                      sum(0.5 * as.numeric(dist.min < seg.min.dist) * sqrt(penalty))]
-    imb.loss <- (trt.imb - imbalance)^2
+    imb.loss <- (opt.imb.agg(trt.imb) - imbalance)^2
+    even.loss <- var(trt.imb)
     area.loss <- (trt.area - area.prop)^2
     loss.null <- opt.imp.imb * imb.loss +
+                 opt.imp.even * even.loss +
                  opt.imp.area * area.loss +
-                 pen.min.area + pen.min.dist + pen.imb + pen.area
+                 pen.min.area + pen.min.dist +
+                 pen.imb + pen.area
 
-    A.nb <- st_relate(res.grid, res.grid, pattern = "F***1****", sparse = FALSE) * 1
-    diag(A.nb) <- 0
-    A.nb <- as(A.nb, "sparseMatrix")
+    A.nb <-
+      poly2nb(res.grid, queen = FALSE) |>
+      nb2listw(style = "B") |> 
+      listw2mat() |>
+      Matrix()
+
+    # A.nb <- st_relate(res.grid, res.grid, pattern = "F***1****", sparse = FALSE) * 1
+    # diag(A.nb) <- 0
+    # A.nb <- as(A.nb, "sparseMatrix")
 
 #     A.nb <-
 #         poly2nb(res.grid, queen = FALSE) |>
@@ -1990,8 +2087,9 @@ generate_areas_poly <- function(x.dim,
     for(i in 1:opt.fine.max.iter) {
       # if(trt.area <= area.prop) {
         grid.adj.add <-
-          grid.ref[rowSums(A.nb[grid.ref, -grid.ref]) > 0 &
-                   grid.ref %in% with(res.grid, grid[segment != 0])]
+          grid.ref[rowSums(A.nb[grid.ref, -grid.ref]) > 0]
+          # grid.ref[rowSums(A.nb[grid.ref, -grid.ref]) > 0 &
+          #          grid.ref %in% with(res.grid, grid[segment != 0])]
         # if(opt.fine.constr) {
         #     ex.bridge <- exclude_bridges(A.nb, grid.trt, grid.ref)
         #     grid.adj.add <- grid.adj.add[!(grid.adj.add %in% ex.bridge)]
@@ -2008,38 +2106,37 @@ generate_areas_poly <- function(x.dim,
             idx.trt <- idx.trt[idx.trt %in% with(res.grid, grid[segment != 0])]
           }
           idx.trt.add.l[[j]] <- idx.trt
-          foc.obs <- seg.score[.(idx.trt), na.omit(score), on = "grid"]
-          rem.obs <- seg.score[!.(idx.trt), na.omit(score), on = "grid"]
-          foc.freq <-
-            seg.score.bin[.(idx.trt),
-                          .(n = sum(n.bin)),
-                          by = "score.bin", on = "grid"
-                          ][!is.na(score.bin)
-                            ][order(score.bin), n/sum(n)]
-          rem.freq <-
-            seg.score.bin[!.(idx.trt),
-                          .(n = sum(n.bin)),
-                          by = "score.bin", on = "grid"
-                          ][!is.na(score.bin)
-                            ][order(score.bin), n/sum(n)]
-         foc.a <- 
+          foc.obs <- seg.cov.obs[.(idx.trt), .N, on = "grid"]
+          rem.obs <- seg.cov.obs[!.(idx.trt), .N, on = "grid"]
+          foc.a <- 
             res.grid.dt[.(idx.trt),
                         .(area = sum(area)),
                         by = "segment",
                         on = "grid"
                         ][, area]
-        pen.min.dist <-
-          grid.dist.dt[grid1 %in% idx.trt & grid2 %in% idx.trt,
-                       .(dist.min = min(dist)),
-                       by = c("segment1", "segment2")
-                       ][segment1 != segment2,
-                         0.5 * as.numeric(dist.min < seg.min.dist) * sqrt(penalty)]
-          if(length(foc.obs) > 0 & length(rem.obs) > 0) {
+          idx.area <- sum(foc.a) / res.grid.dt[, sum(area)]
+          idx.js <-
+            seg.cov[,
+                    .(js = js_div(x = .SD[grid %in% idx.trt, value],
+                                  y = .SD[!grid %in% idx.trt, value],
+                                  type = "discrete")),
+                    by = "var",
+                    .SDcols = c("grid", "value")
+                    ][, js]
+          idx.imb <- opt.imb.agg(idx.js)
+          idx.even <- sd(idx.js)
+          pen.min.dist <-
+            grid.dist.dt[grid1 %in% idx.trt & grid2 %in% idx.trt,
+                         .(dist.min = min(dist)),
+                         by = c("segment1", "segment2")
+                         ][segment1 != segment2,
+                           0.5 * as.numeric(dist.min < seg.min.dist) * sqrt(penalty)]
+          if(foc.obs > 0 & rem.obs > 0) {
             adj.add[[j]] <- data.table(grid = grid.adj.add[j],
                                        # smd = d_cohen(foc.obs, rem.obs),
-                                       imb = js_div(foc.freq, rem.freq,
-                                                    type = "raw"),
-                                       area = sum(foc.a) / prod(x.dim, y.dim),
+                                       imb = idx.imb,
+                                       even = idx.even,
+                                       area = idx.area,
                                        pen.min.area = sum(pmax(-foc.a + seg.min.area, 0) *
                                                           sqrt(penalty)),
                                        pen.min.dist = sum(pen.min.dist))
@@ -2064,32 +2161,37 @@ generate_areas_poly <- function(x.dim,
             idx.trt <- idx.trt[idx.trt %in% with(res.grid, grid[segment != 0])]
           }
           idx.trt.rem.l[[j]] <- idx.trt
-          foc.obs <- seg.score[.(idx.trt), na.omit(score), on = "grid"]
-          rem.obs <- seg.score[!.(idx.trt), na.omit(score), on = "grid"]
-          foc.freq <-
-            seg.score.bin[.(idx.trt),
-                          .(n = sum(n.bin)),
-                          by = "score.bin", on = "grid"
-                          ][!is.na(score.bin)
-                            ][order(score.bin), n/sum(n)]
-          rem.freq <-
-            seg.score.bin[!.(idx.trt),
-                          .(n = sum(n.bin)),
-                          by = "score.bin", on = "grid"
-                          ][!is.na(score.bin)
-                            ][order(score.bin), n/sum(n)]
+          foc.obs <- seg.cov.obs[.(idx.trt), .N, on = "grid"]
+          rem.obs <- seg.cov.obs[!.(idx.trt), .N, on = "grid"]
           foc.a <- 
             res.grid.dt[.(idx.trt),
                         .(area = sum(area)),
                         by = "segment",
                         on = "grid"
                         ][, area]
-          if(length(foc.obs) > 0 & length(rem.obs) > 0) {
+          idx.area <- sum(foc.a) / res.grid.dt[, sum(area)]
+          idx.js <-
+            seg.cov[,
+                    .(js = js_div(x = .SD[grid %in% idx.trt, value],
+                                  y = .SD[!grid %in% idx.trt, value],
+                                  type = "discrete")),
+                    by = "var",
+                    .SDcols = c("grid", "value")
+                    ][, js]
+          idx.imb <- opt.imb.agg(idx.js)
+          idx.even <- sd(idx.js)
+          pen.min.dist <-
+            grid.dist.dt[grid1 %in% idx.trt & grid2 %in% idx.trt,
+                         .(dist.min = min(dist)),
+                         by = c("segment1", "segment2")
+                         ][segment1 != segment2,
+                           0.5 * as.numeric(dist.min < seg.min.dist) * sqrt(penalty)]
+          if(foc.obs > 0 & rem.obs > 0) {
             adj.rem[[j]] <- data.table(grid = grid.adj.rem[j],
                                        # smd = d_cohen(foc.obs, rem.obs),
-                                       imb = js_div(foc.freq, rem.freq,
-                                                    type = "raw"),
-                                       area = sum(foc.a) / prod(x.dim, y.dim),
+                                       imb = idx.imb,
+                                       even = idx.even,
+                                       area = idx.area,
                                        pen.min.area = sum(pmax(-foc.a + seg.min.area, 0) *
                                                           sqrt(penalty)),
                                        pen.min.dist = sum(pen.min.dist))
@@ -2113,11 +2215,9 @@ generate_areas_poly <- function(x.dim,
                                      abs(area - area.lim[2]) * sqrt(penalty)
                                      )
                   )]
-      adj.dt[, `:=`(imbalance.loss = opt.imp.imb * (imb - imbalance)^2,
-                    area.loss = opt.imp.area * (area - area.prop)^2
-                 )]
-      adj.dt[, `:=`(loss = opt.imp.imb * imbalance.loss +
-                           opt.imp.area * area.loss +
+      adj.dt[, `:=`(loss = opt.imp.imb * (imb - imbalance)^2 +
+                           opt.imp.even * even^2 +
+                           opt.imp.area * (area - area.prop)^2 +
                            pen.min.area + pen.imb + pen.area)]
       grid.change.j <- adj.dt[loss < loss.null, which.min(loss)]
       if(length(grid.change.j) > 0) {
@@ -2150,6 +2250,7 @@ generate_areas_poly <- function(x.dim,
     }
 
   } # End fine-scale optimisation
+
 
   res.grid$selected[-grid.trt] <- FALSE
   res.grid$selected[grid.trt] <- TRUE
@@ -2212,11 +2313,6 @@ generate_areas_poly <- function(x.dim,
   st_agr(poly.areas) <- "constant"
 
   areas.dt <-
-    st_rasterize(poly.areas, template = score) |>
-    as.data.table() |>
-    merge(score, all.x = FALSE, all.y = TRUE)
-
-  areas.dt <-
     st_geometry(poly.areas[poly.areas$type == "treatment",]) |>
     st_cast("POLYGON") |>
     st_as_sf() |>
@@ -2224,20 +2320,37 @@ generate_areas_poly <- function(x.dim,
     st_rasterize(template = generate_empty(x.dim = x.dim,
                                            y.dim = y.dim)) |>
     as.data.table() |>
-    setnames(c("x", "y", "poly")) |>
-    merge(score, all.x = FALSE, all.y = TRUE)
+    setnames(c("x", "y", "poly"))
   areas.dt[, type := fifelse(poly == 0, "reference", "treatment")]
   areas.dt[, type := factor(type, c("reference", "treatment"))]
 
   trt.area <- areas.dt[type == "treatment", length(type) / nrow(areas.dt)]
+
+  trt.loc <- areas.dt[type == "treatment", .(x, y)]
+
+  trt.obs <-
+    cov.dt[trt.loc,
+           ..cov.names,
+           on = c("x", "y")] |>
+    as.list()
+  ref.obs <-
+    cov.dt[!trt.loc,
+           ..cov.names,
+           on = c("x", "y")] |>
+    as.list()
   trt.imb <-
-    js_div(x = areas.dt[type == "treatment", na.omit(score)],
-           y = areas.dt[type == "reference", na.omit(score)],
-           type = "discrete")
+    mapply(\(x, y) js_div(x, y, type = "discrete"), trt.obs, ref.obs) |>
+    unname()
+
 
   if(verbose > 0) {
-    message(paste0("Final result (exact): Imbalance ", round(trt.imb, getOption("digits")),
-                   ". Area proportion ", round(trt.area, getOption("digits")), "."))
+    message(paste0("Final result (exact):\nImbalance ",
+                   paste(round(trt.imb, getOption("digits")), collapse = ", "),
+                   "; aggregate ",
+                   round(opt.imb.agg(trt.imb), getOption("digits")),
+                   ".\nArea proportion ",
+                   round(trt.area, getOption("digits")),
+                   "."))
   }
 
   return(list(shape = poly.areas,
@@ -2931,7 +3044,9 @@ generate_landscape_4cov_nl <-
            areas.seg.prec,
            areas.min.bound.dist,
            areas.opt.imp.imb,
+           areas.opt.imp.even,
            areas.opt.imp.area,
+           areas.opt.imb.agg,
            areas.opt.pop,
            areas.opt.prec,
            areas.opt.pcrossover,
@@ -3053,21 +3168,12 @@ generate_landscape_4cov_nl <-
 
   if(verbose > 0) message("Simulating treatment areas …") 
 
-  cov.inv <-
-    invert(covariates,
-            attributes = sample(c(TRUE, FALSE),
-                                size = length(covariates),
-                                replace = TRUE)) |>
-    scale_int()
-
-  score.trt <- score(cov.inv, type = score.type)
-  score.trt <- setNames(score.trt, "imb.score")
-
   areas.poly <-
     generate_areas_poly(x.dim = x.dim,
                         y.dim = y.dim,
                         seg.seed = areas.seg.seed,
-                        score = score.trt,
+                        # score = score.trt,
+                        score = covariates,
                         score.sam = areas.score.sam,
                         imbalance = areas.imbalance,
                         imbalance.tol = areas.imbalance.tol,
@@ -3082,7 +3188,9 @@ generate_landscape_4cov_nl <-
                         min.bound.dist = areas.min.bound.dist,
                         verbose = verbose,
                         opt.imp.imb = areas.opt.imp.imb,
+                        opt.imp.even = areas.opt.imp.even,
                         opt.imp.area = areas.opt.imp.area,
+                        opt.imb.agg = areas.opt.imb.agg,
                         opt.pop = areas.opt.pop,
                         opt.prec = areas.opt.prec,
                         opt.pcrossover = areas.opt.pcrossover,
@@ -3094,8 +3202,7 @@ generate_landscape_4cov_nl <-
                         opt.fine.max.iter = areas.opt.fine.max.iter,
                         opt.fine.constr = areas.opt.fine.constr,
                         opt.fine.tol = areas.opt.fine.tol,
-                        opt.cache = areas.opt.cache
-                        )
+                        opt.cache = areas.opt.cache)
 
   trt.poly <- 
     areas.poly$shape[areas.poly$shape$type == "treatment",] |>
@@ -3201,8 +3308,7 @@ generate_landscape_4cov_nl <-
       treatment,
       cov.main.effects,
       cov.int.effects,
-      residual,
-      score.trt) |>
+      residual) |>
     as.data.table()
 
   landscape.dt <-

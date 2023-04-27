@@ -18,16 +18,23 @@
 # source("utilities_fcne.R")
 source("utilities.R")
 
-
-set.seed(19010511+1) # Rose Ausländer
-n <- 1000
 ls.dim <- 100
+ls.imbalance <- 0.1
+parallel <- FALSE
+n <- 1000
+
+set.seed(19010511) # Rose Ausländer
+ls.seeds <- round(runif(n, 0, ls.imbalance) * 1e8)
 cov.effect.mu <- c(-2, 2)
+cov.int.effect.mu <- c(-2, 2)
 cov.effect.range <- c(0.5, 2)
+cov.int.effect.range <- c(0.5, 2)
 z1.mix.w <- runif(n, 0.2, 0.5)
 z2.mix.w <- runif(n, 0.2, 0.5)
 z3.mix.prop <- runif(n, 0.2, 0.5)
 z4.mix.w <- runif(n, 0.2, 0.5)
+opt.iter <- ifelse(ls.imbalance <= 0.3, 250, 500)
+opt.run <- ifelse(ls.imbalance <= 0.3, 100, 200)
 parameters <-
   data.table(
              id = 1:n,
@@ -35,7 +42,7 @@ parameters <-
              x.dim = ls.dim,
              y.dim = ls.dim,
              # Imbalance
-             areas.imbalance = 0.1,
+             areas.imbalance = ls.imbalance,
              # Effects
              treatment.eff.mean = 1,
              z1.effect.type = sample(c("sigmoid", "minimum", "unimodal", "bimodal"), n,
@@ -54,28 +61,28 @@ parameters <-
                                      replace = TRUE),
              z4.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]),
              z4.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
-             int12.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]) ,
-             int12.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             int12.effect.range = runif(n, cov.int.effect.range[1], cov.int.effect.range[2]) ,
+             int12.effect.mu = runif(n, cov.int.effect.mu[1], cov.int.effect.mu[2]),
              int12.effect.nuclei = sample(20:50, n, replace = TRUE),
-             int13.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]) ,
-             int13.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             int13.effect.range = runif(n, cov.int.effect.range[1], cov.int.effect.range[2]) ,
+             int13.effect.mu = runif(n, cov.int.effect.mu[1], cov.int.effect.mu[2]),
              int13.effect.nuclei = sample(20:50, n, replace = TRUE),
-             int14.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]) ,
-             int14.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             int14.effect.range = runif(n, cov.int.effect.range[1], cov.int.effect.range[2]) ,
+             int14.effect.mu = runif(n, cov.int.effect.mu[1], cov.int.effect.mu[2]),
              int14.effect.nuclei = sample(20:50, n, replace = TRUE),
-             int23.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]) ,
-             int23.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             int23.effect.range = runif(n, cov.int.effect.range[1], cov.int.effect.range[2]) ,
+             int23.effect.mu = runif(n, cov.int.effect.mu[1], cov.int.effect.mu[2]),
              int23.effect.nuclei = sample(20:50, n, replace = TRUE),
-             int24.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]) ,
-             int24.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             int24.effect.range = runif(n, cov.int.effect.range[1], cov.int.effect.range[2]) ,
+             int24.effect.mu = runif(n, cov.int.effect.mu[1], cov.int.effect.mu[2]),
              int24.effect.nuclei = sample(20:50, n, replace = TRUE),
-             int34.effect.range = runif(n, cov.effect.range[1], cov.effect.range[2]) ,
-             int34.effect.mu = runif(n, cov.effect.mu[1], cov.effect.mu[2]),
+             int34.effect.range = runif(n, cov.int.effect.range[1], cov.int.effect.range[2]) ,
+             int34.effect.mu = runif(n, cov.int.effect.mu[1], cov.int.effect.mu[2]),
              int34.effect.nuclei = sample(20:50, n, replace = TRUE),
              # Residual variation
-             e.exp.var = 1,
+             e.exp.var = 0.5,
              e.exp.scale = runif(n, 0.01*ls.dim, ls.dim),
-             e.nug.var = 1,
+             e.nug.var = 0.5,
              # Parameters for generating functions
              treatment.mat.nu = 1,
              treatment.mat.scale = runif(n, 0.01*ls.dim, 0.5*ls.dim),
@@ -88,12 +95,12 @@ parameters <-
              z1.mix.w = z1.mix.w,
              z2.grad.phi = runif(n, 0, 2*pi),
              z2.mix.w = z2.mix.w,
-             z3.dist.n = sample(10:25, n, replace = TRUE),
+             z3.dist.n = sample(5:10, n, replace = TRUE),
              z3.dist.acc = ls.dim/100,
              z3.mix.prop = z3.mix.prop,
-             z4.seg.n = sample(10:25, n, replace = TRUE),
-             z4.mat.nu = runif(n, 1, 2),
-             z4.mat.scale = runif(n, 0.1, 1),
+             z4.seg.n = sample(10:20, n, replace = TRUE),
+             z4.mat.nu = runif(n, 1, 1.5),
+             z4.mat.scale = runif(n, 0.1, 10),
              z4.mix.w = z4.mix.w,
              # Parameters for defining treatment and reference areas
              score.type = "mahalanobis",
@@ -101,30 +108,32 @@ parameters <-
              areas.score.sam = 1e5,
              areas.imbalance.tol = 0,
              areas.area.prop = runif(n, 0.35, 0.65),
-             areas.area.tol = list(NULL),
+             areas.area.tol = 0.15,
              areas.area.exact = FALSE,
              areas.seg.res = 0.05 * ls.dim,
-             areas.seg.min.dist = 0.03*ls.dim,
+             areas.seg.min.dist = 0.025 * ls.dim,
              areas.seg.min.area = (ls.dim/10)^2,
-             areas.seg.even = 2,
+             areas.seg.even = runif(n, 1, 2),
              areas.seg.prec = 5e-4 * ls.dim,
              areas.min.bound.dist = 0,
              areas.opt.imp.imb = 5,
+             areas.opt.imp.even = 1,
              areas.opt.imp.area = 1,
-             areas.opt.pop = 100,
+             areas.opt.imb.agg = mean,
+             areas.opt.pop = 250,
              areas.opt.prec = 1e-3,
              areas.opt.pcrossover = 0.9,
              areas.opt.pmutation = 0.5,
-             areas.opt.max.iter = 500,
-             areas.opt.run = 100,
-             areas.opt.parallel = 4,
+             areas.opt.max.iter = opt.iter,
+             areas.opt.run = opt.run,
+             areas.opt.parallel = parallel,
              areas.opt.fine = TRUE,
              areas.opt.fine.max.iter = 100,
              areas.opt.fine.constr = TRUE,
              areas.opt.fine.tol = 1e-6,
-             verbose = 2
+             areas.opt.cache = TRUE
              )
-rm(z1.mix.w, z2.mix.w, z3.mix.prop, z4.mix.w)
+
 
 # attach(as.list(parameters[id == 1]))
 # detach(as.list(parameters[id == 1]))
@@ -139,20 +148,61 @@ rm(z1.mix.w, z2.mix.w, z3.mix.prop, z4.mix.w)
 #          as.list()
 
 ls.par <- as.list(parameters[id == 1])
-ls.par$areas.imbalance <- 0.3
 ls.par <- lapply(ls.par, unlist)
+ls.par$areas.imbalance <- 0.3
+ls.par$areas.opt.imb.agg <- ls.par$areas.opt.imb.agg[[1]]
+ls.par$areas.opt.parallel <- 4
 
 attach(ls.par)
 detach(ls.par)
 
 system.time({
-ls <- do.call(generate_landscape_4cov_nl, ls.par)
+  ls <- do.call(generate_landscape_4cov_nl, ls.par)
 })
 # ls <- readRDS("landscape.rds")
 
 
-plot_landscape_4cov_nl(ls$landscape, select = "overview")
+plot_landscape_4cov_nl(ls$landscape, select = "all")
 plot_functions_4cov_nl(ls$fun)
+
+ls$landscape[, mean(response), by = type]
+
+
+som.egp2 <-
+      egp_som(ls$landscape,
+              topo = "hexagonal",
+              x.dim = 10,
+              y.dim = 10,
+              epochs = 1000,
+              vars = c("z1", "z2", "z3", "z4"),
+              parallel = 4)
+
+som.egp <-
+      egp_som(ls$landscape,
+              topo = "hexagonal",
+              x.dim = 10,
+              y.dim = 10,
+              epochs = 1000,
+              vars = c("z1", "z2", "z3", "z4"),
+              parallel = 4)
+
+som.egp$grid.nb == som.egp2$grid.nb
+
+
+som.egp$grid.nb[1,]
+som.egp2$grid.nb[1,]
+
+d_cohen(ls$landscape[type == "reference", z1], ls$landscape[type == "treatment", z1])
+d_cohen(ls$landscape[type == "reference", z2], ls$landscape[type == "treatment", z2])
+d_cohen(ls$landscape[type == "reference", z3], ls$landscape[type == "treatment", z3])
+d_cohen(ls$landscape[type == "reference", z4], ls$landscape[type == "treatment", z4])
+
+
+ks_stat(ls$landscape[type == "reference", z1], ls$landscape[type == "treatment", z1])
+ks_stat(ls$landscape[type == "reference", z2], ls$landscape[type == "treatment", z2])
+ks_stat(ls$landscape[type == "reference", z3], ls$landscape[type == "treatment", z3])
+ks_stat(ls$landscape[type == "reference", z4], ls$landscape[type == "treatment", z4])
+
 
 
 data <- ls$landscape

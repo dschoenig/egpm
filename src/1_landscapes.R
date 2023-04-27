@@ -18,7 +18,7 @@ if(is.na(parallel)) parallel <- FALSE
 # ls.name <- "imbalance_high"
 # n <- 1000
 # ls.dim <- 100
-# ls.imbalance <- 0.5
+# ls.imbalance <- 0.3
 # task.id <- 1
 # task.count <- 1000
 # parallel <- 4
@@ -51,8 +51,6 @@ z1.mix.w <- runif(n, 0.2, 0.5)
 z2.mix.w <- runif(n, 0.2, 0.5)
 z3.mix.prop <- runif(n, 0.2, 0.5)
 z4.mix.w <- runif(n, 0.2, 0.5)
-opt.iter <- ifelse(ls.imbalance <= 0.3, 250, 500)
-opt.run <- ifelse(ls.imbalance <= 0.3, 100, 200)
 parameters <-
   data.table(
              id = 1:n,
@@ -126,7 +124,7 @@ parameters <-
              areas.score.sam = 1e5,
              areas.imbalance.tol = 0,
              areas.area.prop = runif(n, 0.35, 0.65),
-             areas.area.tol = list(NULL),
+             areas.area.tol = list(c(0.35, 0.65)),
              areas.area.exact = FALSE,
              areas.seg.res = 0.05 * ls.dim,
              areas.seg.min.dist = 0.025 * ls.dim,
@@ -135,13 +133,15 @@ parameters <-
              areas.seg.prec = 5e-4 * ls.dim,
              areas.min.bound.dist = 0,
              areas.opt.imp.imb = 5,
+             areas.opt.imp.even = 1,
              areas.opt.imp.area = 1,
+             areas.opt.imb.agg = mean,
              areas.opt.pop = 100,
              areas.opt.prec = 1e-3,
              areas.opt.pcrossover = 0.9,
              areas.opt.pmutation = 0.5,
-             areas.opt.max.iter = opt.iter,
-             areas.opt.run = opt.run,
+             areas.opt.max.iter = 250,
+             areas.opt.run = 100,
              areas.opt.parallel = parallel,
              areas.opt.fine = TRUE,
              areas.opt.fine.max.iter = 100,
@@ -177,7 +177,8 @@ for(i in chunk) {
 
   ls.par <- 
     as.list(parameters[id == i,]) |>
-    lapply(unlist)
+    lapply(unlist, recursive = FALSE)
+  ls.par$areas.opt.imb.agg <- ls.par$areas.opt.imb.agg[[1]]
   ls.par$verbose <- 2
   file.ls <- paste0(path.ls.data,
                     stri_pad_left(ls.par$id, ceiling(log10(n))+1, 0),
