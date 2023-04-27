@@ -1788,7 +1788,7 @@ generate_areas_poly <- function(x.dim,
     return(list(foc.freq = foc.freq, ref.freq = ref.freq))
   }
 
-  if(verbose > 0) message("Building areas (optimisation) …")
+  if(verbose > 0) message("Building areas (optimization) …")
 
   order.grid <- ceiling(log2(nrow(res.grid.dt)))
   order.buffer <- ceiling(log2(sqrt(x.dim^2 + y.dim^2)))
@@ -2010,7 +2010,7 @@ generate_areas_poly <- function(x.dim,
 
   # plot(res.grid[, "selected"])
 
-  # Extract results of coarse optimisation
+  # Extract results of coarse optimization
 
   grid.trt <- with(res.grid, grid[selected])
   grid.ref <- setdiff(res.grid$grid, grid.trt)
@@ -2251,7 +2251,7 @@ generate_areas_poly <- function(x.dim,
       }
     }
 
-  } # End fine-scale optimisation
+  } # End fine-scale optimization
 
 
   res.grid$selected[-grid.trt] <- FALSE
