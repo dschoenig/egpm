@@ -140,6 +140,7 @@ parameters <-
              areas.opt.prec = 1e-3,
              areas.opt.pcrossover = 0.9,
              areas.opt.pmutation = 0.5,
+             areas.opt.elitism = 5,
              areas.opt.max.iter = 250,
              areas.opt.run = 100,
              areas.opt.parallel = parallel,
