@@ -10,10 +10,10 @@ mod.type <- args[2]
 task_id <- as.integer(args[3])
 task_count <- as.integer(args[4])
 
-ls.type <- "imbalance_medium"
-mod.type <- "match"
-task_id <- 1
-task_count <- 100
+# ls.type <- "imbalance_medium"
+# mod.type <- "match"
+# task_id <- 1
+# task_count <- 100
 
 sam.frac <- 0.01
 overwrite <- TRUE

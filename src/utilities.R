@@ -3031,7 +3031,6 @@ generate_landscape_4cov_nl <-
            z4.mat.nu,
            z4.mat.scale,
            z4.mix.w,
-           score.type,
            areas.seg.seed,
            areas.score.sam,
            areas.imbalance,
