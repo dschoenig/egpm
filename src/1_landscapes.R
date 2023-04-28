@@ -136,7 +136,7 @@ parameters <-
              areas.opt.imp.area = 1,
              areas.opt.imb.agg = mean,
              areas.opt.pop.n = 100,
-             areas.opt.rand = FALSE,
+             areas.opt.pop.rand = TRUE,
              areas.opt.prec = 1e-3,
              areas.opt.pcrossover = 0.9,
              areas.opt.pmutation = 0.5,
