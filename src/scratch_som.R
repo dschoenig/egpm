@@ -33,8 +33,6 @@ z1.mix.w <- runif(n, 0.2, 0.5)
 z2.mix.w <- runif(n, 0.2, 0.5)
 z3.mix.prop <- runif(n, 0.2, 0.5)
 z4.mix.w <- runif(n, 0.2, 0.5)
-opt.iter <- ifelse(ls.imbalance <= 0.3, 250, 500)
-opt.run <- ifelse(ls.imbalance <= 0.3, 100, 200)
 parameters <-
   data.table(
              id = 1:n,
@@ -103,12 +101,11 @@ parameters <-
              z4.mat.scale = runif(n, 0.1, 10),
              z4.mix.w = z4.mix.w,
              # Parameters for defining treatment and reference areas
-             score.type = "mahalanobis",
              areas.seg.seed = 3,
              areas.score.sam = 1e5,
              areas.imbalance.tol = 0,
              areas.area.prop = runif(n, 0.35, 0.65),
-             areas.area.tol = 0.15,
+             areas.area.tol = list(c(0.35, 0.65)),
              areas.area.exact = FALSE,
              areas.seg.res = 0.05 * ls.dim,
              areas.seg.min.dist = 0.025 * ls.dim,
@@ -120,12 +117,14 @@ parameters <-
              areas.opt.imp.even = 1,
              areas.opt.imp.area = 1,
              areas.opt.imb.agg = mean,
-             areas.opt.pop = 250,
+             areas.opt.pop.n = 100,
+             areas.opt.rand = FALSE,
              areas.opt.prec = 1e-3,
              areas.opt.pcrossover = 0.9,
              areas.opt.pmutation = 0.5,
-             areas.opt.max.iter = opt.iter,
-             areas.opt.run = opt.run,
+             areas.opt.elitism = 5,
+             areas.opt.max.iter = 250,
+             areas.opt.run = 100,
              areas.opt.parallel = parallel,
              areas.opt.fine = TRUE,
              areas.opt.fine.max.iter = 100,
@@ -153,12 +152,19 @@ ls.par$areas.imbalance <- 0.3
 ls.par$areas.opt.imb.agg <- ls.par$areas.opt.imb.agg[[1]]
 ls.par$areas.opt.parallel <- 4
 
-attach(ls.par)
-detach(ls.par)
+# attach(ls.par)
+# detach(ls.par)
 
+
+ls.par$areas.opt.pop.rand <- TRUE
 system.time({
   ls <- do.call(generate_landscape_4cov_nl, ls.par)
 })
+ls.par$areas.opt.pop.rand <- FALSE
+system.time({
+  ls2 <- do.call(generate_landscape_4cov_nl, ls.par)
+})
+
 # ls <- readRDS("landscape.rds")
 
 

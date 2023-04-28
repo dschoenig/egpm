@@ -1312,11 +1312,7 @@ match_to_segments_old <- function(segments, pw.dist, center, buffer, collapse = 
   return(matched.l)
 }
 
-# REMOVE
-# n = 3
-x <- c(10, 10, 15, 15, 25,
-       65, 35, 75, 27, 15,
-       50, 80, 37, 85, 35)
+
 
 decode_seg <- function(x, n = 1, digits = 0) {
   seg.list <- split(round(x, digits = digits),
@@ -1401,8 +1397,7 @@ match_to_segments <- function(pw.dist,
 
 # system.time(segment_min_distance(grid.dist.pw, grid.sel = grid.sel, segments = segments))
 
-segment_min_distance <- function(pw.dist,
-                                 grid.cols = c("grid1", "grid2"),
+segment_min_distance.old <- function(pw.dist,
                                  grid.sel,
                                  segments) {
   grid.seg <- data.table(grid = grid.sel, segment = segments)
@@ -1426,48 +1421,49 @@ segment_min_distance <- function(pw.dist,
   return(grid.dist.dt)
 }
 
-# segment_min_distance <- function(pw.dist,
-#                                  grid.sel,
-#                                  segments,
-#                                  grid.cols = c("grid1", "grid2"),
-#                                  dist.col = "dist"
-#                                  ) {
-#   if(is.data.table(pw.dist)) {
-#     grid.seg <- data.table(grid = grid.sel, segment = segments)
-#     grid.seg[, `:=`(grid1 = grid, grid2 = grid, segment1 = segment, segment2 = segment)]
-#     pw.dist[.(grid.sel),
-#             on = grid.cols[1]
-#             ][.(grid.sel),
-#               on = grid.cols[2]
-#               ] |>
-#     merge(grid.seg[, .(grid1, segment1)], by = "grid1") |>
-#     merge(grid.seg[, .(grid2, segment2)], by = "grid2") |>
-#       DT(segment1 != segment2,
-#          .(dist.min = min(dist)),
-#          by = c("segment1", "segment2")) |>
-#       DT(order(segment1, segment2))
-#   }
-#   if(is.matrix(pw.dist)) {
-#     grid.dist.dt <- as.data.table(pw.dist[grid.sel, grid.sel])
-#     names(grid.dist.dt) <- as.character(grid.sel)
-#     grid.dist.dt[, grid1 := grid.sel]
-#     grid.dist.dt <-
-#       melt(grid.dist.dt,
-#            id.vars = "grid1",
-#            variable.name = "grid2", value.name = "dist",
-#            variable.factor = FALSE) |>
-#       DT(, grid2 := as.integer(grid2)) |>
-#       merge(grid.seg[, .(grid1 = grid, segment1 = segment)],
-#             by = "grid1") |>
-#       merge(grid.seg[, .(grid2 = grid, segment2 = segment)],
-#             by = "grid2") |>
-#       DT(segment1 != segment2,
-#          .(dist.min = min(dist)),
-#          by = c("segment1", "segment2")) |>
-#       DT(order(segment1, segment2))
-#   }
-#   return(grid.dist.dt)
-# }
+segment_min_distance <- function(pw.dist,
+                                 grid.sel,
+                                 segments
+                                 ) {
+  grid.seg <- data.table(grid = grid.sel, segment = segments)
+  grid.seg[, `:=`(grid1 = grid,
+                  grid2 = grid,
+                  segment1 = segment,
+                  segment2 = segment)]
+  if(is.data.table(pw.dist)) {
+    min.dist <-
+      pw.dist[CJ(grid1 = grid.sel, grid2 = grid.sel),
+              on = c("grid1", "grid2")
+                ][grid.seg[, .(grid1, segment1)],
+                  on = "grid1"
+                  ][grid.seg[, .(grid2, segment2)],
+                    on = "grid2"] |>
+      DT(segment1 != segment2,
+         .(dist.min = min(dist)),
+         by = c("segment1", "segment2")) |>
+      DT(order(segment1, segment2))
+  }
+  if(is.matrix(pw.dist)) {
+    grid.dist.dt <- as.data.table(pw.dist[grid.sel, grid.sel])
+    names(grid.dist.dt) <- as.character(grid.sel)
+    grid.dist.dt[, grid1 := grid.sel]
+    min.dist <-
+      melt(grid.dist.dt,
+           id.vars = "grid1",
+           variable.name = "grid2", value.name = "dist",
+           variable.factor = FALSE) |>
+      DT(, grid2 := as.integer(grid2)) |>
+      merge(grid.seg[, .(grid1, segment1)],
+            by = "grid1") |>
+      merge(grid.seg[, .(grid2, segment2)],
+            by = "grid2") |>
+      DT(segment1 != segment2,
+         .(dist.min = min(dist)),
+         by = c("segment1", "segment2")) |>
+      DT(order(segment1, segment2))
+  }
+  return(min.dist)
+}
 
 
 encode_grid_buffer.old <- function(grid, buffer, order.grid, order.buffer) {
@@ -1573,11 +1569,12 @@ generate_areas_poly <- function(x.dim,
                                 opt.imp.even = 1,
                                 opt.imp.area = 1,
                                 opt.imb.agg = gmean,
-                                opt.pop = 50,
-                                opt.prec = 1e-4,
+                                opt.pop.n = 50,
+                                opt.pop.rand = TRUE,
+                                opt.prec = 1e-3,
                                 opt.pcrossover = 0.8,
                                 opt.pmutation = 0.1,
-                                opt.elitism = max(1, round(opt.pop*0.1)),
+                                opt.elitism = max(1, round(opt.pop.n*0.1)),
                                 opt.max.iter = 100,
                                 opt.run = opt.max.iter,
                                 opt.parallel = FALSE,
@@ -1818,38 +1815,6 @@ generate_areas_poly <- function(x.dim,
         f <- length(x.decode$grid.seg)^2 * sqrt(.Machine$double.xmax)
       # Otherwise evaluate function
       } else {
-        freqs <- get_freq.m(trt.proposed$grid)
-        # foc.freq <- frq
-        #   seg.cov.bin[.(trt.proposed$grid),
-        #                 .(n = sum(n.bin)),
-        #                 by = c("value.bin", "var"),
-        #                 on = "grid"
-        #                 ][!is.na(value.bin)
-        #                   ][order(var, value.bin),
-        #                     .(value.bin,
-        #                       foc = n/sum(n)),
-        #                     by = "var"]
-        # ref.freq <- 
-        #   seg.cov.bin[!.(trt.proposed$grid),
-        #                 .(n = sum(n.bin)),
-        #                 by = c("value.bin", "var"),
-        #                 on = "grid"
-        #                 ][!is.na(value.bin)
-        #                   ][order(var, value.bin),
-        #                     .(value.bin,
-        #                       ref = n/sum(n)),
-        #                     by = "var"]
-        if(nrow(freqs$ref.freq) > 0) {
-          js.dt <-
-            merge(freqs$foc.freq, freqs$ref.freq, by = c("var", "value.bin"))
-          trt.imb <-
-            js.dt[, 
-                  .(js_div = js_div(foc, ref, type = "raw")),
-                  by = "var"
-                  ][,js_div]
-        } else {
-          trt.imb <- rep(0, length(unique(freqs$foc.freq$var)))
-        }
         trt.a <- 
           merge(res.grid.dt[.(trt.proposed$grid),
                             on = "grid"],
@@ -1864,28 +1829,48 @@ generate_areas_poly <- function(x.dim,
                              area = rep(0, length(seg.rem))))
         }
         trt.area <- sum(trt.a) / prod(x.dim, y.dim)
-        imbalance.loss <- (opt.imb.agg(trt.imb) - imbalance)^2
-        even.loss <- var(trt.imb)
-        area.loss <- (trt.area - area.prop)^2
         penalty.min.area <- pmax(-trt.a$area + seg.min.area, 0) * sqrt(.Machine$double.xmax)
         if(length(unique(trt.proposed$segment)) > 1) {
-          penalty.min.dist <-
-            segment_min_distance.m(pw.dist = grid.dist.pw,
-                                   grid.cols = c("grid1", "grid2"),
+          min.dist <-
+            segment_min_distance.m(pw.dist = grid.dist.dt,
                                    grid.sel = trt.proposed$grid,
-                                   segments = trt.proposed$segment) |>
-            DT(, as.numeric(dist.min < seg.min.dist) * sqrt(.Machine$double.xmax))
+                                   segments = trt.proposed$segment)
+          penalty.min.dist <-
+            min.dist[,
+                     pen.dist := fifelse(dist.min < seg.min.dist,
+                                         sqrt(.Machine$double.xmax),
+                                         0)
+                     ][, pen.dist]
         } else {
           penalty.min.dist <- 0
         }
-        # REMOVE
-        # penalty.oob <- as.numeric(!(x$grid %in% res.grid.dt$grid)) * sqrt(.Machine$double.xmax)
-        f <-
-          opt.imp.imb * imbalance.loss +
-          opt.imp.even * even.loss +
-          opt.imp.area * area.loss +
-          sum(penalty.min.area) +
-          sum(penalty.min.dist)
+        penalties <- sum(penalty.min.area) + sum(penalty.min.dist)
+        if(penalties > 0) {
+          f <- penalties
+        } else {
+          freqs <- get_freq.m(trt.proposed$grid)
+          if(nrow(freqs$ref.freq) > 0) {
+            js.dt <-
+              merge(freqs$foc.freq, freqs$ref.freq, by = c("var", "value.bin"))
+            trt.imb <-
+              js.dt[, 
+                    .(js_div = js_div(foc, ref, type = "raw")),
+                    by = "var"
+                    ][,js_div]
+          } else {
+            trt.imb <- rep(0, length(unique(freqs$foc.freq$var)))
+          }
+          imbalance.loss <- (opt.imb.agg(trt.imb) - imbalance)^2
+          even.loss <- var(trt.imb)
+          area.loss <- (trt.area - area.prop)^2
+          # REMOVE
+          # penalty.oob <- as.numeric(!(x$grid %in% res.grid.dt$grid)) * sqrt(.Machine$double.xmax)
+          f <-
+            opt.imp.imb * imbalance.loss +
+            opt.imp.even * even.loss +
+            opt.imp.area * area.loss +
+            penalties
+        }
       }
     }
     return(-f)
@@ -1908,37 +1893,64 @@ generate_areas_poly <- function(x.dim,
 
   if(verbose > 0) message("Creating starting population for genetic optimization …")
 
-  pop.start.mat <- matrix(NA, nrow = opt.pop, ncol = n.bits)
-  for(i in 1:opt.pop) {
-    grid.seg.sam <- sample(res.grid.dt$grid, seg.seed)
-    grid.cen.sam <-
-      grid.dist.dt[grid2 %in% grid.seg.sam,
-                   .SD[which.min(dist)][1],
-                   by = grid1,
-                   .SDcols = c("grid2", "dist")
-                   ][,
-                     .SD[sample(1:.N, 1)],
-                     by = grid2
-                     ][.(grid.seg.sam), grid1, on = "grid2"]
-    buffer.sam <- round(runif(n = seg.seed,
-                              sqrt(seg.min.area),
-                              sqrt(area.prop * x.dim * y.dim / seg.seed)))
-    pop.start.mat[i,] <-
-      encode_grid_buffer(grid.seg.sam,
-                         grid.cen.sam,
-                         buffer.sam,
-                         order.grid,
-                         order.buffer)
+  pop.start.mat <- matrix(NA, nrow = opt.pop.n, ncol = n.bits)
+
+  if(!opt.pop.rand & verbose > 1) {
+    prog <- txtProgressBar(min = 0, max = opt.pop.n, initial = 0,
+                           char = "=", width = NA, style = 3)
   }
+  n.pop <- 1
+  while(n.pop <= opt.pop.n) {
+    grid.seg.sam <- sample(res.grid.dt$grid, seg.seed)
+    grid.cen.sam <- sample(res.grid.dt$grid, seg.seed, replace = TRUE)
+    buffer.sam <- round(runif(n = seg.seed, 0, sqrt(x.dim^2 + y.dim^2)))
+    pop.try <- encode_grid_buffer(grid.seg.sam,
+                                  grid.cen.sam,
+                                  buffer.sam,
+                                  order.grid,
+                                  order.buffer)
+    if(opt.pop.rand) {
+      fit.try = 0
+    } else {
+      fit.try <- f_opt_imb_area.m(pop.try)
+    }
+    if(fit.try > -sum(c(opt.imp.imb, opt.imp.even, opt.imp.area))) {
+      pop.start.mat[n.pop,] <- pop.try
+      if(!opt.pop.rand & verbose > 1) {
+        setTxtProgressBar(prog, n.pop)
+      }
+      n.pop <- n.pop + 1
+    }
+  }
+  if(!opt.pop.rand & verbose > 1) close(prog)
+
+  # pop.start.mat <- matrix(NA, nrow = opt.pop.n, ncol = n.bits)
+  # for(i in 1:opt.pop.n) {
+  #   grid.seg.sam <- sample(res.grid.dt$grid, seg.seed)
+  #   grid.cen.sam <-
+  #     grid.dist.dt[grid2 %in% grid.seg.sam,
+  #                  .SD[which.min(dist)][1],
+  #                  by = grid1,
+  #                  .SDcols = c("grid2", "dist")
+  #                  ][,
+  #                    .SD[sample(1:.N, 1)],
+  #                    by = grid2
+  #                    ][.(grid.seg.sam), grid1, on = "grid2"]
+  #   buffer.sam <- round(runif(n = seg.seed,
+  #                             sqrt(seg.min.area),
+  #                             sqrt(area.prop * x.dim * y.dim / seg.seed)))
+  #   pop.start.mat[i,] <-
+  #     encode_grid_buffer(grid.seg.sam,
+  #                        grid.cen.sam,
+  #                        buffer.sam,
+  #                        order.grid,
+  #                        order.buffer)
+  # }
 
   f_max <- -((opt.imp.imb + opt.imp.even + opt.imp.area) * opt.prec)
   f_monitor <- ifelse(verbose > 1, gaMonitor, FALSE)
 
   if(verbose > 0) message("Genetic optimization …")
-
-  x <- round(runif(n.bits))
-  f_opt_imb_area(x)
-
 
   buffer.opt <- NULL
   while(is.null(buffer.opt)) {
@@ -1952,7 +1964,7 @@ generate_areas_poly <- function(x.dim,
              nBits = n.bits,
              suggestions = pop.start.mat,
              run = opt.run,
-             popSize = opt.pop,
+             popSize = opt.pop.n,
              maxiter = opt.max.iter,
              optim = TRUE,
              optimArgs = list(poptim = 0.25),
@@ -3048,7 +3060,8 @@ generate_landscape_4cov_nl <-
            areas.opt.imp.even,
            areas.opt.imp.area,
            areas.opt.imb.agg,
-           areas.opt.pop,
+           areas.opt.pop.n,
+           areas.opt.pop.rand = FALSE,
            areas.opt.prec,
            areas.opt.pcrossover,
            areas.opt.pmutation,
@@ -3193,7 +3206,8 @@ generate_landscape_4cov_nl <-
                         opt.imp.even = areas.opt.imp.even,
                         opt.imp.area = areas.opt.imp.area,
                         opt.imb.agg = areas.opt.imb.agg,
-                        opt.pop = areas.opt.pop,
+                        opt.pop.n = areas.opt.pop.n,
+                        opt.pop.rand = areas.opt.pop.rand,
                         opt.prec = areas.opt.prec,
                         opt.pcrossover = areas.opt.pcrossover,
                         opt.pmutation = areas.opt.pmutation,
