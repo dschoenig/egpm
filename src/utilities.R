@@ -934,7 +934,6 @@ generate_areas_poly.old <- function(x.dim,
                                 opt.tol = 1e-4,
                                 ...
                                 ) {
-
 # for(m in 1:20){
   if(verbose) message("Setting up candidate polygons …")
 
@@ -4296,6 +4295,9 @@ capwords <- function(s, strict = FALSE) {
 }
 
 
+
+## EGP functions
+
 som_init_pc <- function(grid, data) {
   # Calculate principal components
   init.pca <- prcomp(x = data, center = FALSE, scale = FALSE)
@@ -5177,7 +5179,8 @@ egp_posterior_draw <- function(model,
           t(posterior[post.chunks$from[k]:post.chunks$to[k], marginals[[j]]])
         if(type == "response") {
           fam <- model$family
-          m.predict.chunk[, post.chunks$from[k]:post.chunks$to[k]] <- fam$linkinv(lp)
+          m.predict.chunk[, post.chunks$from[k]:post.chunks$to[k]] <-
+           fam$linkinv(as.matrix(lp))
         } else {
           m.predict.chunk[, post.chunks$from[k]:post.chunks$to[k]] <- lp
         }
