@@ -10,11 +10,11 @@ n.threads <- as.integer(args[3])
 task_id <- as.integer(args[4])
 task_count <- as.integer(args[5])
 
-ls.type <- "imbalance_high"
-mod.type <- "egp_som25"
-n.threads <- 4
-task_id <- 1
-task_count <- 1000
+# ls.type <- "imbalance_high"
+# mod.type <- "egp_som25"
+# n.threads <- 4
+# task_id <- 1
+# task_count <- 1000
 
 sam.frac <- 0.01
 som.dim <- 25
