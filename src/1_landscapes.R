@@ -119,7 +119,7 @@ parameters <-
              z4.mat.scale = runif(n, 0.1, 10),
              z4.mix.w = z4.mix.w,
              # Parameters for defining treatment and reference areas
-             areas.seg.seed = 3,
+             areas.seg.seed = sample(1:3, n, replace = TRUE),
              areas.score.sam = 1e5,
              areas.imbalance.tol = 0,
              areas.area.prop = runif(n, 0.35, 0.65),
