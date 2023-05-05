@@ -1,6 +1,6 @@
 library(data.table)
 library(mgcv)
-library(kohonen)
+library(stringi)
 
 source("utilities.R")
 
@@ -8,8 +8,8 @@ args <- commandArgs(trailingOnly = TRUE)
 ls.type <- args[1]
 mod.type <- args[2]
 
-# ls.type <- "imbalance_high"
-# mod.type <- "egp_som25"
+ls.type <- "imbalance_high"
+mod.type <- "egp_som25"
 
 path.base <- "../"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
@@ -21,18 +21,11 @@ if(!dir.exists(path.results)) dir.create(path.results, recursive = TRUE)
 
 file.results <- paste0(path.results, mod.type, ".rds")
 
-files.mod <- paste0(path.mod,
-                    list.files(path.mod, pattern = mod.type))
+files.mod <-
+  paste0(path.mod, list.files(path.mod, pattern = mod.type)) |>
+  stri_subset(regex = ".rds$")
 
 ids <- as.integer(stri_match_last_regex(files.mod, "\\d{4}"))
-
-effects.noint <- list()
-terms.noint <- list()
-dev.expl.noint <- list()
-
-effects.int <- list()
-terms.int <- list()
-dev.expl.int <- list()
 
 params.i <- list()
 marginals.i <- list()
@@ -91,7 +84,6 @@ for(i in ids) {
 
   params.i[[i]] <- mod.res$parameters
   params.i[[i]][, mod.id := 1:.N]
-  setcolorder(params.i[[i]], c("landscape", "mod.id"))
   marginals.i[[i]] <- rbindlist(marginals.j, idcol = "mod.id")
   terms.i[[i]] <- rbindlist(terms.j, idcol = "mod.id")
   dev.expl.i[[i]] <- rbindlist(dev.expl.j, idcol = "mod.id")
@@ -103,6 +95,7 @@ for(i in ids) {
 }
 
 params <- rbindlist(params.i)
+setcolorder(params.i[[i]], c("landscape", "mod.id"))
 marginals <- rbindlist(marginals.i, idcol = "landscape")
 setcolorder(marginals, c("landscape", "mod.id"))
 terms <- rbindlist(terms.i, idcol = "landscape")
