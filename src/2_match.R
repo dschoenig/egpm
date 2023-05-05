@@ -145,7 +145,7 @@ for(i in chunk) {
                         newdata = ls.fit[type == "treatment"])
       results.mod[[j]] <-
         list(model = mod.lm,
-             marginal = marginal$estimate)
+             marginal = marginal)
       rm(mod.lm, marginal)
     } else {
       if(mod.para$type[j] == "cem") {

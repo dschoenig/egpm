@@ -1,6 +1,6 @@
 library(data.table)
-library(mgcv)
-library(stringi)
+library(MatchIt)
+library(marginaleffects)
 
 source("utilities.R")
 
@@ -9,7 +9,7 @@ ls.type <- args[1]
 mod.type <- args[2]
 
 # ls.type <- "imbalance_high"
-# mod.type <- "egp_som25"
+# mod.type <- "match"
 
 path.base <- "../"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
@@ -28,64 +28,56 @@ ids <- as.integer(stri_match_last_regex(files.mod, "\\d+")[,1])
 
 params.i <- list()
 marginals.i <- list()
-terms.i <- list()
 dev.expl.i <- list()
+
+# SUBSETTING IDS REMOVE LATER
+task_id <- as.integer(args[3])
+task_count <- as.integer(args[4])
+row.chunks <- chunk_seq(1, length(ids), ceiling(length(ids)/ task_count))
+chunk <- row.chunks$from[task_id]:row.chunks$to[task_id]
+ids <- chunk
 
 for(i in ids) {
 
   ta <- Sys.time()
 
-  message(paste0("Summarizing results for EGP model ", i, " …"))
+  message(paste0("Summarizing results for model ", i, " …"))
 
   mod.res <- readRDS(files.mod[i])
 
   marginals.j <- list()
-  terms.j <- list()
   dev.expl.j <- list()
 
   for(j in seq_along(mod.res$models)) {
 
-    grp.vars <- c("group.id", mod.res$models[[j]]$egp.def$group.by.c)
-
-    marginals.j[[j]] <- 
-      mod.res$models[[j]]$marginal[,
-                                   .(mean = mean(marginal),
-                                     q2.5 = quantile(marginal, 0.025),
-                                     q97.5 = quantile(marginal, 0.975)),
-                                   by = grp.vars
-                                   ]
-
-    mod.egp <- mod.res$models[[j]]$model
-
-    edf <- numeric(0)
-    k.mod <- numeric(0)
-    labels <- character(0)
-    n.smooth <- length(mod.egp$smooth)
-    for (k in 1:n.smooth) {
-      labels[k] <- mod.egp$smooth[[k]]$label
-      edf[k] <-
-        sum(mod.egp$edf[mod.egp$smooth[[k]]$first.para:mod.egp$smooth[[k]]$last.para])
-      k.mod[k] <- 
-        mod.egp$smooth[[k]]$bs.dim
+    if(mod.res$parameters$type[j] == "lm") {
+      ls.fit <-
+        as.data.table(mod.res$models[[j]]$model$model)
+      mod.res$models[[j]]$marginal <-
+        avg_comparisons(mod.res$models[[j]]$model,
+                        variables = "type",
+                        vcov = "HC3",
+                        newdata = ls.fit[type == "treatment"])
     }
 
-    terms.j[[j]] <-
-      data.table(term = labels,
-                 edf = edf,
-                 k = k.mod)
+    marginals.j[[j]] <- 
+      as.data.table(mod.res$models[[j]]$marginal) |>
+      DT(, .(mean = estimate,
+             q2.5 = conf.low,
+             q97.5 = conf.high))
 
+    # UPDATE WITH GLM VERSION
     dev.expl.j[[j]] <-
-      data.table(dev.expl = 
-                   ((mod.egp$null.deviance - mod.egp$deviance) /
-                    mod.egp$null.deviance) * 100)
+      data.table(dev.expl = unname(summary(mod.res$models[[j]]$model)$r.squared))
 
   }
 
   params.i[[i]] <- mod.res$parameters
   params.i[[i]][, mod.id := 1:.N]
   marginals.i[[i]] <- rbindlist(marginals.j, idcol = "mod.id")
-  terms.i[[i]] <- rbindlist(terms.j, idcol = "mod.id")
   dev.expl.i[[i]] <- rbindlist(dev.expl.j, idcol = "mod.id")
+
+  saveRDS(mod.res, files.mod[i])
 
   tb <- Sys.time()
   te <- tb-ta
@@ -97,15 +89,12 @@ params <- rbindlist(params.i)
 setcolorder(params.i[[i]], c("landscape", "mod.id"))
 marginals <- rbindlist(marginals.i, idcol = "landscape")
 setcolorder(marginals, c("landscape", "mod.id"))
-terms <- rbindlist(terms.i, idcol = "landscape")
-setcolorder(terms, c("landscape", "mod.id"))
 dev.expl <- rbindlist(dev.expl.i, idcol = "landscape")
 setcolorder(dev.expl, c("landscape", "mod.id"))
 
 results <-
   list(parameters = params,
        marginal = marginals,
-       terms = terms,
        deviance = dev.expl)
 
 saveRDS(results, file.results)
