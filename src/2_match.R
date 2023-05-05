@@ -79,20 +79,23 @@ for(i in chunk) {
     rbind(CJ(landscape = ls.par$id,
              sam.frac,
              type = "lm",
-             cov.form = factor(c("none", "include", "interact")),
+             mod.cov = factor(c("exclude", "include", "interact")),
+             trt.int = c(FALSE, TRUE),
              sorted = FALSE),
           CJ(landscape = ls.par$id,
              sam.frac,
              type = "cem",
              cutpoints = factor(c("st", "sc", "fd")),
-             cov.form = factor(c("none", "include", "interact")),
+             mod.cov = factor(c("exclude", "include", "interact")),
+             trt.int = c(FALSE, TRUE),
              sorted = FALSE),
           CJ(landscape = ls.par$id,
              sam.frac,
              type = "nearest",
              distance = factor(c("glm", "mahalanobis")),
              replace = c(FALSE, TRUE),
-             cov.form = factor(c("none", "include", "interact")),
+             mod.cov = factor(c("exclude", "include", "interact")),
+             trt.int = c(FALSE, TRUE),
              sorted = FALSE),
           fill = TRUE)
 
@@ -106,12 +109,32 @@ for(i in chunk) {
   for(j in 1:nrow(mod.para)) {
 
     message(paste0("Parameter combination ", j, "/", nrow(mod.para)), " …")
-    
-    mod.form <-
-      switch(as.character(mod.para$cov.form[j]),
-             none = response ~ type,
-             include = response ~ type + z1 + z2 + z3 + z4,
-             interact = response ~ type * (z1 + z2 + z3 + z4))
+  
+    if(mod.para$trt.int[j] == FALSE) {
+
+      mod.form <-
+        switch(as.character(mod.para$mod.cov[j]),
+               exclude = response ~ type,
+               include = response ~ type + z1 + z2 + z3 + z4,
+               interact = response ~ type + 
+                            z1 + z2 + z3 + z4 +
+                            z1:z2 + z1:z3 + z1:z4 + z2:z3 + z2:z4 + z3:z4)
+    } else {
+      mod.form <-
+        switch(as.character(mod.para$mod.cov[j]),
+               exclude = response ~ type,
+               include = response ~ type * (z1 + z2 + z3 + z4),
+               interact = response ~ type * ( 
+                            z1 + z2 + z3 + z4 +
+                            z1:z2 + z1:z3 + z1:z4 + z2:z3 + z2:z4 + z3:z4))
+    }
+      match.form <-
+        switch(as.character(mod.para$mod.cov[j]),
+               exclude = type ~ z1 + z2 + z3 + z4,
+               include = type ~ z1 + z2 + z3 + z4,
+               interact = type ~
+                            z1 + z2 + z3 + z4 +
+                            z1:z2 + z1:z3 + z1:z4 + z2:z3 + z2:z4 + z3:z4)
 
     if(mod.para$type[j] == "lm") {
       mod.lm <- lm(mod.form, data = ls.fit)
@@ -140,20 +163,26 @@ for(i in chunk) {
                   replace = mod.para$replace[j],
                   data = ls.sam)
       }
+
       ls.match <- match.data(matched)
+
       mod.match <-
         lm(mod.form,
            weights = weights,
            data = ls.match)
+
       marginal <-
         avg_comparisons(mod.match,
                         variables = "type",
                         vcov = "HC3",
                         newdata = ls.match[type == "treatment"],
                         wts = "weights")
+
       results.mod[[j]] <-
-        list(model = mod.match,
-             marginal = marginal$estimate)
+        list(matched = matched,
+             model = mod.match,
+             marginal = marginal)
+
       rm(matched,
          ls.match,
          mod.match,
