@@ -20,7 +20,8 @@ c(
   "memoise",
   "Matrix",
   "MatchIt",
-  "marginaleffects") |>
+  "marginaleffects",
+  "sandwich") |>
 install.packages()
 
 data.table::update_dev_pkg()
