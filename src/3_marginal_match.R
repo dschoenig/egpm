@@ -97,6 +97,9 @@ results <-
        marginal = marginals,
        deviance = dev.expl)
 
+
+file.results <- paste0(path.results, mod.type, "_", task_id, ".rds")
+
 saveRDS(results, file.results)
 
 
