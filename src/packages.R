@@ -18,7 +18,9 @@ c(
   "kohonen",
   "GA",
   "memoise",
-  "Matrix") |>
+  "Matrix",
+  "MatchIt",
+  "marginaleffects") |>
 install.packages()
 
 data.table::update_dev_pkg()
