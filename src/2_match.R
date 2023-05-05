@@ -187,6 +187,7 @@ for(i in chunk) {
          ls.match,
          mod.match,
          marginal)
+      gc()
     }
   }
 
@@ -204,6 +205,7 @@ for(i in chunk) {
   saveRDS(object = results.ls, file = files.tmp[i.step])
 
   rm(results.mod) 
+  gc()
   
   tb <- Sys.time()
   te <- tb-ta
