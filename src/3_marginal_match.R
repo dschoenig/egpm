@@ -30,13 +30,6 @@ params.i <- list()
 marginals.i <- list()
 dev.expl.i <- list()
 
-# # SUBSETTING IDS REMOVE LATER
-# task_id <- as.integer(args[3])
-# task_count <- as.integer(args[4])
-# row.chunks <- chunk_seq(1, length(ids), ceiling(length(ids)/ task_count))
-# chunk <- row.chunks$from[task_id]:row.chunks$to[task_id]
-# ids <- chunk
-
 for(i in ids) {
 
   ta <- Sys.time()
@@ -53,17 +46,6 @@ for(i in ids) {
   dev.expl.j <- list()
 
   for(j in seq_along(mod.res$models)) {
-
-    # # REMOVE
-    # if(mod.res$parameters$type[j] == "lm") {
-    #   ls.fit <-
-    #     as.data.table(mod.res$models[[j]]$model$model)
-    #   mod.res$models[[j]]$marginal <-
-    #     avg_comparisons(mod.res$models[[j]]$model,
-    #                     variables = "type",
-    #                     vcov = "HC3",
-    #                     newdata = ls.fit[type == "treatment"])
-    # }
 
     marginals.j[[j]] <- 
       as.data.table(mod.res$models[[j]]$marginal) |>
@@ -102,9 +84,6 @@ results <-
   list(parameters = params,
        marginal = marginals,
        deviance = dev.expl)
-
-# # REMOVE
-# file.results <- paste0(path.results, mod.type, "_", task_id, ".rds")
 
 saveRDS(results, file.results)
 
