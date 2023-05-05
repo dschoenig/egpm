@@ -1,3 +1,4 @@
+
 args <- commandArgs(trailingOnly = TRUE)
 
 library(mgcv)
@@ -10,10 +11,10 @@ n.threads <- as.integer(args[3])
 task_id <- as.integer(args[4])
 task_count <- as.integer(args[5])
 
-# ls.type <- "imbalance_medium"
-# mod.type <- "egp_som25"
+# ls.type <- "imbalance_high"
+# mod.type <- "egp_som10"
 # n.threads <- 4
-# task_id <- 5
+# task_id <- 1
 # task_count <- 1000
 
 sam.frac <- 0.01
@@ -206,11 +207,11 @@ for(i in chunk) {
   }
 
   # mars <- numeric(0)
-  # for(k in seq_along(results.ls$models)) {
+  # for(k in seq_along(results.mod)) {
   #   mars[k] <-
-  #     results.ls$models[[k]]$marginal[group.id == 1, mean(marginal)]
+  #     results.mod[[k]]$marginal[group.id == 1, mean(marginal)]
   # }
-  
+
   results.ls <-
     list(parameters = mod.para,
          models = results.mod)
