@@ -35,7 +35,7 @@ for(i in ids) {
 
   ta <- Sys.time()
 
-  message(paste0("Summarizing results for EGP model ", i, " …"))
+  message(paste0("Summarizing results for landscape ", i, " …"))
 
   mod.res <- readRDS(files.mod[i])
 

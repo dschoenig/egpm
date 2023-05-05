@@ -8,8 +8,8 @@ args <- commandArgs(trailingOnly = TRUE)
 ls.type <- args[1]
 mod.type <- args[2]
 
-# ls.type <- "imbalance_high"
-# mod.type <- "match"
+ls.type <- "imbalance_high"
+mod.type <- "match"
 
 path.base <- "../"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
@@ -30,35 +30,40 @@ params.i <- list()
 marginals.i <- list()
 dev.expl.i <- list()
 
-# SUBSETTING IDS REMOVE LATER
-task_id <- as.integer(args[3])
-task_count <- as.integer(args[4])
-row.chunks <- chunk_seq(1, length(ids), ceiling(length(ids)/ task_count))
-chunk <- row.chunks$from[task_id]:row.chunks$to[task_id]
-ids <- chunk
+# # SUBSETTING IDS REMOVE LATER
+# task_id <- as.integer(args[3])
+# task_count <- as.integer(args[4])
+# row.chunks <- chunk_seq(1, length(ids), ceiling(length(ids)/ task_count))
+# chunk <- row.chunks$from[task_id]:row.chunks$to[task_id]
+# ids <- chunk
 
 for(i in ids) {
 
   ta <- Sys.time()
 
-  message(paste0("Summarizing results for model ", i, " …"))
+  message(paste0("Summarizing results for landscape ", i, " …"))
 
-  mod.res <- readRDS(files.mod[i])
+  mod.res <- NULL
+  while(is.null(mod.res)) {
+    mod.res <- try(readRDS(files.mod[i]))
+  }
+
 
   marginals.j <- list()
   dev.expl.j <- list()
 
   for(j in seq_along(mod.res$models)) {
 
-    if(mod.res$parameters$type[j] == "lm") {
-      ls.fit <-
-        as.data.table(mod.res$models[[j]]$model$model)
-      mod.res$models[[j]]$marginal <-
-        avg_comparisons(mod.res$models[[j]]$model,
-                        variables = "type",
-                        vcov = "HC3",
-                        newdata = ls.fit[type == "treatment"])
-    }
+    # # REMOVE
+    # if(mod.res$parameters$type[j] == "lm") {
+    #   ls.fit <-
+    #     as.data.table(mod.res$models[[j]]$model$model)
+    #   mod.res$models[[j]]$marginal <-
+    #     avg_comparisons(mod.res$models[[j]]$model,
+    #                     variables = "type",
+    #                     vcov = "HC3",
+    #                     newdata = ls.fit[type == "treatment"])
+    # }
 
     marginals.j[[j]] <- 
       as.data.table(mod.res$models[[j]]$marginal) |>
@@ -77,7 +82,8 @@ for(i in ids) {
   marginals.i[[i]] <- rbindlist(marginals.j, idcol = "mod.id")
   dev.expl.i[[i]] <- rbindlist(dev.expl.j, idcol = "mod.id")
 
-  saveRDS(mod.res, files.mod[i])
+  # # REMOVE
+  # saveRDS(mod.res, files.mod[i])
 
   tb <- Sys.time()
   te <- tb-ta
@@ -97,8 +103,8 @@ results <-
        marginal = marginals,
        deviance = dev.expl)
 
-
-file.results <- paste0(path.results, mod.type, "_", task_id, ".rds")
+# # REMOVE
+# file.results <- paste0(path.results, mod.type, "_", task_id, ".rds")
 
 saveRDS(results, file.results)
 
