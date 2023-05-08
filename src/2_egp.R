@@ -26,9 +26,10 @@ task_count <- as.integer(args[11])
 # som.epochs <- 1000
 # egp.k.som <- 250
 # egp.k.geo <- 250
-# egp.max.knots.som <- som.dim^2
-# egp.max.knots.geo <- egp.k.geo*10
 # egp.approx <- TRUE
+
+egp.max.knots.som <- som.dim^2
+egp.max.knots.geo <- egp.k.geo*10
 
 overwrite <- TRUE
 
@@ -152,7 +153,7 @@ for(i in chunk) {
                         xt = list(max.knots = egp.max.knots.geo)) +
                       s(x, y, by = type, bs = "gp", k = egp.k.geo,
                         xt = list(max.knots = egp.max.knots.geo)) +
-                      s(som.x, som.y, bs = egp.basis, k = egp.k.som,
+                      s(som.x, som.y, bs = "gp", k = egp.k.som,
                         xt = list(max.knots = egp.max.knots.som)),
                       data = ls.fit,
                       select = TRUE,

@@ -7,15 +7,16 @@ source("utilities.R")
 
 ls.type <- args[1]
 mod.type <- args[2]
-task_id <- as.integer(args[3])
-task_count <- as.integer(args[4])
+sam.frac <- as.numeric(args[3])
+task_id <- as.integer(args[4])
+task_count <- as.integer(args[5])
 
 # ls.type <- "imbalance_medium"
 # mod.type <- "match"
+# sam.frac <- 0.01
 # task_id <- 1
 # task_count <- 100
 
-sam.frac <- 0.01
 overwrite <- TRUE
 
 path.base <- "../"
