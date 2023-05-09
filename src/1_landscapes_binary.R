@@ -12,10 +12,10 @@ task.id <- as.integer(args[3])
 task.count <- as.integer(args[4])
 parallel <- as.integer(args[5])
 
-# ls.original <- "imbalance_high"
-# ls.binary <- "binary_imbalance_high"
-# task.id <- 4
-# task.count <- 1000
+# ls.original <- "imbalance_low"
+# ls.binary <- "binary_imbalance_low"
+# task.id <- 1
+# task.count <- 1
 
 paste0("Settings:\n",
        "  Original landscape ", ls.original, "\n",
@@ -73,6 +73,9 @@ chunk <- row.chunks$from[task.id]:row.chunks$to[task.id]
 
 chunk <- setdiff(chunk, simulated)
 
+# low <- read.table("sum_bin_low.txt")[,1]
+# chunk <- which(low > 1e-4)
+
 for(i in chunk) {
 
   message(paste0("Generating binary landscape ", i, " / ", nrow(par.b), " …"))
@@ -86,7 +89,6 @@ for(i in chunk) {
     lapply(unlist, recursive = FALSE)
   ls.par$ls <- ls.o$landscape
   ls.par$verbose <- 2
-  ls.par$parallel <- parallel
   ls.par$e.var <- par.o[id == i, sum(e.exp.var, e.nug.var)]
   file.ls.b <- ls.par$file.path
   ls.b <- NULL

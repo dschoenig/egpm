@@ -3386,21 +3386,21 @@ generate_landscape_4cov_nl_binary <- function(ls,
     f_opt_sp(x, deriv = 1)
   }
 
-  if(verbose > 1) opt.trace <- TRUE else opt.trace <- TRUE
+  if(verbose > 1) opt.trace <- TRUE else opt.trace <- FALSE
 
   opt.b <-
-    optim(par = 1,
-          fn = f_opt_sp,
-          gr = df_opt_sp,
-          method = "L-BFGS-B",
-          lower = opt.lim[1],
-          upper = opt.lim[2],
-          control = list(factr = 1,
-                         trace = opt.trace))
+    nloptr(x0 = 1,
+           eval_f = \(x) f_opt_sp(x, deriv = 0), 
+           lb = opt.lim[1],
+           ub = opt.lim[2],
+           opts = list(algorithm = "NLOPT_GN_CRS2_LM",
+                       maxeval = .Machine$integer.max,
+                       stopval = 0,
+                       xtol_rel = opt.prec))
 
   if(verbose > 0) message("Building landscape …") 
 
-  b <- opt.b$par
+  b <- opt.b$solution
 
   pars <- c(a = a, b = b)
 
