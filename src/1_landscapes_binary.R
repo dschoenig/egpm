@@ -52,6 +52,7 @@ par.b <-
              p.ref = 0.2,
              p.trt = 0.3,
              e.df = runif(n, 1, 3),
+             opt.prec = sqrt(.Machine$double.eps),
              opt.grid = 1024
              )
 

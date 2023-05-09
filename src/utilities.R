@@ -3350,6 +3350,7 @@ generate_landscape_4cov_nl_binary <- function(ls,
                                               e.var,
                                               e.df,
                                               opt.grid,
+                                              opt.prec,
                                               verbose = 2,
                                               ...) {
 
