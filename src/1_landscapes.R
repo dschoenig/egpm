@@ -38,7 +38,6 @@ if(!dir.exists(path.ls.data)) dir.create(path.ls.data, recursive = TRUE)
 file.par <- paste0(path.ls, "parameters.rds")
 file.log <- paste0(path.ls, "simulate.log")
 
-
 # PARAMETERS ########################################################
 
 set.seed(19010511) # Rose Ausländer
