@@ -3375,7 +3375,7 @@ generate_landscape_4cov_nl_binary <- function(ls,
 
   resp.r <- range(ls$response)
   resp.m <- median(ls$response)
-  opt.lim <- (max(abs(resp.r - resp.m)) * c(-1, 1)) + resp.m
+  opt.lim <- (max(abs(resp.r)) * c(-1, 1))
 
   b.seq <- seq(opt.lim[1], opt.lim[2], length.out = opt.grid)
   f.seq <- sapply(b.seq, f_opt_b, a = a, n = cov.n, p.ref = p.ref, p.trt = p.trt)
