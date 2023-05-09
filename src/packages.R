@@ -17,6 +17,7 @@ c(
   "patchwork",
   "kohonen",
   "GA",
+  "nloptr",
   "memoise",
   "Matrix",
   "MatchIt",
