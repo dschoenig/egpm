@@ -3386,8 +3386,6 @@ generate_landscape_4cov_nl_binary <- function(ls,
     f_opt_sp(x, deriv = 1)
   }
 
-  if(verbose > 1) opt.trace <- TRUE else opt.trace <- FALSE
-
   opt.b <-
     nloptr(x0 = 1,
            eval_f = \(x) f_opt_sp(x, deriv = 0), 
@@ -3397,6 +3395,8 @@ generate_landscape_4cov_nl_binary <- function(ls,
                        maxeval = .Machine$integer.max,
                        stopval = 0,
                        xtol_rel = opt.prec))
+
+  if(verbose > 1) print(opt.b)
 
   if(verbose > 0) message("Building landscape …") 
 
