@@ -24,10 +24,10 @@ if(is.na(parallel)) parallel <- FALSE
 # parallel <- 4
 
 paste0("Settings:\n",
-       "N ", n, "\n",
-       "Dimension ", ls.dim, "\n",
-       "Imbalance ", ls.imbalance, "\n",
-       "Parallel ", parallel) |>
+       "  N ", n, "\n",
+       "  Dimension ", ls.dim, "\n",
+       "  Imbalance ", ls.imbalance, "\n",
+       "  Parallel ", parallel) |>
 message()
 
 path.base <- "../"
@@ -181,9 +181,7 @@ for(i in chunk) {
     lapply(unlist, recursive = FALSE)
   ls.par$areas.opt.imb.agg <- ls.par$areas.opt.imb.agg[[1]]
   ls.par$verbose <- 2
-  file.ls <- paste0(path.ls.data,
-                    stri_pad_left(ls.par$id, ceiling(log10(n))+1, 0),
-                    ".rds")
+  file.ls <- ls.par$file.path
 
   ls <- NULL
   while(is.null(ls)) {

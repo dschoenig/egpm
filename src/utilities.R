@@ -3060,7 +3060,7 @@ generate_landscape_4cov_nl <-
            areas.opt.imp.area,
            areas.opt.imb.agg,
            areas.opt.pop.n,
-           areas.opt.pop.rand = FALSE,
+           areas.opt.pop.rand,
            areas.opt.prec,
            areas.opt.pcrossover,
            areas.opt.pmutation,
@@ -3342,8 +3342,120 @@ generate_landscape_4cov_nl <-
   }
 
 
+
+generate_landscape_4cov_nl_binary <- function(ls,
+                                              p.ref,
+                                              p.trt,
+                                              e.var,
+                                              e.df,
+                                              opt.grid,
+                                              verbose = 2,
+                                              ...) {
+
+  if(verbose > 0) message("Scaling treatment effect …") 
+
+  cov.effects <- names(ls)[names(ls) %like% "f."]
+  cov.n <- length(cov.effects)
+
+  cov.mat.trt <-
+    ls[type == "treatment",
+       c("treatment", cov.effects),
+       with = FALSE] |>
+    as.matrix()
+
+  f_opt_b <- function(b, a, n, p.ref, p.trt) {
+    trt.scale <- c(b, rep(1, n))
+    trt.raw <- as.vector(cov.mat.trt %*% trt.scale)
+    p.trt.s <- sum(trt.raw >= a) / length(trt.raw)
+    f <- (p.trt.s - p.trt)^2
+    return(f)
+  }
+
+  a <- quantile(cov.mat.trt %*% c(0, rep(1, cov.n)), 1-p.ref, names = FALSE)
+
+  resp.r <- range(ls$response)
+  resp.m <- median(ls$response)
+  opt.lim <- (max(abs(resp.r - resp.m)) * c(-1, 1)) + resp.m
+
+  b.seq <- seq(opt.lim[1], opt.lim[2], length.out = opt.grid)
+  f.seq <- sapply(b.seq, f_opt_b, a = a, n = cov.n, p.ref = p.ref, p.trt = p.trt)
+
+  f_opt_sp <- splinefun(b.seq, f.seq)
+
+  df_opt_sp <- function(x, ...) {
+    f_opt_sp(x, deriv = 1)
+  }
+
+  if(verbose > 1) opt.trace <- TRUE else opt.trace <- TRUE
+
+  opt.b <-
+    optim(par = 1,
+          fn = f_opt_sp,
+          gr = df_opt_sp,
+          method = "L-BFGS-B",
+          lower = opt.lim[1],
+          upper = opt.lim[2],
+          control = list(factr = 1,
+                         trace = opt.trace))
+
+  if(verbose > 0) message("Building landscape …") 
+
+  b <- opt.b$par
+
+  pars <- c(a = a, b = b)
+
+  ls.bin <- copy(ls)
+  ls.bin[, `:=`(intercept = -pars[1],
+                treatment = pars[2] * treatment,
+                residual = qt(pnorm(residual,
+                                    mean = 0,
+                                    sd = sqrt(e.var)),
+                              df = e.df))]
+
+  lat.form <-
+    parse(text = paste(c("intercept", "treatment", cov.effects, "residual"),
+                       collapse = " + "))
+
+  ls.bin[, latent := eval(lat.form)]
+  ls.bin[, response := fifelse(latent > 0, 1, 0)]
+
+  trt.scale <- c(b, rep(1, cov.n))
+  trt.raw <- as.vector(cov.mat.trt %*% trt.scale)
+  mar.trt <- sum(trt.raw >= a) / length(trt.raw)
+
+  ref.form <-
+    parse(text = paste(c("intercept", cov.effects),
+                       collapse = " + "))
+  trt.form <-
+    parse(text = paste(c("intercept", "treatment", cov.effects),
+                       collapse = " + "))
+
+  mar.trt <-
+    ls.bin[type == "treatment",
+           .(p.ref = sum(eval(ref.form) > 0) / .N,
+             p.trt = sum(eval(trt.form) > 0) / .N)]
+
+  n.poly.trt <- ls.bin[type == "treatment", length(unique(poly))]
+
+  if(n.poly.trt > 1) {
+  mar.trt <-
+    rbind(mar.trt,
+          ls.bin[type == "treatment",
+                 .(p.ref = sum(eval(ref.form) > 0) / .N,
+                   p.trt = sum(eval(trt.form) > 0) / .N),
+                 by = poly][order(poly)],
+          fill = TRUE)
+  setcolorder(mar.trt, c("poly", "p.ref", "p.trt"))
+  }
+
+  return(list(landscape = ls.bin,
+              scaling = pars,
+              marginal = mar.trt))
+
+}
+
+
 plot_landscape_4cov_nl <- function(x,
-                                   type = "landscape",
                                    select = "overview",
                                    interactions = TRUE,
                                    ls_theme = NULL,
@@ -3361,7 +3473,8 @@ plot_landscape_4cov_nl <- function(x,
                                    title.eff.main = "Covariate effects (main)",
                                    legend.eff.main = "Covariate\neffect",
                                    title.eff.int = "Covariate effects (interactions)",
-                                   legend.eff.int = "Covariate\neffect"
+                                   legend.eff.int = "Covariate\neffect",
+                                   limits.common = TRUE
                                    ) {
   # select options for landscape: overview, effects, all
 
@@ -3512,16 +3625,20 @@ plot_landscape_4cov_nl <- function(x,
 
   eff.dt[, label := eff.lab[effect]]
 
-  lim.effects <-
-    unlist(x[,
-             .(min(as.matrix(.SD)),
-               max(as.matrix(.SD))),
-             .SDcols = c("treatment",
-                         "residual",
-                         eff.var)],
-           use.names = FALSE)
-  lim.effects <- 
-    (floor(lim.effects / 0.25) + c(0, 1)) * 0.25
+  if(limits.common) {
+    lim.effects <-
+      unlist(x[,
+               .(min(as.matrix(.SD)),
+                 max(as.matrix(.SD))),
+               .SDcols = c("treatment",
+                           "residual",
+                           eff.var)],
+             use.names = FALSE)
+    lim.effects <- 
+      (floor(lim.effects / 0.25) + c(0, 1)) * 0.25
+  } else {
+    lim.effects <- c(NA, NA)
+  }
 
     # for(i in seq_along(eff.main)) {
     #   p.title <- switch(i, `1` = "Covariate effects (main)", " ")
@@ -3705,6 +3822,318 @@ plot_landscape_4cov_nl <- function(x,
 
   return(p.select)
 }
+
+
+
+plot_landscape_4cov_nl_binary <- function(x,
+                                          select = "overview",
+                                          interactions = TRUE,
+                                          ls_theme = NULL,
+                                          ls_guide = NULL,
+                                          title.type = "Area type",
+                                          legend.type = "Area type",
+                                          title.cov = "Covariates",
+                                          legend.cov = "Covariate\nvalue",
+                                          title.resp = "Response",
+                                          legend.resp = "Response",
+                                          title.trt = "Treatment effect",
+                                          legend.trt = "Treatment\neffect",
+                                          title.resid = "Residual variation",
+                                          legend.resid = "Residual\nvariation",
+                                          title.eff.main = "Covariate effects (main)",
+                                          legend.eff.main = "Covariate\neffect",
+                                          title.eff.int = "Covariate effects (interactions)",
+                                          legend.eff.int = "Covariate\neffect",
+                                          limits.common = TRUE
+                                          ) {
+  # select options for landscape: overview, effects, all
+
+  if(is.null(ls_theme)) {
+    ls_theme <-
+      theme_minimal(base_family = "IBMPlexSansCondensed", base_size = 11) +
+      theme(plot.title = element_text(hjust = 0,
+                                      face = "bold",
+                                      margin = margin(l = 0, b = 5, t = 11)),
+            plot.margin = margin(3, 3, 3, 3),
+            strip.text = element_text(size = rel(0.8),
+                                      hjust = 0.5),
+            strip.background = element_rect(fill = "grey90", color = NA),
+            axis.title = element_blank(),
+            axis.text = element_blank(),
+            axis.ticks = element_blank(),
+            legend.position = "right",
+            legend.justification = "top")
+  }
+
+  if(is.null(ls_guide)) {
+    guide_fill <-
+      guides(fill = guide_colorbar(
+                                   ticks.colour = "grey5",
+                                   ticks.linewidth = 0.2,
+                                   frame.colour = "grey5",
+                                   frame.linewidth = 0.2,
+                                   barwidth = 1,
+                                   barheight = 5,
+                                   label.position = "right",
+                                   label.hjust = 1,
+                                   draw.ulim = TRUE,
+                                   draw.llim = TRUE
+                                   ))
+  } else {
+    guide_fill <- ls_guide
+  }
+
+  if(select == "interactions") interactions <- TRUE
+  
+  plots <- list()
+
+  # Response
+ 
+  resp.col <- divergingx_hcl(11, "Roma", rev = TRUE)[c(6, 11)]
+  names(resp.col) <- c("0", "1")
+
+  plots[["resp"]] <-
+    ggplot(x, aes(x = x, y = y,
+                  fill = factor(as.character(response), levels = c("0", "1")))) +
+    geom_raster() +
+    scale_fill_manual(values = resp.col) +
+    scale_x_continuous(expand = c(0, 0)) +
+    scale_y_continuous(expand = c(0, 0)) +
+    coord_fixed() +
+    labs(title = title.resp, fill = legend.resp) +
+    ls_theme
+
+  # Variables: area type
+
+  plots[["type"]] <- 
+    ggplot(x, aes(x = x, y = y)) +
+    geom_raster(aes(fill = type)) +
+    scale_fill_manual(breaks = levels(x$type),
+                      values = c("grey20", "grey80"),
+                      labels = capwords(levels(x$type))) +
+    coord_fixed(expand = FALSE) +
+    labs(title = title.type, fill = legend.type) +
+    ls_theme
+
+  # Variables: covariates
+
+  cov.var <- paste0("z", 1:4)
+  cov.lab <- toupper(cov.var)
+  names(cov.lab) <- cov.var
+
+  cov.dt <-
+    x[,
+      c("x", "y", cov.var),
+      with = FALSE] |>
+    melt(id.vars = c("x", "y"),
+         measure.vars = cov.var,
+         variable.name = "covariate",
+         value.name = "value")
+
+  cov.dt[, label := cov.lab[covariate]]
+
+  plots[["cov"]] <-
+    ggplot(cov.dt) +
+    geom_raster(aes(x = x, y = y, fill = value)) +
+    scale_fill_continuous_sequential(palette = "Viridis", rev = FALSE, limits = c(0, 1)) +
+    scale_x_continuous(expand = c(0, 0)) +
+    scale_y_continuous(expand = c(0, 0)) +
+    coord_fixed() +
+    guide_fill +
+    facet_wrap(vars(label), ncol = 2, nrow = 2) +
+    labs(title = title.cov, fill = legend.cov) +
+    ls_theme
+
+  # Effects: covariates
+
+  eff.main <-  paste0("f.", cov.var)
+  eff.int <- 
+    paste0("f.int", c("12", "13", "14", "23", "24", "34"))
+  eff.var <- c(eff.main, eff.int)
+
+  eff.main.lab <- toupper(cov.var)
+  names(eff.main.lab) <- eff.main
+  eff.int.lab <-
+    c("z1:z2", "z1:z3", "z1:z4",
+      "z2:z3", "z2:z4", "z3:z4") |>
+    toupper()
+  names(eff.int.lab) <- eff.int
+  eff.lab <- c(eff.main.lab, eff.int.lab)
+
+  eff.dt <-
+    x[,
+      c("x", "y", eff.var),
+      with = FALSE] |>
+    melt(id.vars = c("x", "y"),
+         measure.vars = eff.var,
+         variable.name = "effect",
+         value.name = "value")
+
+  eff.dt[, label := eff.lab[effect]]
+
+  if(limits.common) {
+    lim.effects <-
+      unlist(x[,
+               .(min(as.matrix(.SD)),
+                 max(as.matrix(.SD))),
+               .SDcols = c("treatment",
+                           eff.var)],
+             use.names = FALSE)
+    lim.effects <- 
+      (floor(lim.effects / 0.25) + c(0, 1)) * 0.25
+  } else {
+    lim.effects <- c(NA, NA)
+  }
+
+    plots[["eff.main"]] <-
+      eff.dt[effect %in% eff.main] |>
+      ggplot(aes(x = x, y = y, fill = value)) +
+      geom_raster() +
+      scale_fill_continuous_divergingx(palette = "Roma", rev = TRUE, mid = 0,
+                                       limits = lim.effects) +
+      scale_x_continuous(expand = c(0, 0)) +
+      scale_y_continuous(expand = c(0, 0)) +
+      coord_fixed() +
+      guide_fill +
+      facet_wrap(vars(label)) +
+      labs(title = title.eff.main,
+           fill = legend.eff.main) +
+      ls_theme
+
+
+    plots[["eff.int"]] <-
+      eff.dt[effect %in% eff.int] |>
+      ggplot(aes(x = x, y = y, fill = value)) +
+      geom_raster() +
+      scale_fill_continuous_divergingx(palette = "Roma",
+                                       rev = TRUE, mid = 0,
+                                       limits = lim.effects) +
+      scale_x_continuous(expand = c(0, 0)) +
+      scale_y_continuous(expand = c(0, 0)) +
+      coord_fixed() +
+      guide_fill +
+      facet_wrap(vars(label)) +
+      labs(title = title.eff.int,
+           fill = legend.eff.int) +
+      ls_theme
+
+    # Effects: treatment
+
+    plots[["trt"]] <-
+      ggplot(x, aes(x = x, y = y, fill = treatment)) +
+      geom_raster() +
+      scale_fill_continuous_divergingx(palette = "Roma", rev = TRUE, mid = 0,
+                                       limits = lim.effects) +
+      scale_x_continuous(expand = c(0, 0)) +
+      scale_y_continuous(expand = c(0, 0)) +
+      coord_fixed() +
+      guide_fill +
+      labs(title = title.trt, fill = legend.trt) +
+      ls_theme
+
+    # Effects: residual
+
+    res.lim <- quantile(x$residual, c(0.01, 0.99))
+
+    plots[["resid"]] <-
+      ggplot(x, aes(x = x, y = y, fill = residual)) +
+      geom_raster() +
+      scale_fill_continuous_divergingx(palette = "Roma", rev = TRUE, mid = 0,
+                                       limits = res.lim,
+                                       oob = scales::squish
+                                       ) +
+      scale_x_continuous(expand = c(0, 0)) +
+      scale_y_continuous(expand = c(0, 0)) +
+      coord_fixed() +
+      guide_fill +
+      labs(title = title.resid, fill = legend.resid) +
+      ls_theme
+
+  if(select == "overview") {
+    layout.overview <-
+      "ACC
+       BCC"
+    p.select <-
+      (plots$type +
+      plots$resp +
+      plots$cov +
+      plot_layout(design = layout.overview, widths = 1, heights = 1, guides = "collect")) &
+      ls_theme
+  }
+
+  if(select == "effects" & interactions) {
+    layout.eff <-
+      "ABB
+       DBB
+       CCC
+       CCC"
+    p.select <-
+      (plots$trt +
+      plots$eff.main +
+      plots$eff.int +
+      plots$resid +
+      plot_layout(design = layout.eff, widths = 1, guides = "collect")) &
+      ls_theme
+  }
+  
+
+  if(select == "effects" & !interactions) {
+    layout.eff.noint <-
+      "ABB
+       CBB"
+    p.select <-
+      (plots$trt +
+      plots$eff.main +
+      plots$resid +
+      plot_layout(design = layout.eff.noint, widths = 1, guides = "collect")) &
+      ls_theme
+  }
+
+  if(select == "all") {
+    layout.all <-
+      "ACC
+       BCC
+       DEE
+       GEE
+       FFF
+       FFF"
+    p.select <-
+      (plots$type +
+      plots$resp +
+      plots$cov +
+      plots$trt +
+      plots$eff.main +
+      plots$eff.int +
+      plots$resid +
+      plot_layout(design = layout.all, widths = 1, guides = "collect")) &
+      ls_theme
+  }
+
+  if(select == "all" & !interactions) {
+    layout.all.noint <-
+      "ACC
+       BCC
+       DEE
+       FEE"
+    p.select <-
+      (plots$type +
+      plots$resp +
+      plots$cov +
+      plots$trt +
+      plots$eff.main +
+      plots$resid +
+      plot_layout(design = layout.all.noint, widths = 1, guides = "collect")) &
+      ls_theme
+  }
+  
+  if(select == "list") {
+    p.select <- plots
+  }
+
+  return(p.select)
+}
+
+
 
 
 plot_functions_4cov_nl <- function(x = NULL,
