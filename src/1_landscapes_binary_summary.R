@@ -5,7 +5,7 @@ source("utilities.R")
 args <- commandArgs(trailingOnly = TRUE)
 ls.type <- args[1]
 
-ls.type <- "binary_imbalance_high"
+# ls.type <- "binary_imbalance_high"
 
 path.base <- "../"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
