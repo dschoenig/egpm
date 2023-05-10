@@ -4,8 +4,10 @@ source("utilities.R")
 
 args <- commandArgs(trailingOnly = TRUE)
 ls.type <- args[1]
+resp.type <- args[2]
 
-# ls.type <- "imbalance_high"
+# ls.type <- "binary_imbalance_high"
+# resp.type <- "normal"
 
 path.base <- "../"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
@@ -19,7 +21,10 @@ parameters <- readRDS(file.par)
 
 ids <- parameters$id
 
-results.l <- list()
+cov.l <- list()
+optim.l <- list()
+marginal.l <- list()
+scaling.l <- list()
 
 for(i in ids) {
 
@@ -30,13 +35,43 @@ for(i in ids) {
     message(paste0("Summarizing results for landscape ", i, " …"))
     
     ls <- readRDS(parameters[id == i, file.path])
-   
-    imb <- ls$optim[names(ls$optim) %like% "imbalance"]
 
-    results.l[[i]] <- 
+    cov.names <- stri_subset(names(ls$landscape), regex = "^z\\d+")
+
+    setindex(ls$landscape, type)
+    obs.trt <- ls$landscape[.("treatment"), ..cov.names, on = "type"]
+    obs.ref <- ls$landscape[.("reference"), ..cov.names, on = "type"]
+
+    cov.j <- list()
+    for(j in seq_along(cov.names)) {
+      obs.trt.cov <- obs.trt[[cov.names[j]]]
+      obs.ref.cov <- obs.ref[[cov.names[j]]]
+      cov.j[[j]] <-
+        data.table(variable = cov.names[j],
+                   d_cohen = d_cohen(obs.trt.cov, obs.ref.cov,
+                                     na.rm = TRUE),
+                   var_ratio = var_ratio(obs.trt.cov, obs.ref.cov,
+                                         na.rm = TRUE),
+                   ks_stat = ks_stat(obs.trt.cov, obs.ref.cov,
+                                     na.rm = TRUE),
+                   js_div = js_div(obs.trt.cov, obs.ref.cov,
+                                   type = "discrete", na.rm = TRUE))
+    }
+    cov.l[[i]] <- rbindlist(cov.j)
+
+    imb <- ls$optim[names(ls$optim) %like% "imbalance"]
+    optim.l[[i]] <- 
       data.table(imbalance = list(imb),
                  imbalance.mean = mean(imb),
                  area.prop = ls$optim["area.prop"])
+
+    if(resp.type == "binary") {
+      marginal.l[[i]] <- ls$marginal
+      marginal.l[[i]][,
+                      `:=`(p.diff = p.trt - p.ref,
+                           p.ratio = p.trt/p.ref)]
+      scaling.l[[i]] <- as.data.table(as.list(ls$scaling))
+    }
 
     tb <- Sys.time()
     te <- tb-ta
@@ -45,7 +80,28 @@ for(i in ids) {
   }
 }
 
-results <- rbindlist(results.l, idcol = "id")
+optim <- rbindlist(optim.l, idcol = "id")
+cov <- rbindlist(cov.l, idcol = "id")
+
+if(resp.type == "normal") {
+  results <- list(objectives = optim,
+                  balance = cov)
+}
+
+if(resp.type == "binary") {
+  marginal <- rbindlist(marginal.l, idcol = "id", fill = TRUE)
+  scaling <- rbindlist(scaling.l, idcol = "id")
+  marginal[, type := fifelse(is.na(poly), "treatment", "subarea")]
+  marginal[, type := factor(type, levels = c("treatment", "subarea"))]
+  setcolorder(marginal, c("id", "type"))
+  results <-
+    list(objectives = optim,
+         marginal = marginal,
+         scaling = scaling,
+         balance = cov)
+}
+
+print(results)
 
 saveRDS(results, file.results)
 

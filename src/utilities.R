@@ -292,7 +292,11 @@ resize_polygons <- function(x,
 }
 
 
-d_cohen <- function(x, y) {
+d_cohen <- function(x, y, na.rm = FALSE) {
+  if(na.rm) {
+    x <- na.omit(x)
+    y <- na.omit(y)
+  }
   mu_x <- mean(x)
   mu_y <- mean(y)
   s <- sqrt((sum((x-mu_x)^2) + sum((y-mu_y)^2)) / (length(x) + length(y) - 2))
@@ -300,11 +304,19 @@ d_cohen <- function(x, y) {
   return(d)
 }
 
-var_ratio <- function(x, y) {
+var_ratio <- function(x, y, na.rm = FALSE) {
+  if(na.rm) {
+    x <- na.omit(x)
+    y <- na.omit(y)
+  }
   var(x) / var(y)
 }
 
-ks_stat <- function(x, y) {
+ks_stat <- function(x, y, na.rm = FALSE) {
+  if(na.rm) {
+    x <- na.omit(x)
+    y <- na.omit(y)
+  }
   x <- x[!is.na(x)]
   y <- y[!is.na(y)]
   n <- length(x)
@@ -489,7 +501,12 @@ js_div <- function(x,
                    disc.breaks = "FD",
                    dens.range = NULL,
                    dens.n = 512,
-                   dens.bw = "SJ") {
+                   dens.bw = "SJ",
+                   na.rm = FALSE) {
+  if(na.rm) {
+    x <- na.omit(x)
+    y <- na.omit(y)
+  }
   if(type == "density") {
     if(is.null(dens.range)) {
       p.range <- range(c(range(x), range(y)))
