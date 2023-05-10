@@ -11,6 +11,8 @@ resp.type <- args[3]
 sam.frac <- as.numeric(args[4])
 task_id <- as.integer(args[5])
 task_count <- as.integer(args[6])
+overwrite <- as.logical(args[7])
+if(is.na(overwrite)) overwrite <- TRUE
 
 # ls.type <- "imbalance_medium"
 # mod.type <- "match"
@@ -18,8 +20,7 @@ task_count <- as.integer(args[6])
 # sam.frac <- 0.01
 # task_id <- 1
 # task_count <- 100
-
-overwrite <- TRUE
+# overwrite <- TRUE
 
 path.base <- "../"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")

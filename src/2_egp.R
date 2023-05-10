@@ -16,6 +16,8 @@ egp.approx <- as.logical(args[9])
 n.threads <- as.integer(args[10])
 task_id <- as.integer(args[11])
 task_count <- as.integer(args[12])
+overwrite <- as.logical(args[13])
+if(is.na(overwrite)) overwrite <- TRUE
 
 # ls.type <- "imbalance_high"
 # mod.type <- "egp_som25"
@@ -29,11 +31,10 @@ task_count <- as.integer(args[12])
 # egp.k.som <- 250
 # egp.k.geo <- 250
 # egp.approx <- TRUE
+# overwrite <- TRUE
 
 egp.max.knots.som <- som.dim^2
 egp.max.knots.geo <- egp.k.geo*10
-
-overwrite <- TRUE
 
 path.base <- "../"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
