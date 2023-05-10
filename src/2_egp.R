@@ -6,18 +6,20 @@ source("utilities.R")
 
 ls.type <- args[1]
 mod.type <- args[2]
-sam.frac <- as.numeric(args[3])
-som.dim <- as.numeric(args[4])
-som.epochs <- as.integer(args[5])
-egp.k.som <- as.integer(args[6])
-egp.k.geo <- as.integer(args[7])
-egp.approx <- as.logical(args[8])
-n.threads <- as.integer(args[9])
-task_id <- as.integer(args[10])
-task_count <- as.integer(args[11])
+resp.type <- args[3]
+sam.frac <- as.numeric(args[4])
+som.dim <- as.numeric(args[5])
+som.epochs <- as.integer(args[6])
+egp.k.som <- as.integer(args[7])
+egp.k.geo <- as.integer(args[8])
+egp.approx <- as.logical(args[9])
+n.threads <- as.integer(args[10])
+task_id <- as.integer(args[11])
+task_count <- as.integer(args[12])
 
 # ls.type <- "imbalance_high"
 # mod.type <- "egp_som25"
+# resp.type <- "normal"
 # n.threads <- 4
 # task_id <- 1
 # task_count <- 1000
@@ -133,6 +135,11 @@ for(i in chunk) {
 
 
     ls.fit[, type := factor(type, levels = levels(type), ordered = TRUE)]
+
+    mod.fam <-
+      switch(resp.type,
+             normal = gaussian(link = "identity"),
+             binary = binomial(link = "logit"))
 
     if(egp.approx) {
        mod.egp <- bam(response ~

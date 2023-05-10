@@ -41,7 +41,6 @@ for(i in ids) {
     mod.res <- try(readRDS(files.mod[i]))
   }
 
-
   marginals.j <- list()
   dev.expl.j <- list()
 
@@ -53,9 +52,15 @@ for(i in ids) {
              q2.5 = conf.low,
              q97.5 = conf.high))
 
-    # UPDATE WITH GLM VERSION
+    mod <- attr(mod.res$models[[j]]$marginal, "model")
+
     dev.expl.j[[j]] <-
-      data.table(dev.expl = unname(summary(mod.res$models[[j]]$model)$r.squared))
+      data.table(dev.expl = 
+                   ((mod$null.deviance - mod$deviance) /
+                    mod$null.deviance))
+
+    # # LM version
+    # data.table(dev.expl = unname(summary(mod.res$models[[j]]$model)$r.squared))
 
   }
 
@@ -63,9 +68,6 @@ for(i in ids) {
   params.i[[i]][, mod.id := 1:.N]
   marginals.i[[i]] <- rbindlist(marginals.j, idcol = "mod.id")
   dev.expl.i[[i]] <- rbindlist(dev.expl.j, idcol = "mod.id")
-
-  # # REMOVE
-  # saveRDS(mod.res, files.mod[i])
 
   tb <- Sys.time()
   te <- tb-ta

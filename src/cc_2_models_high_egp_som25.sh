@@ -9,6 +9,6 @@
 
 module load StdEnv/2020 gcc/9.3.0 gdal/3.5.1 geos/3.10.2 python/3.10 udunits/2.2.28 r/4.2.2
 
-Rscript 2_egp.R imbalance_high egp_som25 \
+Rscript 2_egp.R imbalance_high egp_som25 normal \
 	0.01 25 1000 250 250 TRUE \
 	$SLURM_CPUS_PER_TASK $SLURM_ARRAY_TASK_ID $SLURM_ARRAY_TASK_COUNT

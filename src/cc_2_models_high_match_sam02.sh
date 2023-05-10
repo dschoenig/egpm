@@ -9,4 +9,4 @@
 
 module load StdEnv/2020 gcc/9.3.0 gdal/3.5.1 geos/3.10.2 python/3.10 udunits/2.2.28 r/4.2.2
 
-Rscript 2_match.R imbalance_high match_sam02 0.02 $SLURM_ARRAY_TASK_ID $SLURM_ARRAY_TASK_COUNT
+Rscript 2_match.R imbalance_high match_sam02 normal 0.02 $SLURM_ARRAY_TASK_ID $SLURM_ARRAY_TASK_COUNT

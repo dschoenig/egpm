@@ -7,12 +7,14 @@ source("utilities.R")
 
 ls.type <- args[1]
 mod.type <- args[2]
-sam.frac <- as.numeric(args[3])
-task_id <- as.integer(args[4])
-task_count <- as.integer(args[5])
+resp.type <- args[3]
+sam.frac <- as.numeric(args[4])
+task_id <- as.integer(args[5])
+task_count <- as.integer(args[6])
 
 # ls.type <- "imbalance_medium"
 # mod.type <- "match"
+# resp.type <- "normal"
 # sam.frac <- 0.01
 # task_id <- 1
 # task_count <- 100
@@ -79,7 +81,7 @@ for(i in chunk) {
   mod.para <-
     rbind(CJ(landscape = ls.par$id,
              sam.frac,
-             type = "lm",
+             type = "glm",
              mod.cov = factor(c("exclude", "include", "interact")),
              trt.int = c(FALSE, TRUE),
              sorted = FALSE),
@@ -129,25 +131,37 @@ for(i in chunk) {
                             z1 + z2 + z3 + z4 +
                             z1:z2 + z1:z3 + z1:z4 + z2:z3 + z2:z4 + z3:z4))
     }
-      match.form <-
-        switch(as.character(mod.para$mod.cov[j]),
-               exclude = type ~ z1 + z2 + z3 + z4,
-               include = type ~ z1 + z2 + z3 + z4,
-               interact = type ~
-                            z1 + z2 + z3 + z4 +
-                            z1:z2 + z1:z3 + z1:z4 + z2:z3 + z2:z4 + z3:z4)
 
-    if(mod.para$type[j] == "lm") {
-      mod.lm <- lm(mod.form, data = ls.fit)
+    match.form <-
+      switch(as.character(mod.para$mod.cov[j]),
+             exclude = type ~ z1 + z2 + z3 + z4,
+             include = type ~ z1 + z2 + z3 + z4,
+             interact = type ~
+                          z1 + z2 + z3 + z4 +
+                          z1:z2 + z1:z3 + z1:z4 + z2:z3 + z2:z4 + z3:z4)
+
+    if(mod.para$type[j] == "glm") {
+
+      mod.fam <-
+        switch(resp.type,
+               normal = gaussian(link = "identity"),
+               binary = binomial(link = "logit"))
+
+      mod.lm <- glm(mod.form,
+                    family = mod.fam,
+                    data = ls.fit)
+
       marginal <-
         avg_comparisons(mod.lm,
                         variables = "type",
                         vcov = "HC3",
                         newdata = ls.fit[type == "treatment"])
+
       results.mod[[j]] <-
-        list(model = mod.lm,
-             marginal = marginal)
+        list(marginal = marginal)
+
       rm(mod.lm, marginal)
+
     } else {
       if(mod.para$type[j] == "cem") {
         matched <-
@@ -167,10 +181,16 @@ for(i in chunk) {
 
       ls.match <- match.data(matched)
 
+      mod.fam <-
+        switch(resp.type,
+               normal = gaussian(link = "identity"),
+               binary = quasibinomial(link = "logit"))
+
       mod.match <-
-        lm(mod.form,
-           weights = weights,
-           data = ls.match)
+        glm(mod.form,
+            family = mod.fam,
+            weights = weights,
+            data = ls.match)
 
       marginal <-
         avg_comparisons(mod.match,
@@ -181,7 +201,6 @@ for(i in chunk) {
 
       results.mod[[j]] <-
         list(matched = matched,
-             model = mod.match,
              marginal = marginal)
 
       rm(matched,

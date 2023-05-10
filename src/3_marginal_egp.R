@@ -77,7 +77,7 @@ for(i in ids) {
     dev.expl.j[[j]] <-
       data.table(dev.expl = 
                    ((mod.egp$null.deviance - mod.egp$deviance) /
-                    mod.egp$null.deviance) * 100)
+                    mod.egp$null.deviance))
 
   }
 
