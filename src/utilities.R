@@ -4749,8 +4749,8 @@ capwords <- function(s, strict = FALSE) {
 som_init_pc <- function(grid, data) {
   # Calculate principal components
   init.pca <- prcomp(x = data, center = FALSE, scale = FALSE)
-  init.max <- apply(init.pca$x[, 1:2], 2, max)
   init.min <- apply(init.pca$x[, 1:2], 2, min)
+  init.max <- apply(init.pca$x[, 1:2], 2, max)
   grid.min <- apply(grid$pts, 2, min)
   grid.max <- apply(grid$pts, 2, max)
   grid.scale <- grid.max - grid.min
@@ -4763,11 +4763,73 @@ som_init_pc <- function(grid, data) {
   return(init.coord.cov)
 }
 
+quantization_error <- function(som, data = NULL, ...) {
+  if(is.null(data)) {
+    distances <- som$distances
+  } else {
+    embedded <- egp_embed(x = data,
+                          som = som,
+                          dist = TRUE,
+                          dist.name = "dist.mapped",
+                          ...) 
+    distances <- embedded[, "dist.mapped"]
+  }
+  if(som$dist.fcts == "sumofsquares") {
+    dist.sq <- distances
+  } else {
+    dist.sq <- distances^2
+  }
+  quant.e <- mean(dist.sq)
+  return(quant.e)
+}
+
+variance_explained <- function(som, data = NULL, ...) {
+  qe <- quantization_error(som = som, data = data, ...)
+  if(is.null(data)) {
+    data <- som$data[[1]]
+  }
+  var.data <- mean(colSums((t(data) - colMeans(data, na.rm = TRUE))^2, na.rm = TRUE))
+  var.ex <- 1 - (qe/var.data)
+  return(var.ex)
+}
+
+topological_error <- function(som, ...) {
+  data <- som$data[[1]]
+  units <- som$codes[[1]]
+  if(som$dist.fcts %in% c("sumofsquares", "euclidean")) {
+    bmus <- t(apply(data, 1, \(x) order(colSums((t(units) - x)^2))[1:2]))
+  }
+  if(som$dist.fcts == "manhattan") {
+    bmus <- t(apply(data, 1, \(x) order(colSums(abs(t(units) - x)))[1:2]))
+  }
+  if(som$dist.fcts == "tanimoto") {
+    bmus <- t(apply(data, 1, \(x) order(colSums(t(units) != x) / length(x))[1:2]))
+  }
+  if(som$grid$topo == "rectangular") {
+    # Necessary to recalculate neighbours to use queen instead of rook
+    # neighbours
+    grid.nb <-
+      poly2nb(som$grid.poly, queen = TRUE) |>
+      nb2listw(style = "B") |> 
+      listw2mat() |>
+      Matrix()
+  } else {
+    grid.nb <- som$grid.nb
+  }
+  nb <- apply(bmus, 1, \(x) sum(grid.nb[x,x]) > 1)
+  topo.e <- 1 - (sum(nb) / length(nb))
+  return(topo.e)
+}
+
+
+
 egp_som <- function(x,
-                    x.dim,
+                    x.dim = NULL,
                     y.dim = x.dim,
+                    n = NULL,
                     vars = NULL,
                     scale = TRUE,
+                    dim.equal = TRUE,
                     topo = "hexagonal",
                     nb.fun = "gaussian",
                     dist.fun = "sumofsquares",
@@ -4776,6 +4838,18 @@ egp_som <- function(x,
                     init = som_init_pc,
                     mode = "pbatch",
                     parallel = 1) {
+
+  if(is.null(x.dim) & is.null(n)) {
+    stop("Must provide either `x.dim` or `n`.")
+  }
+
+  if(is.null(x.dim)) {
+    if(dim.equal) {
+      x.dim <- round(sqrt(n))
+      y.dim <- x.dim
+    } else {
+    }
+  }
 
   if(inherits(x, "matrix")) {
     if(!is.null(vars)) {
@@ -4848,10 +4922,8 @@ egp_som <- function(x,
 
   if(dist.fun == "tanimoto") {
     dist.mat <-
-      dist(som.fit$codes[[1]], method = "binary") |>
-      as.matrix()
+      t(apply(codes, 1, \(x) colSums(t(codes) != x) / length(x)))
     dimnames(dist.mat) <- list(NULL, NULL)
-    dist.mat <- dist.mat^2
   }
 
   som.fit$unit.dist <-
@@ -4972,6 +5044,8 @@ egp_embed <- function(x,
   x <- na.omit(x)
   if(scale) {
     x.scaled <- t(apply(x, 1, \(x) (x - som$scale$mean) / som$scale$sd))
+  } else {
+    x.scaled <- x
   }
   mapped <- map(som, x.scaled)
   embedding <- mapped$unit.classif

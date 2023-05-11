@@ -8,8 +8,8 @@ args <- commandArgs(trailingOnly = TRUE)
 ls.type <- args[1]
 mod.type <- args[2]
 
-# ls.type <- "imbalance_high"
-# mod.type <- "egp_som25"
+ls.type <- "imbalance_high"
+mod.type <- "egp_som25"
 
 path.base <- "../"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
