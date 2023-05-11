@@ -4843,14 +4843,6 @@ egp_som <- function(x,
     stop("Must provide either `x.dim` or `n`.")
   }
 
-  if(is.null(x.dim)) {
-    if(dim.equal) {
-      x.dim <- round(sqrt(n))
-      y.dim <- x.dim
-    } else {
-    }
-  }
-
   if(inherits(x, "matrix")) {
     if(!is.null(vars)) {
       x <- x[,vars]
@@ -4871,6 +4863,18 @@ egp_som <- function(x,
 
   scale.att <- list(mean = apply(x, 2, mean, na.rm = TRUE),
                     sd = apply(x, 2, sd, na.rm = TRUE))
+
+  if(is.null(x.dim)) {
+    if(dim.equal) {
+      x.dim <- round(sqrt(n))
+      y.dim <- x.dim
+    } else {
+      pc <- prcomp(x = x.scaled, center = FALSE, scale = FALSE)
+      er <- pc$sdev[1]^2 / pc$sdev[2]^2
+      x.dim <- round(sqrt(er * n))
+      y.dim <- round(n/x.dim)
+    }
+  }
 
   som.grid <- somgrid(xdim = x.dim,
                       ydim = y.dim, 
