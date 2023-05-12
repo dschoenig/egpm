@@ -4822,6 +4822,66 @@ topological_error <- function(som, ...) {
 }
 
 
+unit_diff <- function(unit.var,
+                      group.var,
+                      data = NULL,
+                      type = c("ov_frac", "js_div")) {
+
+  if(!is.null(data)) {
+    if(length(unit.var) > 1 | length(group.var) > 1) {
+      stop("When providing `data`, the arguments `unit.var` and `group.var`\n",
+           "must be character vectors of length one, corresponding to column\n",
+           "names in the data provided.")
+    }
+    data.dt <- as.data.table(data)
+    data.dt <- data.dt[, c(unit.var, group.var), with = FALSE]
+  } else {
+    data.dt <-
+      data.table(unit.var = unit.var,
+                 group.var = group.var)
+    unit.var <- "unit.var"
+    group.var <- "group.var"
+  }
+
+  group.lev <-
+    data.dt[,
+            as.character(unique(group.col)),
+            env = list(group.col = group.var)]
+
+  cast.form <- as.formula(paste(unit.var, group.var, sep = "~"))
+
+  counts <-
+    data.dt[, .(.n = .N), by = c(unit.var, group.var)] |>
+    dcast(cast.form, value.var = ".n", fill = 0)
+
+  ov <- NULL
+  js <- NULL
+
+  if("ov_frac" %in% type) {
+    ov <-
+      counts[grp1 > 0 | grp2 > 0,
+             sum(fifelse(grp1 > 0 & grp2 > 0, 1, 0)) / .N,
+             env = list(grp1 = group.lev[1],
+                        grp2 = group.lev[2])] 
+  }
+  if("js_div" %in% type) {
+    js <-
+      counts[,
+             js_div(x = grp1/sum(grp1),
+                    y = grp2/sum(grp2),
+                    type = "raw"),
+             env = list(grp1 = group.lev[1],
+                        grp2 = group.lev[2])] 
+  }
+
+  result <- c(ov, js)
+  names(result) <- type
+  if(length(result) > 1) {
+    result <- as.list(result)
+  }
+  return(result)
+}
+
 
 egp_som <- function(x,
                     x.dim = NULL,
@@ -4843,15 +4903,15 @@ egp_som <- function(x,
     stop("Must provide either `x.dim` or `n`.")
   }
 
-  if(inherits(x, "matrix")) {
+  if(inherits(data, "matrix")) {
     if(!is.null(vars)) {
-      x <- x[,vars]
+      x <- data[,vars]
     }
   } else {
     if(is.null(vars)) {
-      x <- as.matrix(as.data.frame(x))
+      x <- as.matrix(as.data.frame(data))
     } else {
-      x <- as.matrix(as.data.frame(x)[,vars])
+      x <- as.matrix(as.data.frame(data)[,vars])
     }
   }
 
@@ -4869,7 +4929,7 @@ egp_som <- function(x,
       x.dim <- round(sqrt(n))
       y.dim <- x.dim
     } else {
-      pc <- prcomp(x = x.scaled, center = FALSE, scale = FALSE)
+      pc <- prcomp(x = x.scaled, center = FALSE, scale = FALSE, rank. = 2)
       er <- pc$sdev[1]^2 / pc$sdev[2]^2
       x.dim <- round(sqrt(er * n))
       y.dim <- round(n/x.dim)

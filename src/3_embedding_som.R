@@ -43,10 +43,22 @@ for(i in ids) {
 
     som <- mod.res$models[[j]]$som
 
+    unit.var <- som$unit.classif
+    group.var <- mod.res$models[[j]]$model$model$type
+    units.diff <- unit_diff(unit.var = som$unit.classif,
+                            group.var = mod.res$models[[j]]$model$model$type)
+
+
+    length(c(NULL, 1))
+
+    as.list(units.diff)
+
     eval.j[[j]] <-
       data.table(quant.error = quantization_error(som),
                  topo.error = topological_error(som),
-                 var.expl = variance_explained(som))
+                 var.expl = variance_explained(som),
+                 units.ov_frac = units.diff$ov_frac,
+                 units.js_div = units.diff$js_div)
 
   }
 
