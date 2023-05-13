@@ -4883,7 +4883,7 @@ unit_diff <- function(unit.var,
 }
 
 
-egp_som <- function(x,
+egp_som <- function(data,
                     x.dim = NULL,
                     y.dim = x.dim,
                     n = NULL,

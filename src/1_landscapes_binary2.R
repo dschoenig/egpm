@@ -43,14 +43,15 @@ par.o <- readRDS(file.par.o)
 n <- nrow(par.o)
 
 set.seed(18820125) # Virginia Woolfe
-int.code <- as.integer(rawToBits(charToRaw(paste0(ls.original, ls.binary))))
-ls.seeds <- round(runif(n, 0, sum(int.code)/length(int.code)) * 1e8)
+p.ref <- 0.4
+p.trt <- 0.6
+ls.seeds <- round(runif(n, min(c(0, p.trt-p.ref)), max(0, p.trt-p.ref)) * 1e8)
 par.b <-
   data.table(id = par.o$id,
              seed = ls.seeds,
              ls.original = ls.original,
-             p.ref = 0.3,
-             p.trt = 0.5,
+             p.ref = p.ref,
+             p.trt = p.trt,
              e.df = 1,
              opt.prec = sqrt(.Machine$double.eps),
              opt.grid = 1024
