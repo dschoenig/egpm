@@ -8,8 +8,8 @@ args <- commandArgs(trailingOnly = TRUE)
 ls.type <- args[1]
 mod.type <- args[2]
 
-# ls.type <- "imbalance_high"
-# mod.type <- "match"
+ls.type <- "imbalance_high"
+mod.type <- "match"
 
 path.base <- "../"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
@@ -49,6 +49,7 @@ for(i in ids) {
     marginals.j[[j]] <- 
       as.data.table(mod.res$models[[j]]$marginal) |>
       DT(, .(mean = estimate,
+             se = std.error,
              q2.5 = conf.low,
              q97.5 = conf.high))
 
