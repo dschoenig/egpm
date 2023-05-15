@@ -3538,6 +3538,71 @@ generate_landscape_4cov_nl_binary_alt <- function(ls,
 
 }
 
+generate_landscape_4cov_nl_binary_alt2 <- function(ls,
+                                                  p.mean,
+                                                  e.var,
+                                                  opt.grid,
+                                                  opt.prec,
+                                                  ...) {
+
+  cov.effects <- names(ls)[names(ls) %like% "f."]
+  cov.n <- length(cov.effects)
+
+
+  cov.mat <-
+    ls[,
+       c("treatment", cov.effects),
+       with = FALSE] |>
+    as.matrix()
+
+  a <- quantile(cov.mat %*% c(0, rep(1, cov.n)), 1-p.mean, names = FALSE)
+
+  pars <- c(a = a)
+
+  ls.bin <- copy(ls)
+  ls.bin[, `:=`(intercept = -pars[1],
+                residual = qlogis(pnorm(residual,
+                                        mean = 0,
+                                        sd = sqrt(e.var)),
+                                  scale = e.var))]
+
+  lat.form <-
+    parse(text = paste(c("intercept", "treatment", cov.effects, "residual"),
+                       collapse = " + "))
+
+  ls.bin[, latent := eval(lat.form)]
+  ls.bin[, response := fifelse(latent > 0, 1, 0)]
+
+  ref.form <-
+    parse(text = paste(c("intercept", cov.effects),
+                       collapse = " + "))
+  trt.form <-
+    parse(text = paste(c("intercept", "treatment", cov.effects),
+                       collapse = " + "))
+
+  mar.trt <-
+    ls.bin[type == "treatment",
+           .(p.ref = sum(eval(ref.form) > 0) / .N,
+             p.trt = sum(eval(trt.form) > 0) / .N)]
+
+  n.poly.trt <- ls.bin[type == "treatment", length(unique(poly))]
+
+  if(n.poly.trt > 1) {
+  mar.trt <-
+    rbind(mar.trt,
+          ls.bin[type == "treatment",
+                 .(p.ref = sum(eval(ref.form) > 0) / .N,
+                   p.trt = sum(eval(trt.form) > 0) / .N),
+                 by = poly][order(poly)],
+          fill = TRUE)
+  setcolorder(mar.trt, c("poly", "p.ref", "p.trt"))
+  }
+
+  return(list(landscape = ls.bin,
+              scaling = pars,
+              marginal = mar.trt))
+
+}
 
 plot_landscape_4cov_nl <- function(x,
                                    select = "overview",
