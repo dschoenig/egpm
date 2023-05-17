@@ -1551,7 +1551,7 @@ exclude_bridges <- function(x, a, b) {
   return(to_exclude)
 }
 
-gmean <- function(x, na.rm = FALSE, zero.allow = TRUE) {
+geomean <- function(x, na.rm = FALSE, zero.allow = TRUE) {
   if(any(x == 0)) {
     if(zero.allow) {
       return(0)
@@ -1559,8 +1559,8 @@ gmean <- function(x, na.rm = FALSE, zero.allow = TRUE) {
       stop("Values of `x` must be strictly positive when `zero.allow = FALSE`.")
     }
   }
-  gmean <- exp(mean(log(x), na.rm = na.rm))
-  return(gmean)
+  geomean <- exp(mean(log(x), na.rm = na.rm))
+  return(geomean)
 }
 
 
@@ -5995,6 +5995,9 @@ egp_posterior_predict <- function(model,
            agg.fun = mean,
            trans.fun = NULL,
            ids = NULL,
+           # TODO: weights; works best if, for each group, the weights
+           # sum to 1; then sum as agg.fun makes sense
+           # weights = NULL,
            pred.var = "predicted",
            draw.var = ".draw",
            id.var = "id",
@@ -6024,10 +6027,12 @@ egp_posterior_predict <- function(model,
   if(is.null(ids)) {
     ids <- list(predictions.dt[, unique(id.col), env = list(id.col = id.var)])
   }
+  # TODO: if weights = NULL
   draw.chunks <- chunk_seq(1, length(draw.ids), draw.chunk)
   if(is.null(agg.size))
     agg.size <- min(unlist(lapply(ids, length)))
   ids.dt <-
+    # TODO: create with weights
     list(1:length(ids), ids) |>
     as.data.table() |>
     setnames(c(group.name, id.var))
@@ -6045,6 +6050,7 @@ egp_posterior_predict <- function(model,
                        env = list(group.col = group.name)]
   if(all(ids.dt$N == 0)) return(NULL)
   ids.dt.l <-
+    # TODO: Make sure to carry weights here
     ids.dt[order(-N),
            .(id.col = unlist(id.col)),
            by = c(group.name, "agg.id"),
@@ -6072,18 +6078,44 @@ egp_posterior_predict <- function(model,
     single.l <- list()
     for(j in seq_along(single.ids)) {
       ids.sum <- ids.dt.l[.(single.ids[j]), on = group.name]
-      single.l[[j]] <-
-        predictions.draws[.(ids.sum),
-                          nomatch = NULL,
-                          on = id.var
-                          ][order(draw.col, group.col),
-                            .(agg.col = agg(pred.col)),
-                            by = c(draw.var, group.name),
-                            env = list(group.col = group.name,
-                                       draw.col = draw.var,
-                                       pred.col = pred.var,
-                                       agg.col = agg.name,
-                                       agg = agg.fun)]
+      # TODO: also extract weights.sum
+      if(identical(agg.fun, mean)) {
+        # Use internal optimizations of data.table
+        # TODO: Same optimization for sum
+        single.l[[j]] <-
+          # TODO: Here join also weights, prepare data.table with id.var and
+          # .w
+          predictions.draws[.(ids.sum),
+                            nomatch = NULL,
+                            on = id.var
+                            ][order(draw.col, group.col),
+                              # TODO: Multiply pred.col with .w
+                              # TODO: Split here, aggregation as extra
+                              #   step to optimize performance (test
+                              #   timing!)
+                              .(agg.col = mean(pred.col)),
+                              by = c(draw.var, group.name),
+                              env = list(group.col = group.name,
+                                         draw.col = draw.var,
+                                         pred.col = pred.var,
+                                         agg.col = agg.name)]
+      } else {
+        single.l[[j]] <-
+          # TODO: Here join also weights, prepare data.table with id.var and
+          # .w
+          predictions.draws[.(ids.sum),
+                            nomatch = NULL,
+                            on = id.var
+                            ][order(draw.col, group.col),
+                              # TODO: Multiply pred.col with .w;
+                              .(agg.col = mean(pred.col)),
+                              by = c(draw.var, group.name),
+                              env = list(group.col = group.name,
+                                         draw.col = draw.var,
+                                         pred.col = pred.var,
+                                         agg.col = agg.name,
+                                         agg = agg.fun)]
+      }
       if(progress) {
         prog.counter <- prog.counter + ids.dt[group.col == single.ids[j],
                                               N,
