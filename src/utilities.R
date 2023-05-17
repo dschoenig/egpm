@@ -5309,12 +5309,12 @@ get_nb <- function(x) {x$grid.nb}
   data.dt <- as.data.table(data)
   if(is.null(group.vars)) {
     groups <-
-        data.dt[,
+        data.dt[order(id.col),
                 .(id.col = list(id.col)),
                   env = list(id.col = id.var)]
   } else {
     groups <-
-        data.dt[,
+        data.dt[order(id.col),
                 .(id.col = list(id.col)),
                   by = group.vars,
                   env = list(id.col = id.var)]
@@ -6260,7 +6260,6 @@ egp_evaluate_factual <- function(predictions,
 
 egp_evaluate_counterfactual <- function(predictions,
                                         cf.def,
-                                        units = NULL,
                                         name = "counterfactual",
                                         group.eval = NULL,
                                         pred.var = NULL,
