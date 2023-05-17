@@ -109,7 +109,6 @@ for(i in chunk) {
        egp.max.knots.geo,
        egp.approx)
 
-
   results.mod <- list()
 
   for(j in 1:nrow(mod.para)) {
@@ -118,24 +117,33 @@ for(i in chunk) {
 
     ls.fit <- copy(ls.sam)
 
-    message("Fitting SOM …")
+    if(j > 1) {
+      som.same <-
+        mod.para[c(j-1, j),
+                 all(unlist(lapply(.SD, \(x) x[1] == x[2]))),
+                 .SDcols = c("som.topology", "som.dim", "som.epochs"),
+                 nomatch = NULL]
+    } else {
+      som.same <- FALSE
+    }
 
-    som.egp <-
-      egp_som(ls.fit,
-              topo = mod.para$som.topology[j],
-              x.dim = mod.para$som.dim[j],
-              y.dim = mod.para$som.dim[j],
-              epochs = mod.para$som.epochs[j],
-              vars = c("z1", "z2", "z3", "z4"),
-              parallel = n.threads)
+    if(som.same) {
+      message("Reusing previous SOM …")
+    } else {
+      message("Fitting SOM …")
+      som.egp <-
+        egp_som(ls.fit,
+                topo = mod.para$som.topology[j],
+                x.dim = mod.para$som.dim[j],
+                y.dim = mod.para$som.dim[j],
+                epochs = mod.para$som.epochs[j],
+                vars = c("z1", "z2", "z3", "z4"),
+                parallel = n.threads)
+    }
 
     ls.fit[,
            c("som.unit", "som.x", "som.y") :=
              get_bmu(som.egp, coord = TRUE, list = TRUE)]
-
-
-    message("Fitting GAM …")
-
 
     ls.fit[, type := factor(type, levels = levels(type), ordered = TRUE)]
 
@@ -144,33 +152,51 @@ for(i in chunk) {
              normal = gaussian(link = "identity"),
              binary = binomial(link = "logit"))
 
-    if(egp.approx) {
-       mod.egp <- bam(response ~
-                      s(x, y, bs = "gp", k = egp.k.geo,
-                        xt = list(max.knots = egp.max.knots.geo)) +
-                      s(x, y, by = type, bs = "gp", k = egp.k.geo,
-                        xt = list(max.knots = egp.max.knots.geo)) +
-                      s(som.x, som.y, bs = "gp", k = egp.k.som,
-                        xt = list(max.knots = egp.max.knots.som)),
-                      data = ls.fit,
-                      select = TRUE,
-                      discrete = TRUE,
-                      nthreads = n.threads
-                      )
-     } else {
-       mod.egp <- gam(response ~
-                      s(x, y, bs = "gp", k = egp.k.geo,
-                        xt = list(max.knots = egp.max.knots.geo)) +
-                      s(x, y, by = type, bs = "gp", k = egp.k.geo,
-                        xt = list(max.knots = egp.max.knots.geo)) +
-                      s(som.x, som.y, bs = "gp", k = egp.k.som,
-                        xt = list(max.knots = egp.max.knots.som)),
-                      data = ls.fit,
-                      select = TRUE,
-                      method= "REML",
-                      optimizer = "efs"
-                     )
-     }
+    if(j > 1) {
+      para.same <-
+        mod.para[c(j-1, j),
+                 all(unlist(lapply(.SD, \(x) x[1] == x[2]))),
+                 .SDcols = c("egp.k.geo", "egp.max.knots.geo",
+                             "egp.k.som", "egp.max.knots.som"),
+                 nomatch = NULL]
+    } else {
+      para.same <- FALSE
+    }
+
+    mod.same <- all(para.same, som.same)
+
+    if(mod.same) {
+      message("Reusing previous GAM …")
+    } else {
+      message("Fitting GAM …")
+      if(egp.approx) {
+         mod.egp <- bam(response ~
+                        s(x, y, bs = "gp", k = egp.k.geo,
+                          xt = list(max.knots = egp.max.knots.geo)) +
+                        s(x, y, by = type, bs = "gp", k = egp.k.geo,
+                          xt = list(max.knots = egp.max.knots.geo)) +
+                        s(som.x, som.y, bs = "gp", k = egp.k.som,
+                          xt = list(max.knots = egp.max.knots.som)),
+                        data = ls.fit,
+                        select = TRUE,
+                        discrete = TRUE,
+                        nthreads = n.threads
+                        )
+       } else {
+         mod.egp <- gam(response ~
+                        s(x, y, bs = "gp", k = egp.k.geo,
+                          xt = list(max.knots = egp.max.knots.geo)) +
+                        s(x, y, by = type, bs = "gp", k = egp.k.geo,
+                          xt = list(max.knots = egp.max.knots.geo)) +
+                        s(som.x, som.y, bs = "gp", k = egp.k.som,
+                          xt = list(max.knots = egp.max.knots.som)),
+                        data = ls.fit,
+                        select = TRUE,
+                        method= "REML",
+                        optimizer = "efs"
+                       )
+       }
+    }
 
     # summary(mod.egp)
     # AIC(mod.egp)
@@ -211,6 +237,8 @@ for(i in chunk) {
     egp.count <- egp_evaluate_counterfactual(egp.pred, egp.def)
     egp.mar <- egp_marginal(egp.fac, egp.count)
 
+    print(egp.mar[group.id == 1, mean(marginal)])
+
     results.mod[[j]] <-
       list(som = som.egp,
            model = mod.egp,
@@ -219,7 +247,6 @@ for(i in chunk) {
            marginal = egp.mar)
 
     rm(ls.fit,
-       som.egp, mod.egp,
        egp.post, egp.pred,
        egp.def,
        egp.fac, egp.count,
