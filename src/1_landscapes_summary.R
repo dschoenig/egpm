@@ -65,6 +65,18 @@ for(i in ids) {
                  imbalance.mean = mean(imb),
                  area.prop = ls$optim["area.prop"])
 
+
+    if(resp.type == "normal") {
+      marginal.l[[i]] <-
+        rbind(ls$landscape[type == "treatment",
+                           .(marginal = mean(treatment))],
+              ls$landscape[type == "treatment",
+                           .(marginal = mean(treatment)),
+                           by = poly],
+              fill = TRUE) |>
+        setcolorder("poly")
+    }
+
     if(resp.type == "binary") {
       marginal.l[[i]] <- ls$marginal
       marginal.l[[i]][,
@@ -82,18 +94,20 @@ for(i in ids) {
 
 optim <- rbindlist(optim.l, idcol = "id")
 cov <- rbindlist(cov.l, idcol = "id")
+marginal <- rbindlist(marginal.l, idcol = "id", fill = TRUE)
+marginal[, type := fifelse(is.na(poly), "treatment", "subarea")]
+marginal[, type := factor(type, levels = c("treatment", "subarea"))]
+setcolorder(marginal, c("id", "type"))
 
 if(resp.type == "normal") {
-  results <- list(objectives = optim,
-                  balance = cov)
+  results <-
+    list(objectives = optim,
+         marginal = marginal,
+         balance = cov)
 }
 
 if(resp.type == "binary") {
-  marginal <- rbindlist(marginal.l, idcol = "id", fill = TRUE)
   scaling <- rbindlist(scaling.l, idcol = "id")
-  marginal[, type := fifelse(is.na(poly), "treatment", "subarea")]
-  marginal[, type := factor(type, levels = c("treatment", "subarea"))]
-  setcolorder(marginal, c("id", "type"))
   results <-
     list(objectives = optim,
          marginal = marginal,
