@@ -20,7 +20,8 @@ library(nloptr)
 library(GA)
 library(memoise)
 library(Matrix)
-
+library(statmod)
+library(tweedie)
 
 cloglog <- function(mu) {
   log(-log(1 - mu))
@@ -3425,6 +3426,54 @@ generate_landscape_4cov_nl_binary <- function(ls,
               marginal = mar.trt))
 
 }
+
+
+generate_landscape_4cov_nl_tweedie <- function(ls,
+                                               tw.power,
+                                               e.var,
+                                               ...) {
+
+  cov.effects <- names(ls)[names(ls) %like% "f."]
+  # cov.n <- length(cov.effects)
+
+  ls.tw <- copy(ls)
+
+  lp.form <-
+    parse(text = paste(c("treatment", cov.effects),
+                       collapse = " + "))
+
+  ls.tw[, linpred := eval(lp.form)]
+  ls.tw[, response := rtweedie(length(response),
+                                      power = tw.power,
+                                      mu = exp(linpred),
+                                      phi = e.var)]
+  ls.tw[, residual := response - exp(linpred)]
+  ls.tw[, zero := fifelse(response > 0, FALSE, TRUE)]
+
+  mar.trt <- 
+    ls.tw[type == "treatment",
+          .(ref = mean(exp(linpred - treatment)),
+            trt = mean(exp(linpred)))]
+
+  n.poly.trt <- ls.tw[type == "treatment", length(unique(poly))]
+
+  if(n.poly.trt > 1) {
+  mar.trt <-
+    rbind(mar.trt,
+          ls.tw[type == "treatment",
+                .(ref = mean(exp(linpred - treatment)),
+                  trt = mean(exp(linpred))),
+                by = poly][order(poly)],
+          fill = TRUE)
+  setcolorder(mar.trt, c("poly", "ref", "trt"))
+  }
+
+  return(list(landscape = ls.tw,
+              marginal = mar.trt))
+
+}
+
+
 
 plot_landscape_4cov_nl <- function(x,
                                    select = "overview",
