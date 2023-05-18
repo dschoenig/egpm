@@ -91,7 +91,7 @@ for(i in chunk) {
   file.ls.b <- ls.par$file.path
   ls.b <- NULL
   while(is.null(ls.b)) {
-    try({ls.b <- do.call(generate_landscape_4cov_nl_binary_alt2, ls.par)})
+    try({ls.b <- do.call(generate_landscape_4cov_nl_binary, ls.par)})
     if(is.null(ls)) message("Simulation failed. Trying again …")
   }
 
