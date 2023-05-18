@@ -3360,190 +3360,12 @@ generate_landscape_4cov_nl <-
   }
 
 
-
 generate_landscape_4cov_nl_binary <- function(ls,
-                                              p.ref,
-                                              p.trt,
+                                              p.mean,
                                               e.var,
-                                              e.df,
                                               opt.grid,
                                               opt.prec,
-                                              verbose = 2,
                                               ...) {
-
-  if(verbose > 0) message("Scaling treatment effect …") 
-
-  cov.effects <- names(ls)[names(ls) %like% "f."]
-  cov.n <- length(cov.effects)
-
-  cov.mat.trt <-
-    ls[type == "treatment",
-       c("treatment", cov.effects),
-       with = FALSE] |>
-    as.matrix()
-
-  f_opt_b <- function(b, a, n, p.ref, p.trt) {
-    trt.scale <- c(b, rep(1, n))
-    trt.raw <- as.vector(cov.mat.trt %*% trt.scale)
-    p.trt.s <- sum(trt.raw >= a) / length(trt.raw)
-    f <- (p.trt.s - p.trt)^2
-    return(f)
-  }
-
-  a <- quantile(cov.mat.trt %*% c(0, rep(1, cov.n)), 1-p.ref, names = FALSE)
-
-  resp.r <- range(ls$response)
-  resp.m <- median(ls$response)
-  opt.lim <- (max(abs(resp.r)) * c(-1, 1))
-
-  b.seq <- seq(opt.lim[1], opt.lim[2], length.out = opt.grid)
-  f.seq <- sapply(b.seq, f_opt_b, a = a, n = cov.n, p.ref = p.ref, p.trt = p.trt)
-
-  f_opt_sp <- splinefun(b.seq, f.seq)
-
-  df_opt_sp <- function(x, ...) {
-    f_opt_sp(x, deriv = 1)
-  }
-
-  opt.b <-
-    nloptr(x0 = 1,
-           eval_f = \(x) f_opt_sp(x, deriv = 0), 
-           lb = opt.lim[1],
-           ub = opt.lim[2],
-           opts = list(algorithm = "NLOPT_GN_CRS2_LM",
-                       maxeval = .Machine$integer.max,
-                       stopval = 0,
-                       xtol_rel = opt.prec))
-
-  if(verbose > 1) print(opt.b)
-
-  if(verbose > 0) message("Building landscape …") 
-
-  b <- opt.b$solution
-
-  pars <- c(a = a, b = b)
-
-  ls.bin <- copy(ls)
-  ls.bin[, `:=`(intercept = -pars[1],
-                treatment = pars[2] * treatment,
-                residual = qt(pnorm(residual,
-                                    mean = 0,
-                                    sd = sqrt(e.var)),
-                              df = e.df))]
-
-  lat.form <-
-    parse(text = paste(c("intercept", "treatment", cov.effects, "residual"),
-                       collapse = " + "))
-
-  ls.bin[, latent := eval(lat.form)]
-  ls.bin[, response := fifelse(latent > 0, 1, 0)]
-
-  ref.form <-
-    parse(text = paste(c("intercept", cov.effects),
-                       collapse = " + "))
-  trt.form <-
-    parse(text = paste(c("intercept", "treatment", cov.effects),
-                       collapse = " + "))
-
-  mar.trt <-
-    ls.bin[type == "treatment",
-           .(p.ref = sum(eval(ref.form) > 0) / .N,
-             p.trt = sum(eval(trt.form) > 0) / .N)]
-
-  n.poly.trt <- ls.bin[type == "treatment", length(unique(poly))]
-
-  if(n.poly.trt > 1) {
-  mar.trt <-
-    rbind(mar.trt,
-          ls.bin[type == "treatment",
-                 .(p.ref = sum(eval(ref.form) > 0) / .N,
-                   p.trt = sum(eval(trt.form) > 0) / .N),
-                 by = poly][order(poly)],
-          fill = TRUE)
-  setcolorder(mar.trt, c("poly", "p.ref", "p.trt"))
-  }
-
-  return(list(landscape = ls.bin,
-              scaling = pars,
-              marginal = mar.trt))
-
-}
-
-
-
-generate_landscape_4cov_nl_binary_alt <- function(ls,
-                                                  p.mean,
-                                                  e.var,
-                                                  e.df,
-                                                  opt.grid,
-                                                  opt.prec,
-                                                  ...) {
-
-  cov.effects <- names(ls)[names(ls) %like% "f."]
-  cov.n <- length(cov.effects)
-
-
-  cov.mat <-
-    ls[,
-       c("treatment", cov.effects),
-       with = FALSE] |>
-    as.matrix()
-
-  a <- quantile(cov.mat %*% c(0, rep(1, cov.n)), 1-p.mean, names = FALSE)
-
-  pars <- c(a = a)
-
-  ls.bin <- copy(ls)
-  ls.bin[, `:=`(intercept = -pars[1],
-                residual = qt(pnorm(residual,
-                                    mean = 0,
-                                    sd = sqrt(e.var)),
-                              df = e.df))]
-
-  lat.form <-
-    parse(text = paste(c("intercept", "treatment", cov.effects, "residual"),
-                       collapse = " + "))
-
-  ls.bin[, latent := eval(lat.form)]
-  ls.bin[, response := fifelse(latent > 0, 1, 0)]
-
-  ref.form <-
-    parse(text = paste(c("intercept", cov.effects),
-                       collapse = " + "))
-  trt.form <-
-    parse(text = paste(c("intercept", "treatment", cov.effects),
-                       collapse = " + "))
-
-  mar.trt <-
-    ls.bin[type == "treatment",
-           .(p.ref = sum(eval(ref.form) > 0) / .N,
-             p.trt = sum(eval(trt.form) > 0) / .N)]
-
-  n.poly.trt <- ls.bin[type == "treatment", length(unique(poly))]
-
-  if(n.poly.trt > 1) {
-  mar.trt <-
-    rbind(mar.trt,
-          ls.bin[type == "treatment",
-                 .(p.ref = sum(eval(ref.form) > 0) / .N,
-                   p.trt = sum(eval(trt.form) > 0) / .N),
-                 by = poly][order(poly)],
-          fill = TRUE)
-  setcolorder(mar.trt, c("poly", "p.ref", "p.trt"))
-  }
-
-  return(list(landscape = ls.bin,
-              scaling = pars,
-              marginal = mar.trt))
-
-}
-
-generate_landscape_4cov_nl_binary_alt2 <- function(ls,
-                                                  p.mean,
-                                                  e.var,
-                                                  opt.grid,
-                                                  opt.prec,
-                                                  ...) {
 
   cov.effects <- names(ls)[names(ls) %like% "f."]
   cov.n <- length(cov.effects)
@@ -5476,6 +5298,9 @@ egp_define_counterfactual <-
            compare.by = NULL,
            group.by = NULL,
            som.var = "som.unit",
+           geo.vars = NULL,
+           geo.kernel = "matern32",
+           geo.range = NULL,
            id.var = "id",
            group.name = "group.id",
            unit.name = "cf.unit",
@@ -5483,7 +5308,9 @@ egp_define_counterfactual <-
            assign.cat = c("counterfactual", "factual"),
            n.min = 1,
            nb.strategy = "sequential",
-           deg.max = NULL) {
+           deg.max = NULL,
+           agg.size = NULL,
+           progress = TRUE) {
 
   data.dt <- as.data.table(data)
 
@@ -5499,7 +5326,7 @@ egp_define_counterfactual <-
     group.by <- list(group.by)
   }
 
-  vars.sel <- c(id.var, compare.by, group.by.c, som.var)
+  vars.sel <- c(id.var, compare.by, group.by.c, som.var, geo.vars)
 
   data.dt <- data.dt[, ..vars.sel]
 
@@ -5521,9 +5348,11 @@ egp_define_counterfactual <-
 
   # Reference SOM units
 
-  data.dt <- data.dt[.(id.col = unique(c(fac.ids, cf.ids))),
-                     on = id.var,
-                     env = list(id.col = id.var)]
+  data.dt <-
+    data.dt[.(id.col = unique(c(fac.ids, cf.ids))),
+            on = id.var,
+            nomatch = NULL,
+            env = list(id.col = id.var)]
   setkeyv(data.dt, id.var)
 
   bmu.ref <- data.dt[.(cf.ids), on = id.var]
@@ -5540,6 +5369,12 @@ egp_define_counterfactual <-
 
 
     if(nb.strategy == "sequential") {
+
+      dist = som$unit.dist
+      n = n.bmu
+      n.min = n.min
+      deg.max = deg.max
+
       nbh <-
         .nb_sequential(dist = som$unit.dist,
                        n = n.bmu,
@@ -5563,6 +5398,9 @@ egp_define_counterfactual <-
                 env = list(id.col = id.var,
                            cf.col = unit.name,
                            som.col = som.var)]
+    cf.bmu.dt[,
+              .n := as.integer(lapply(cf.col, length)),
+              env = list(cf.col = unit.name)]
 
     cf.ids.dt <-
       data.dt[.(cf.ids),
@@ -5675,6 +5513,11 @@ egp_define_counterfactual <-
 
   }
 
+  cf.ids.dt[,
+            .n := unlist(lapply(id.col, length)),
+            env = list(id.col = id.var)]
+
+
   data.cf <- data.dt[.(cf.ids), on = id.var ]
   data.cf[,
           assign.col := assign.cat[1],
@@ -5686,8 +5529,13 @@ egp_define_counterfactual <-
            env = list(assign.col = assign.name)]
   
   data.ret <- rbind(data.fac, data.cf)
+  setorderv(data.ret, id.var)
 
   # Groups
+
+  id.names <- paste(id.var, assign.cat, sep = ".")
+  geo.names.cf <- paste(geo.vars, assign.cat[1], sep = ".")
+  geo.names.fac <- paste(geo.vars, assign.cat[2], sep = ".")
 
   groups.l <- list()
   for(i in seq_along(group.by)){
@@ -5697,23 +5545,222 @@ egp_define_counterfactual <-
                     group.vars = group.by[[i]],
                     add.label = FALSE)
   }
-
   groups <- rbindlist(groups.l, fill = TRUE)
-
+  setnames(groups, id.var, id.names[2])
   groups[,
          group.col := 1:nrow(groups),
          env = list(group.col = group.name)]
-  setcolorder(groups, c(group.name, group.by.c, id.var)) 
+  setorderv(groups, group.name)
+
+  groups.long <-
+    groups[,
+           .(id.fac = as.integer(unlist(cell.factual))),
+           by = group.name,
+           env = list(id.fac = id.names[2])]
+  groups.long[, .n.fac := .N, by = group.name]
+  setkeyv(groups.long, id.names[2])
+
+  # groups.n <-
+  #   groups.long[, .(.n.fac = .N), by = group.name]
+  # setkey(groups.n, .n.fac)
+
+
+  units.fac <-
+    cf.bmu.dt[,
+               .(cf.col = as.integer(unlist(cf.col))),
+               by = id.var,
+               env = list(cf.col = unit.name)
+               ][,
+                 .(id.fac = id.col,
+                   cf.col),
+                 env = list(id.fac = id.names[2],
+                            id.col = id.var,
+                            cf.col = unit.name)] |>
+    merge(SJ(cf.ids.dt[,
+                       .(cf.col, .n),
+                       env = list(cf.col = unit.name)]),
+          by = unit.name,
+          sort = FALSE,
+          all.x = TRUE,
+          all.y = FALSE) |>
+    merge(data.fac[,
+                   .(id.fac = id.col,
+                     fac.x = geo.x,
+                     fac.y = geo.y),
+                   env = list(id.fac = id.names[2],
+                              id.col = id.var,
+                              fac.x = geo.names.fac[1],
+                              geo.x = geo.vars[1],
+                              fac.y = geo.names.fac[2],
+                              geo.y = geo.vars[2])],
+          by = id.names[2]) |>
+    na.omit(".n")
+
+
+  # REMOVE later
+  if(!all(data.fac$cell %in% units.fac$cell.factual)) warning("Not all treatment observations are considered.")
+
+  units.cf <-
+    cf.ids.dt[,
+               .(id.cf = as.integer(unlist(id.col))),
+               by = cf.col,
+               env = list(id.cf = id.names[1],
+                          id.col = id.var,
+                          cf.col = unit.name)
+               ] |>
+    merge(data.cf[,
+                  .(id.cf = id.col,
+                    cf.x = geo.x,
+                    cf.y = geo.y),
+                  env = list(id.cf = id.names[1],
+                             id.col = id.var,
+                             cf.x = geo.names.cf[1],
+                             geo.x = geo.vars[1],
+                             cf.y = geo.names.cf[2],
+                             geo.y = geo.vars[2])],
+          by = id.names[1])
+
+
+  if(is.null(agg.size)) agg.size <- sum(units.fac$.n)
+
+  units.fac[order(-.n), .nc := cumsum(.n)]
+  units.fac[, .agg.id := ceiling(.nc / agg.size)]
+  units.fac <- units.fac[, -c(".n", ".nc")]
+  agg.ids <- na.omit(unique(units.fac[order(.agg.id), .agg.id]))
+
+  if(!is.null(geo.vars)) {
+    range.sam <- 1e6
+    if(is.null(geo.range)) {
+      if(nrow(data.dt) > range.sam) {
+        pts <- st_multipoint(x = as.matrix(data.dt[sample(1:.N, range.sam, replace = TRUE),
+                                                   ..geo.vars]),
+                             dim = "XY")
+      } else {
+        pts <-
+          st_multipoint(x = as.matrix(data.dt[, ..geo.vars]),
+                             dim = "XY")
+      }
+      pts.bb <- st_bbox(st_minimum_bounding_circle(pts))
+      geo.range <- pts.bb[["xmax"]] - pts.bb[["xmin"]]
+    }
+  } else {
+    geo.kernel = "nodist"
+    geo.range <- 1
+  }
+
+  dist.fun <- function(x) sqrt(rowSums((x[, 1:2] - x[, 3:4])^2))
+
+  geo.fun <-
+    switch(geo.kernel,
+           "matern12" = function(x) {exp(-x)},
+           "matern32" = function(x) {
+                          sqrt3 <- sqrt(3)
+                          (1 + sqrt3 * x) * exp(-sqrt3 * x)},
+           "matern52" = function(x) {
+                          sqrt5 <- sqrt(5)
+                          (1 + sqrt5 * x + sqrt5/3 * x^2) * exp(-sqrt5 * x)},
+          )
+
+
+  if(length(agg.ids) <= 1) progress <- FALSE
+
+  if(progress) {
+    prog <- txtProgressBar(min = 0,
+                           max = length(agg.ids),
+                           char = "=", width = NA, title = "Progress", style = 3)
+  }
+
+  weights.cf.l <- list()
+
+  for(i in seq_along(agg.ids)) {
+
+    if(!is.null(geo.vars)) {
+
+      dist.obs <-
+        units.cf[SJ(units.fac[J(agg.ids[i]),
+                    on = ".agg.id"]),
+                 on = unit.name,
+                 allow.cartesian = TRUE
+                 ][,
+                   .(fac.id,
+                     cf.id,
+                     .dist = dist.fun(as.matrix(.SD)) / geo.range),
+                   .SDcols = c(geo.names.fac, geo.names.cf),
+                   env = list(fac.id = id.names[2],
+                              cf.id = id.names[1])]
+    dist.obs[,
+             .geosim := geo.fun(.dist)]
+
+    } else {
+
+      dist.obs <-
+        units.cf[SJ(units.fac[J(agg.ids[i]),
+                    on = ".agg.id"]),
+                 on = unit.name,
+                 allow.cartesian = TRUE
+                 ][,
+                   .(fac.id,
+                     cf.id,
+                     .geosim = 1),
+                   env = list(fac.id = id.names[2],
+                              cf.id = id.names[1])]
+
+
+    }
+
+    dist.obs[,
+             .w := .geosim / sum(.geosim),
+             by = cell.factual]
+    setkeyv(dist.obs, id.names[2])
+
+    weights <- groups.long[dist.obs, on = id.names[2], allow.cartesian = TRUE]
+
+    weights.cf.l[[i]] <-
+      weights[,
+              .(.w = sum(.w)),
+              by = c(group.name, id.names[1])]
+
+    if(progress) {
+      setTxtProgressBar(prog, i)
+    }
+
+  }
+
+  if(progress) {
+    close(prog)
+  }
+
+  weights.cf <-
+    rbindlist(weights.cf.l) |>
+    DT(, .(.w = sum(.w)),
+       by = c(group.name, id.names[1]))
+
+  weights.cf[, .w := .w/sum(.w), by = group.name]
+
+  groups.cf <-
+    weights.cf[order(cf.id),
+               .(cf.id = list(cf.id),
+                 .w = list(.w)),
+               by = group.name,
+               env = list(cf.id = id.names[1])
+               ][order(group.col),
+                 env = list(group.col = group.name)]
+
+  groups.comb <- merge(groups, groups.cf)
+  setcolorder(groups.comb, c(group.name, group.by.c, id.names[2], id.names[1], ".w")) 
 
   counterfactual <- list(data = data.ret,
-                         assignment = cf.bmu.dt,
-                         groups = groups,
-                         units = cf.ids.dt,
+                         groups = groups.comb,
+                         assignment = cf.bmu.dt[, -".n"],
+                         units = cf.ids.dt[, -".n"],
                          compare.by = compare.by,
                          group.by = group.by,
                          group.by.c = group.by.c,
                          id.var = id.var,
                          som.var = som.var,
+                         geo.vars = geo.vars,
+                         geo.kernel = geo.kernel,
+                         geo.range = geo.range,
                          group.var = group.name,
                          unit.var = unit.name,
                          assign.var = assign.name,
@@ -5723,6 +5770,8 @@ egp_define_counterfactual <-
 
   return(counterfactual)
 }
+
+
 
 
 get_influence <- function(x) {
@@ -5969,20 +6018,7 @@ egp_posterior_predict <- function(model,
   return(predicted)
 }
 
-# predictions = pred
-# ids <- cf$groups$cell
-# trans.fun = NULL
-# agg.fun = E
-# pred.var = "response.int"
-# draw.var = ".draw"
-# id.var = "cell"
-# # ids = NULL
-# draw.ids = NULL
-# draw.chunk = NULL
-# agg.size = 3500
-# clamp = NULL
-# parallel = NULL
-# progress = TRUE
+
 
 .aggregate_variables <- function(predictions, ...) {
   UseMethod(".aggregate_variables", predictions)
@@ -5995,9 +6031,7 @@ egp_posterior_predict <- function(model,
            agg.fun = mean,
            trans.fun = NULL,
            ids = NULL,
-           # TODO: weights; works best if, for each group, the weights
-           # sum to 1; then sum as agg.fun makes sense
-           # weights = NULL,
+           weights = NULL,
            pred.var = "predicted",
            draw.var = ".draw",
            id.var = "id",
@@ -6027,15 +6061,16 @@ egp_posterior_predict <- function(model,
   if(is.null(ids)) {
     ids <- list(predictions.dt[, unique(id.col), env = list(id.col = id.var)])
   }
-  # TODO: if weights = NULL
+  if(is.null(weights)) {
+    weights <- lapply(ids, \(x) rep(1, length(x)))
+  }
   draw.chunks <- chunk_seq(1, length(draw.ids), draw.chunk)
   if(is.null(agg.size))
     agg.size <- min(unlist(lapply(ids, length)))
   ids.dt <-
-    # TODO: create with weights
-    list(1:length(ids), ids) |>
+    list(1:length(ids), ids, weights) |>
     as.data.table() |>
-    setnames(c(group.name, id.var))
+    setnames(c(group.name, id.var, ".w"))
   setorderv(ids.dt, group.name)
   ids.dt[,N := as.numeric(unname(unlist(lapply(ids, length))))]
   ids.dt[order(-N), Nc := cumsum(N)]
@@ -6050,9 +6085,9 @@ egp_posterior_predict <- function(model,
                        env = list(group.col = group.name)]
   if(all(ids.dt$N == 0)) return(NULL)
   ids.dt.l <-
-    # TODO: Make sure to carry weights here
     ids.dt[order(-N),
-           .(id.col = unlist(id.col)),
+           .(id.col = unlist(id.col),
+             .w = unlist(.w)),
            by = c(group.name, "agg.id"),
            env = list(id.col = id.var)]
   setkeyv(ids.dt.l, id.var)
@@ -6078,44 +6113,18 @@ egp_posterior_predict <- function(model,
     single.l <- list()
     for(j in seq_along(single.ids)) {
       ids.sum <- ids.dt.l[.(single.ids[j]), on = group.name]
-      # TODO: also extract weights.sum
-      if(identical(agg.fun, mean)) {
-        # Use internal optimizations of data.table
-        # TODO: Same optimization for sum
-        single.l[[j]] <-
-          # TODO: Here join also weights, prepare data.table with id.var and
-          # .w
-          predictions.draws[.(ids.sum),
-                            nomatch = NULL,
-                            on = id.var
-                            ][order(draw.col, group.col),
-                              # TODO: Multiply pred.col with .w
-                              # TODO: Split here, aggregation as extra
-                              #   step to optimize performance (test
-                              #   timing!)
-                              .(agg.col = mean(pred.col)),
-                              by = c(draw.var, group.name),
-                              env = list(group.col = group.name,
-                                         draw.col = draw.var,
-                                         pred.col = pred.var,
-                                         agg.col = agg.name)]
-      } else {
-        single.l[[j]] <-
-          # TODO: Here join also weights, prepare data.table with id.var and
-          # .w
-          predictions.draws[.(ids.sum),
-                            nomatch = NULL,
-                            on = id.var
-                            ][order(draw.col, group.col),
-                              # TODO: Multiply pred.col with .w;
-                              .(agg.col = mean(pred.col)),
-                              by = c(draw.var, group.name),
-                              env = list(group.col = group.name,
-                                         draw.col = draw.var,
-                                         pred.col = pred.var,
-                                         agg.col = agg.name,
-                                         agg = agg.fun)]
-      }
+      single.l[[j]] <-
+        predictions.draws[.(ids.sum),
+                          nomatch = NULL,
+                          on = id.var
+                          ][order(draw.col, group.col),
+                            .(agg.col = agg.fun(.w*pred.col)),
+                            by = c(draw.var, group.name),
+                            env = list(group.col = group.name,
+                                       draw.col = draw.var,
+                                       pred.col = pred.var,
+                                       agg.col = agg.name,
+                                       agg = agg.fun)]
       if(progress) {
         prog.counter <- prog.counter + ids.dt[group.col == single.ids[j],
                                               N,
@@ -6132,7 +6141,7 @@ egp_posterior_predict <- function(model,
                           on = id.var,
                           allow.cartesian = TRUE
                           ][order(draw.col, group.col),
-                            .(agg.col = agg(pred.col)),
+                            .(agg.col = agg.fun(.w*pred.col)),
                             by = c(draw.var, group.name),
                             env = list(group.col = group.name,
                                        draw.col = draw.var,
@@ -6180,17 +6189,17 @@ egp_summarize_units <- function(predictions,
 
   unit.sum <-
     .aggregate_variables(predictions.dt,
-               agg.fun = mean,
-               ids = units[[id.var]],
-               pred.var = pred.var,
-               draw.var = ".draw",
-               id.var = id.var,
-               agg.name = pred.var,
-               group.name = ".uid",
-               draw.chunk = draw.chunk,
-               agg.size = agg.size,
-               parallel = parallel,
-               progress = progress)
+                         agg.fun = mean,
+                         ids = units[[id.var]],
+                         pred.var = pred.var,
+                         draw.var = ".draw",
+                         id.var = id.var,
+                         agg.name = pred.var,
+                         group.name = ".uid",
+                         draw.chunk = draw.chunk,
+                         agg.size = agg.size,
+                         parallel = parallel,
+                         progress = progress)
 
   units[, .uid := 1:.N]
 
@@ -6218,6 +6227,8 @@ egp_evaluate_factual <- function(predictions,
   predictions.dt <- as.data.table(predictions)
 
   id.var <- cf.def$id.var
+  id.fac <- paste(id.var, cf.def$assign.cat[2], sep = ".")
+  id.cf <- paste(id.var, cf.def$assign.cat[1], sep = ".")
   group.var <- cf.def$group.var
 
   if(is.null(pred.var)) {
@@ -6235,7 +6246,7 @@ egp_evaluate_factual <- function(predictions,
                ids = cf.def$groups[.(group.eval),
                                    id.col,
                                    on = group.var,
-                                   env = list(id.col = id.var)],
+                                   env = list(id.col = id.fac)],
                pred.var = pred.var,
                draw.var = ".draw",
                id.var = id.var,
@@ -6250,7 +6261,7 @@ egp_evaluate_factual <- function(predictions,
           group.col := group.eval[group.col],
           env = list(group.col = group.var)]
   factual.aug <-
-    merge(cf.def$groups[, -id.var, with = FALSE], factual, all.x = FALSE)
+    merge(cf.def$groups[, -c(id.fac, id.cf, ".w"), with = FALSE], factual, all.x = FALSE)
 
   setkeyv(factual.aug, group.var)
   setindexv(factual.aug, ".draw")
@@ -6264,134 +6275,56 @@ egp_evaluate_counterfactual <- function(predictions,
                                         group.eval = NULL,
                                         pred.var = NULL,
                                         draw.chunk = NULL,
+                                        agg.size = NULL,
+                                        parallel = NULL,
                                         progress = TRUE,
-                                        ...) {
-  predictions.dt <- copy(predictions)
+                                        ...
+                                        ){
+
+  predictions.dt <- as.data.table(predictions)
 
   id.var <- cf.def$id.var
+  id.fac <- paste(id.var, cf.def$assign.cat[2], sep = ".")
+  id.cf <- paste(id.var, cf.def$assign.cat[1], sep = ".")
   group.var <- cf.def$group.var
-  unit.var <- cf.def$unit.var
-  compare.by <- cf.def$compare.by
-
-  if(is.null(units)) {
-    units <-
-      egp_summarize_units(predictions = predictions,
-                          cf.def = cf.def,,
-                          pred.var = pred.var,
-                          draw.chunk = draw.chunk,
-                          progress = progress,
-                          ...)
-  }
-   
-  draw.ids <- predictions.dt[, unique(.draw)]
-  if(is.null(draw.chunk)) {
-    draw.chunk <- length(draw.ids)
-  }
-  draw.chunks <- chunk_seq(1, length(draw.ids), draw.chunk)
-
-  if(is.null(group.eval)) {
-    group.eval <- cf.def$groups[[group.var]]
-  }
 
   if(is.null(pred.var)) {
     pred.sel <- which(!names(predictions.dt) %in% c(id.var, ".draw"))[1]
     pred.var <- names(predictions.dt)[pred.sel]
   }
 
-  assigned <- copy(cf.def$assignment)
-  groups <- copy(cf.def$groups[.(group.eval), on = group.var])
-  unit.def <- copy(cf.def$units)
-  unit.sum <- copy(units)
-  setkeyv(unit.sum, unit.var)
-  setindexv(unit.sum, ".draw")
-
-  assigned.l <-
-    assigned[,
-             .(unit.col = unlist(unit.col)),
-             by = c(id.var, compare.by),
-             env = list(id.col = id.var,
-                        unit.col = unit.var)]
-  setindexv(assigned.l, unit.var)
-
-  unit.def[,
-           .n := unlist(lapply(id.col, length)),
-           env = list(id.col = id.var)]
-  setkeyv(unit.def, unit.var)
-
-  assigned.l <-
-    merge(assigned.l,
-          unit.def[, c(compare.by, unit.var, ".n"), with = FALSE],
-          by = c(compare.by, unit.var))
-
-  assigned.l[,
-             .ntotal := sum(.n),
-             by = id.var]
-  assigned.l <-
-    assigned.l[,
-               .w := .n/.ntotal
-               ][, -c(".n", ".ntotal")]
-  setkeyv(assigned.l, id.var)
-  setindexv(assigned.l, unit.var)
-
-  groups.n <- unlist(lapply(groups[[id.var]], length))
-  draws.n <- predictions[, length(unique(.draw))]
-  total.prog <- sum(groups.n * draws.n)
-
-  if(progress) {
-    prog <- txtProgressBar(min = 0,
-                           max = total.prog,
-                           char = "=", width = NA, title = "Progress", style = 3)
-    prog.counter <- 0
-  }
-  
-  group.eval.l <- list()
-  for(i in 1:nrow(groups)) {
-    ass.gr <-
-      assigned.l[.(unlist(groups[[id.var]][i])),
-                 on = id.var,
-                 .(.w = sum(.w)),
-                 by = c(compare.by, unit.var)
-                 ][, .w := .w/sum(.w)]
-    setkeyv(ass.gr, unit.var)
-    draws.eval.l <- list()
-    for(j in seq_along(draw.chunks$from)) {
-      units.sum.draw <-
-        unit.sum[.(draw.chunks$from[j]:draw.chunks$to[j]),
-                 on = ".draw"]
-      setindexv(units.sum.draw, c(compare.by, unit.var))
-      draw.chunk <-
-        merge(ass.gr,
-              units.sum.draw,
-              by = c(compare.by, unit.var),
-              allow.cartesian = TRUE)
-      draws.eval.l[[j]] <-
-        draw.chunk[,
-                   .(name.col = sum(.w * pred.col)),
-                   by = c(".draw"),
-                   env = list(pred.col = pred.var,
-                              name.col = name)]
-      if(progress) {
-        prog.counter <- prog.counter + groups.n[i] * draw.chunks$size[j]
-        setTxtProgressBar(prog, prog.counter)
-      }
-    }
-    group.eval.l[[i]] <- rbindlist(draws.eval.l)
-  } 
-
-  if(progress) {
-    close(prog)
+  if(is.null(group.eval)) {
+    group.eval <- cf.def$groups[[group.var]]
   }
 
-  counterfactual <- rbindlist(group.eval.l, idcol = group.var)
+  counterfactual <-
+    .aggregate_variables(predictions.dt,
+               agg.fun = sum,
+               ids = cf.def$groups[.(group.eval),
+                                   id.col,
+                                   on = group.var,
+                                   env = list(id.col = id.cf)],
+               weights = cf.def$groups[.(group.eval),
+                                       .w,
+                                       on = group.var],
+               pred.var = pred.var,
+               draw.var = ".draw",
+               id.var = id.var,
+               agg.name = name,
+               group.name = group.var,
+               draw.chunk = draw.chunk,
+               agg.size = agg.size,
+               parallel = parallel,
+               progress = progress)
+
   counterfactual[,
                  group.col := group.eval[group.col],
                  env = list(group.col = group.var)]
   counterfactual.aug <-
-      merge(cf.def$groups[, -id.var, with = FALSE], counterfactual, all.x = FALSE)
+    merge(cf.def$groups[, -c(id.fac, id.cf, ".w"), with = FALSE], counterfactual, all.x = FALSE)
+
   setkeyv(counterfactual.aug, group.var)
   setindexv(counterfactual.aug, ".draw")
-
-
   return(counterfactual.aug)
 }
 

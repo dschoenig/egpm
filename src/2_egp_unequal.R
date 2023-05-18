@@ -101,6 +101,7 @@ for(i in chunk) {
        som.epochs,
        som.topology = c("rectangular", "hexagonal"),
        cf.nb.strategy = c("sequential", "expand"),
+       geo = c(FALSE, TRUE),
        egp.k.som,
        egp.k.geo,
        egp.max.knots.som,
@@ -116,16 +117,29 @@ for(i in chunk) {
 
     ls.fit <- copy(ls.sam)
 
-    message("Fitting SOM …")
+    if(j > 1) {
+      som.same <-
+        mod.para[c(j-1, j),
+                 all(unlist(lapply(.SD, \(x) x[1] == x[2]))),
+                 .SDcols = c("som.topology", "som.dim", "som.epochs"),
+                 nomatch = NULL]
+    } else {
+      som.same <- FALSE
+    }
 
-    som.egp <-
-      egp_som(ls.fit,
-              topo = mod.para$som.topology[j],
-              n = mod.para$som.dim[j]^2,
-              dim.equal = FALSE,
-              epochs = mod.para$som.epochs[j],
-              vars = c("z1", "z2", "z3", "z4"),
-              parallel = n.threads)
+    if(som.same) {
+      message("Reusing previous SOM …")
+    } else {
+      message("Fitting SOM …")
+      som.egp <-
+        egp_som(ls.fit,
+                topo = mod.para$som.topology[j],
+                x.dim = mod.para$som.dim[j],
+                y.dim = mod.para$som.dim[j],
+                epochs = mod.para$som.epochs[j],
+                vars = c("z1", "z2", "z3", "z4"),
+                parallel = n.threads)
+    }
 
     ls.fit[,
            c("som.unit", "som.x", "som.y") :=
@@ -142,33 +156,51 @@ for(i in chunk) {
              normal = gaussian(link = "identity"),
              binary = binomial(link = "logit"))
 
-    if(egp.approx) {
-       mod.egp <- bam(response ~
-                      s(x, y, bs = "gp", k = egp.k.geo,
-                        xt = list(max.knots = egp.max.knots.geo)) +
-                      s(x, y, by = type, bs = "gp", k = egp.k.geo,
-                        xt = list(max.knots = egp.max.knots.geo)) +
-                      s(som.x, som.y, bs = "gp", k = egp.k.som,
-                        xt = list(max.knots = egp.max.knots.som)),
-                      data = ls.fit,
-                      select = TRUE,
-                      discrete = TRUE,
-                      nthreads = n.threads
-                      )
-     } else {
-       mod.egp <- gam(response ~
-                      s(x, y, bs = "gp", k = egp.k.geo,
-                        xt = list(max.knots = egp.max.knots.geo)) +
-                      s(x, y, by = type, bs = "gp", k = egp.k.geo,
-                        xt = list(max.knots = egp.max.knots.geo)) +
-                      s(som.x, som.y, bs = "gp", k = egp.k.som,
-                        xt = list(max.knots = egp.max.knots.som)),
-                      data = ls.fit,
-                      select = TRUE,
-                      method= "REML",
-                      optimizer = "efs"
-                     )
-     }
+    if(j > 1) {
+      para.same <-
+        mod.para[c(j-1, j),
+                 all(unlist(lapply(.SD, \(x) x[1] == x[2]))),
+                 .SDcols = c("egp.k.geo", "egp.max.knots.geo",
+                             "egp.k.som", "egp.max.knots.som"),
+                 nomatch = NULL]
+    } else {
+      para.same <- FALSE
+    }
+
+    mod.same <- all(para.same, som.same)
+
+    if(mod.same) {
+      message("Reusing previous GAM …")
+    } else {
+      message("Fitting GAM …")
+      if(egp.approx) {
+         mod.egp <- bam(response ~
+                        s(x, y, bs = "gp", k = egp.k.geo,
+                          xt = list(max.knots = egp.max.knots.geo)) +
+                        s(x, y, by = type, bs = "gp", k = egp.k.geo,
+                          xt = list(max.knots = egp.max.knots.geo)) +
+                        s(som.x, som.y, bs = "gp", k = egp.k.som,
+                          xt = list(max.knots = egp.max.knots.som)),
+                        data = ls.fit,
+                        select = TRUE,
+                        discrete = TRUE,
+                        nthreads = n.threads
+                        )
+       } else {
+         mod.egp <- gam(response ~
+                        s(x, y, bs = "gp", k = egp.k.geo,
+                          xt = list(max.knots = egp.max.knots.geo)) +
+                        s(x, y, by = type, bs = "gp", k = egp.k.geo,
+                          xt = list(max.knots = egp.max.knots.geo)) +
+                        s(som.x, som.y, bs = "gp", k = egp.k.som,
+                          xt = list(max.knots = egp.max.knots.som)),
+                        data = ls.fit,
+                        select = TRUE,
+                        method= "REML",
+                        optimizer = "efs"
+                       )
+       }
+    }
 
     # summary(mod.egp)
     # AIC(mod.egp)
@@ -180,29 +212,36 @@ for(i in chunk) {
       egp_posterior_draw(mod.egp, 1000, unconditional = TRUE, package = "mgcv")
 
     egp.pred <-
-      egp_posterior_predict(
-                            model = mod.egp,
+      egp_posterior_predict(model = mod.egp,
                             data = ls.fit,
                             id.var = "cell",
                             posterior = egp.post)
 
+    if(mod.para$geo[j]) {
+      mod.geo.vars <- c("x", "y")
+    } else {
+      mod.geo.vars <- NULL
+    }
+
     egp.def <-
-      egp_define_counterfactual(
-                                data = ls.fit,
+      egp_define_counterfactual(data = ls.fit,
                                 som = som.egp,
                                 fac.ids = ls.fit[type == "treatment", cell],
                                 cf.ids = ls.fit[type == "reference", cell],
                                 nb.strategy = mod.para$cf.nb.strategy[j],
                                 group.by = list(NULL, "poly"),
                                 som.var = "som.unit",
+                                geo.vars = mod.geo.vars,
+                                geo.kernel = "matern32",
                                 id.var = "cell",
                                 deg.max = NULL,
                                 n.min = 1)
 
-    egp.units <- egp_summarize_units(egp.pred, egp.def)
-    egp.fac <- egp_evaluate_factual(egp.pred, egp.def, agg.size = 1e2)
-    egp.count <- egp_evaluate_counterfactual(egp.pred, egp.def, egp.units)
+    egp.fac <- egp_evaluate_factual(egp.pred, egp.def)
+    egp.count <- egp_evaluate_counterfactual(egp.pred, egp.def)
     egp.mar <- egp_marginal(egp.fac, egp.count)
+
+    print(egp.mar[group.id == 1, mean(marginal)])
 
     results.mod[[j]] <-
       list(som = som.egp,
@@ -211,12 +250,11 @@ for(i in chunk) {
            egp.def = egp.def,
            marginal = egp.mar)
 
-  rm(ls.fit,
-     som.egp, mod.egp,
-     egp.post, egp.pred,
-     egp.def,
-     egp.units, egp.fac, egp.count,
-     egp.mar)
+    rm(ls.fit,
+       egp.post, egp.pred,
+       egp.def,
+       egp.fac, egp.count,
+       egp.mar)
 
   }
 

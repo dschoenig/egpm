@@ -43,15 +43,13 @@ par.o <- readRDS(file.par.o)
 n <- nrow(par.o)
 
 set.seed(18820125) # Virginia Woolfe
-int.code <- as.integer(rawToBits(charToRaw(paste0(ls.original, ls.binary))))
-ls.seeds <- round(runif(n, 0, sum(int.code)/length(int.code)) * 1e8)
+p.mean <- 0.5
+ls.seeds <- round(runif(n, 0, p.mean) * 1e8)
 par.b <-
   data.table(id = par.o$id,
              seed = ls.seeds,
              ls.original = ls.original,
-             p.ref = 0.2,
-             p.trt = 0.3,
-             e.df = runif(n, 1, 3),
+             p.mean = p.mean,
              opt.prec = sqrt(.Machine$double.eps),
              opt.grid = 1024
              )
@@ -89,14 +87,15 @@ for(i in chunk) {
     as.list(par.b[id == i,]) |>
     lapply(unlist, recursive = FALSE)
   ls.par$ls <- ls.o$landscape
-  ls.par$verbose <- 2
   ls.par$e.var <- par.o[id == i, sum(e.exp.var, e.nug.var)]
   file.ls.b <- ls.par$file.path
   ls.b <- NULL
   while(is.null(ls.b)) {
-    try({ls.b <- do.call(generate_landscape_4cov_nl_binary, ls.par)})
+    try({ls.b <- do.call(generate_landscape_4cov_nl_binary_alt2, ls.par)})
     if(is.null(ls)) message("Simulation failed. Trying again …")
   }
+
+  print(ls.b$marginal)
 
   ls.b <-
     c(ls.b,

@@ -67,14 +67,21 @@ for(i in ids) {
 
 
     if(resp.type == "normal") {
-      marginal.l[[i]] <-
-        rbind(ls$landscape[type == "treatment",
-                           .(diff = mean(treatment))],
+      mar.ls <-
+        ls$landscape[type == "treatment",
+                     .(diff = mean(treatment))]
+      if(ls$landscape[type == "treatment", length(unique(poly))] > 1) {
+        mar.ls <-
+        rbind(mar.ls,
               ls$landscape[type == "treatment",
                            .(diff = mean(treatment)),
                            by = poly],
-              fill = TRUE) |>
-        setcolorder("poly")
+              fill = TRUE) 
+      } else {
+        mar.ls[, poly := NA]
+      }
+      setcolorder(mar.ls, "poly")
+      marginal.l[[i]] <- mar.ls
     }
 
     if(resp.type == "binary") {
@@ -97,7 +104,8 @@ cov <- rbindlist(cov.l, idcol = "id")
 marginal <- rbindlist(marginal.l, idcol = "id", fill = TRUE)
 marginal[, type := fifelse(is.na(poly), "treatment", "subarea")]
 marginal[, type := factor(type, levels = c("treatment", "subarea"))]
-setcolorder(marginal, c("id", "type"))
+setcolorder(marginal, c("id", "type", "poly"))
+setorderv(marginal, c("id", "type", "poly"))
 
 if(resp.type == "normal") {
   results <-
