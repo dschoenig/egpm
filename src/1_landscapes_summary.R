@@ -69,9 +69,9 @@ for(i in ids) {
     if(resp.type == "normal") {
       marginal.l[[i]] <-
         rbind(ls$landscape[type == "treatment",
-                           .(marginal = mean(treatment))],
+                           .(diff = mean(treatment))],
               ls$landscape[type == "treatment",
-                           .(marginal = mean(treatment)),
+                           .(diff = mean(treatment)),
                            by = poly],
               fill = TRUE) |>
         setcolorder("poly")
