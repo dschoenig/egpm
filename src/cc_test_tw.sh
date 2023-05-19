@@ -3,7 +3,6 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=8G
 #SBATCH --time=5:00:00
-#SBATCH --array=1-10
 #SBATCH --mail-user=schonig.daniel@courrier.uqam.ca
 #SBATCH --mail-type=ALL
 
