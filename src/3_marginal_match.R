@@ -48,7 +48,8 @@ for(i in ids) {
 
     marginals.j[[j]] <- 
       as.data.table(mod.res$models[[j]]$marginal) |>
-      DT(, .(mean = estimate,
+      DT(, .(poly,
+             mean = estimate,
              se = std.error,
              q2.5 = conf.low,
              q97.5 = conf.high))

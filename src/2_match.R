@@ -105,14 +105,13 @@ for(i in chunk) {
 
   mod.para[, type := factor(type)]
 
-  ls.fit <- copy(ls.sam)
-  match.form <- type ~ z1 + z2 + z3 + z4
-
   results.mod <- list()
 
   for(j in 1:nrow(mod.para)) {
 
     message(paste0("Parameter combination ", j, "/", nrow(mod.para)), " …")
+
+    ls.fit <- copy(ls.sam)
   
     if(mod.para$trt.int[j] == FALSE) {
 
@@ -159,9 +158,24 @@ for(i in chunk) {
         avg_comparisons(mod.glm,
                         variables = "type",
                         vcov = vcov(mod.glm, freq = TRUE, sandwich = TRUE),
-                        newdata = ls.fit[type == "treatment"])
+                        newdata = ls.fit[type == "treatment"]) |>
+        as.data.table()
+      marginal[, poly := NA]
+   
+      if(ls.fit[type == "treatment", length(unique(poly))] > 1) {
+        marginal <-
+          avg_comparisons(mod.glm,
+                          variables = "type",
+                          by = "poly",
+                          vcov = vcov(mod.glm, freq = TRUE, sandwich = TRUE),
+                          newdata = ls.fit[type == "treatment"][order(-poly)]) |>
+          as.data.table() |>
+          rbind(marginal, fill = TRUE)
+      }
 
-      print(marginal$estimate)
+      marginal <-
+        marginal[order(poly, na.last = FALSE),
+                 .(poly, estimate, std.error, conf.low, conf.high)]
 
       results.mod[[j]] <-
         list(marginal = marginal)
@@ -175,7 +189,7 @@ for(i in chunk) {
           matchit(match.form,
                   method = as.character(mod.para$type[j]),
                   cutpoints = as.character(mod.para$cutpoints[j]),
-                  data = ls.sam)
+                  data = ls.fit)
       }
       if(mod.para$type[j] == "nearest") {
         matched <-
@@ -183,7 +197,7 @@ for(i in chunk) {
                   method = as.character(mod.para$type[j]),
                   distance = as.character(mod.para$distance[j]),
                   replace = mod.para$replace[j],
-                  data = ls.sam)
+                  data = ls.fit)
       }
 
       ls.match <- match.data(matched)
@@ -206,9 +220,25 @@ for(i in chunk) {
                         variables = "type",
                         vcov = vcov(mod.match, freq = TRUE, sandwich = TRUE),
                         wts = "weights",
-                        newdata = ls.match[type == "treatment"])
+                        newdata = ls.match[type == "treatment"]) |>
+        as.data.table()
+      marginal[, poly := NA]
+   
+      if(ls.fit[type == "treatment", length(unique(poly))] > 1) {
+        marginal <-
+          avg_comparisons(mod.match,
+                          variables = "type",
+                          by = "poly",
+                          vcov = vcov(mod.match, freq = TRUE, sandwich = TRUE),
+                          wts = "weights",
+                          newdata = ls.match[type == "treatment"][order(-poly)]) |>
+          as.data.table() |>
+          rbind(marginal, fill = TRUE)
+      }
 
-      print(marginal$estimate)
+      marginal <-
+        marginal[order(poly, na.last = FALSE),
+                 .(poly, estimate, std.error, conf.low, conf.high)]
 
       results.mod[[j]] <-
         list(matched = matched,
