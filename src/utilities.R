@@ -3129,9 +3129,9 @@ generate_landscape_4cov_nl <-
            int34.effect.range,
            int34.effect.mu,
            int34.effect.nuclei,
-           e.exp.var,
-           e.exp.scale,
-           e.nug.var,
+           res.sp.scale,
+           res.sp.var,
+           res.rand.var,
            verbose = 2,
            ...) {
 
@@ -3315,13 +3315,18 @@ generate_landscape_4cov_nl <-
 
   if(verbose > 0) message("Simulating residual variation …") 
 
-  mod.residual <-
-    RMexp(var = e.exp.var, scale = e.exp.scale) +
-    RMnugget(var = e.nug.var)
-  residual <- RFsimulate(mod.residual, x = 1:x.dim, y = 1:y.dim)
-  residual <- reset_dim(st_as_stars(residual))
-  residual <- setNames(residual, "residual")
+  mod.res.sp <- RMexp(var = res.sp.var, scale = res.sp.scale)
+  res.sp <- RFsimulate(mod.res.sp, x = 1:x.dim, y = 1:y.dim)
+  res.sp <- reset_dim(st_as_stars(res.sp))
+  res.sp <- setNames(res.sp, "res.sp")
 
+  mod.res.rand <- RMnugget(var = res.rand.var)
+  res.rand <- RFsimulate(mod.res.rand, x = 1:x.dim, y = 1:y.dim)
+  res.rand <- reset_dim(st_as_stars(res.rand))
+  res.rand <- setNames(res.rand, "res.rand")
+
+  res.total <- res.sp + res.rand
+  res.total <- setNames(res.total, "residual")
 
   if(verbose > 0) message("Building landscape …") 
 
@@ -3332,7 +3337,11 @@ generate_landscape_4cov_nl <-
   #   setNames("response")
 
   response <-
-    c(cov.main.effects, cov.int.effects, treatment, residual) |>
+    c(cov.main.effects,
+      cov.int.effects,
+      treatment,
+      res.sp,
+      res.rand) |>
     merge() |>
     st_apply(1:2, sum) |>
     setNames("response")
@@ -3343,8 +3352,10 @@ generate_landscape_4cov_nl <-
       treatment,
       cov.main.effects,
       cov.int.effects,
-      residual) |>
+      res.sp,
+      res.rand) |>
     as.data.table()
+  landscape.dt[, residual := res.sp + res.rand]
 
   landscape.dt <-
     merge(areas.poly$table,
@@ -3363,7 +3374,8 @@ generate_landscape_4cov_nl <-
 
 generate_landscape_4cov_nl_binary <- function(ls,
                                               p.mean,
-                                              e.var,
+                                              res.rand.var,
+                                              res.logis.scale,
                                               opt.grid,
                                               opt.prec,
                                               ...) {
@@ -3384,13 +3396,17 @@ generate_landscape_4cov_nl_binary <- function(ls,
 
   ls.bin <- copy(ls)
   ls.bin[, `:=`(intercept = -pars[1],
-                residual = qlogis(pnorm(residual,
+                res.rand = qlogis(pnorm(res.rand,
                                         mean = 0,
-                                        sd = sqrt(e.var)),
-                                  scale = e.var))]
+                                        sd = sqrt(res.rand.var)),
+                                  scale = res.logis.scale))]
+  ls.bin[, residual := res.sp + res.rand]
 
   lat.form <-
-    parse(text = paste(c("intercept", "treatment", cov.effects, "residual"),
+    parse(text = paste(c("intercept",
+                         "treatment",
+                         cov.effects,
+                         "residual"),
                        collapse = " + "))
 
   ls.bin[, latent := eval(lat.form)]
@@ -3430,7 +3446,7 @@ generate_landscape_4cov_nl_binary <- function(ls,
 
 generate_landscape_4cov_nl_tweedie <- function(ls,
                                                tw.power,
-                                               e.var,
+                                               tw.disp,
                                                ...) {
 
   cov.effects <- names(ls)[names(ls) %like% "f."]
@@ -3438,17 +3454,18 @@ generate_landscape_4cov_nl_tweedie <- function(ls,
 
   ls.tw <- copy(ls)
 
+
   lp.form <-
-    parse(text = paste(c("treatment", cov.effects),
+    parse(text = paste(c("treatment",
+                         cov.effects),
                        collapse = " + "))
 
   ls.tw[, linpred := eval(lp.form)]
-  ls.tw[, response := qtweedie(pnorm(response,
-                                     mean = linpred,
-                                     sd = sqrt(e.var)),
+  ls.tw[, tw.mu := exp(linpred + res.sp)]
+  ls.tw[, response := rtweedie(length(response),
                                power = tw.power,
-                               mu = exp(linpred),
-                               phi = e.var)]
+                               mu = tw.mu,
+                               phi = tw.disp)]
   ls.tw[, residual := response - exp(linpred)]
   ls.tw[, zero := fifelse(response > 0, FALSE, TRUE)]
 

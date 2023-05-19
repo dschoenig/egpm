@@ -95,9 +95,9 @@ parameters <-
              int34.effect.mu = runif(n, cov.int.effect.mu[1], cov.int.effect.mu[2]),
              int34.effect.nuclei = sample(20:50, n, replace = TRUE),
              # Residual variation
-             e.exp.var = 0.5,
-             e.exp.scale = runif(n, 0.01*ls.dim, ls.dim),
-             e.nug.var = 0.5,
+             res.sp.var = 0.5,
+             res.sp.scale = runif(n, 0.01*ls.dim, ls.dim),
+             res.rand.var = 0.5,
              # Parameters for generating functions
              treatment.mat.nu = 1,
              treatment.mat.scale = runif(n, 0.01*ls.dim, 0.5*ls.dim),

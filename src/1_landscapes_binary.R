@@ -50,6 +50,7 @@ par.b <-
              seed = ls.seeds,
              ls.original = ls.original,
              p.mean = p.mean,
+             res.logis.scale = 1,
              opt.prec = sqrt(.Machine$double.eps),
              opt.grid = 1024
              )
@@ -87,7 +88,7 @@ for(i in chunk) {
     as.list(par.b[id == i,]) |>
     lapply(unlist, recursive = FALSE)
   ls.par$ls <- ls.o$landscape
-  ls.par$e.var <- par.o[id == i, sum(e.exp.var, e.nug.var)]
+  ls.par$res.rand.var <- par.o[id == i, res.rand.var]
   file.ls.b <- ls.par$file.path
   ls.b <- NULL
   while(is.null(ls.b)) {

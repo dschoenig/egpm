@@ -49,7 +49,8 @@ par.b <-
   data.table(id = par.o$id,
              seed = ls.seeds,
              ls.original = ls.original,
-             tw.power = tw.power
+             tw.power = tw.power,
+             tw.disp = 1
              )
 
 par.b[, file.name := stri_pad_left(id, ceiling(log10(n))+1, 0)]
@@ -82,7 +83,6 @@ for(i in chunk) {
     as.list(par.b[id == i,]) |>
     lapply(unlist, recursive = FALSE)
   ls.par$ls <- ls.o$landscape
-  ls.par$e.var <- par.o[id == i, sum(e.exp.var, e.nug.var)]
   file.ls.b <- ls.par$file.path
   ls.b <- NULL
   while(is.null(ls.b)) {
