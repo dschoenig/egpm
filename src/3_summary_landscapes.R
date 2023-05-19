@@ -92,6 +92,11 @@ for(i in ids) {
       scaling.l[[i]] <- as.data.table(as.list(ls$scaling))
     }
 
+    if(resp.type == "tweedie") {
+      marginal.l[[i]] <- ls$marginal
+      marginal.l[[i]][, diff := trt - ref]
+    }
+
     tb <- Sys.time()
     te <- tb-ta
     print(te)
@@ -107,7 +112,7 @@ marginal[, type := factor(type, levels = c("treatment", "subarea"))]
 setcolorder(marginal, c("id", "type", "poly"))
 setorderv(marginal, c("id", "type", "poly"))
 
-if(resp.type == "normal") {
+if(resp.type %in% c("normal", "tweedie")) {
   results <-
     list(objectives = optim,
          marginal = marginal,
