@@ -4,8 +4,6 @@ args <- commandArgs(trailingOnly = TRUE)
 
 source("utilities.R")
 
-overwrite <- TRUE
-
 ls.name <- args[1]
 n <- as.integer(args[2])
 ls.dim <- as.integer(args[3])
@@ -14,6 +12,8 @@ task.id <- as.integer(args[5])
 task.count <- as.integer(args[6])
 parallel <- as.integer(args[7])
 if(is.na(parallel)) parallel <- FALSE
+overwrite <- as.logical(args[8])
+if(is.na(overwrite)) overwrite <- TRUE
 
 # ls.name <- "imbalance_high"
 # n <- 1000
@@ -24,10 +24,11 @@ if(is.na(parallel)) parallel <- FALSE
 # parallel <- 4
 
 paste0("Settings:\n",
-       "  N ", n, "\n",
-       "  Dimension ", ls.dim, "\n",
-       "  Imbalance ", ls.imbalance, "\n",
-       "  Parallel ", parallel) |>
+       "  N: ", n, "\n",
+       "  Dimension: ", ls.dim, "\n",
+       "  Imbalance: ", ls.imbalance, "\n",
+       "  Parallel: ", parallel, "\n",
+       "  Overwrite: ", as.character(overwrite)) |>
 message()
 
 path.base <- "../"

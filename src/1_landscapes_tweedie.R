@@ -4,22 +4,22 @@ args <- commandArgs(trailingOnly = TRUE)
 
 source("utilities.R")
 
-overwrite <- TRUE
-
 ls.original <- args[1]
-ls.binary <- args[2]
+ls.tweedie <- args[2]
 task.id <- as.integer(args[3])
 task.count <- as.integer(args[4])
-parallel <- as.integer(args[5])
+overwrite <- as.logical(args[5])
+if(is.na(overwrite)) overwrite <- TRUE
 
 # ls.original <- "imbalance_high"
-# ls.binary <- "tweedie_imbalance_high"
+# ls.tweedie <- "tweedie_imbalance_high"
 # task.id <- 1
 # task.count <- 1
 
 paste0("Settings:\n",
-       "  Original landscape ", ls.original, "\n",
-       "  Binary landscape ", ls.binary) |>
+       "  Original landscape: ", ls.original, "\n",
+       "  Tweedie landscape: ", ls.tweedie, "\n",
+       "  Overwrite: ", as.character(overwrite)) |>
 message()
 
 path.base <- "../"
@@ -27,7 +27,7 @@ path.base <- "../"
 path.ls.o <- paste0(path.base, "landscapes/", ls.original, "/")
 path.ls.o.data <- paste0(path.ls.o, "data/")
 
-path.ls.b <- paste0(path.base, "landscapes/", ls.binary, "/")
+path.ls.b <- paste0(path.base, "landscapes/", ls.tweedie, "/")
 path.ls.b.data <- paste0(path.ls.b, "data/")
 if(!dir.exists(path.ls.b.data)) dir.create(path.ls.b.data, recursive = TRUE)
 

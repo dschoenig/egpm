@@ -4,13 +4,12 @@ args <- commandArgs(trailingOnly = TRUE)
 
 source("utilities.R")
 
-overwrite <- TRUE
-
 ls.original <- args[1]
 ls.binary <- args[2]
 task.id <- as.integer(args[3])
 task.count <- as.integer(args[4])
-parallel <- as.integer(args[5])
+overwrite <- as.logical(args[5])
+if(is.na(overwrite)) overwrite <- TRUE
 
 # ls.original <- "imbalance_low"
 # ls.binary <- "binary_imbalance_low"
@@ -18,8 +17,9 @@ parallel <- as.integer(args[5])
 # task.count <- 1
 
 paste0("Settings:\n",
-       "  Original landscape ", ls.original, "\n",
-       "  Binary landscape ", ls.binary) |>
+       "  Original landscape: ", ls.original, "\n",
+       "  Binary landscape: ", ls.binary, "\n",
+       "  Overwrite: ", as.character(overwrite)) |>
 message()
 
 path.base <- "../"
