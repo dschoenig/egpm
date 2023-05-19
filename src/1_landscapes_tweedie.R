@@ -72,7 +72,7 @@ chunk <- setdiff(chunk, simulated)
 
 for(i in chunk) {
 
-  message(paste0("Generating binary landscape ", i, " / ", nrow(par.b), " …"))
+  message(paste0("Generating Tweedie landscape ", i, " / ", nrow(par.b), " …"))
 
   ta <- Sys.time()
 
