@@ -19,7 +19,7 @@ task_count <- as.integer(args[12])
 overwrite <- as.logical(args[13])
 if(is.na(overwrite)) overwrite <- TRUE
 
-# ls.type <- "imbalance_high"
+# ls.type <- "tw_test"
 # mod.type <- "egp_som25"
 # resp.type <- "normal"
 # n.threads <- 4
@@ -149,7 +149,8 @@ for(i in chunk) {
     mod.fam <-
       switch(resp.type,
              normal = gaussian(link = "identity"),
-             binary = binomial(link = "logit"))
+             binary = binomial(link = "logit"),
+             tweedie = tw(link = "log"))
 
     if(j > 1) {
       para.same <-
@@ -176,6 +177,7 @@ for(i in chunk) {
                           xt = list(max.knots = egp.max.knots.geo)) +
                         s(som.x, som.y, bs = "gp", k = egp.k.som,
                           xt = list(max.knots = egp.max.knots.som)),
+                        family = mod.fam,
                         data = ls.fit,
                         select = TRUE,
                         discrete = TRUE,
@@ -189,6 +191,7 @@ for(i in chunk) {
                           xt = list(max.knots = egp.max.knots.geo)) +
                         s(som.x, som.y, bs = "gp", k = egp.k.som,
                           xt = list(max.knots = egp.max.knots.som)),
+                        family = mod.fam,
                         data = ls.fit,
                         select = TRUE,
                         method= "REML",
@@ -199,7 +202,9 @@ for(i in chunk) {
 
     # summary(mod.egp)
     # AIC(mod.egp)
-
+    # library(DHARMa)
+    # mod.res <- simulateResiduals(mod.egp)
+    # plot(mod.res)
 
     message("Evaluating marginal effect …")
 

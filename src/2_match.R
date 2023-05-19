@@ -14,9 +14,9 @@ task_count <- as.integer(args[6])
 overwrite <- as.logical(args[7])
 if(is.na(overwrite)) overwrite <- TRUE
 
-# ls.type <- "imbalance_medium"
+# ls.type <- "tw_test"
 # mod.type <- "match"
-# resp.type <- "normal"
+# resp.type <- "tweedie"
 # sam.frac <- 0.01
 # task_id <- 1
 # task_count <- 100
@@ -146,24 +146,30 @@ for(i in chunk) {
       mod.fam <-
         switch(resp.type,
                normal = gaussian(link = "identity"),
-               binary = binomial(link = "logit"))
+               binary = binomial(link = "logit"),
+               tweedie = tw(link = log))
 
-      mod.lm <- glm(mod.form,
-                    family = mod.fam,
-                    data = ls.fit)
+      mod.glm <-
+        gam(mod.form,
+            family = mod.fam,
+            data = ls.fit,
+            method = "ML")
 
       marginal <-
-        avg_comparisons(mod.lm,
+        avg_comparisons(mod.glm,
                         variables = "type",
-                        vcov = "HC3",
+                        vcov = vcov(mod.glm, freq = TRUE, sandwich = TRUE),
                         newdata = ls.fit[type == "treatment"])
+
+      print(marginal$estimate)
 
       results.mod[[j]] <-
         list(marginal = marginal)
 
-      rm(mod.lm, marginal)
+      rm(mod.glm, marginal)
 
     } else {
+
       if(mod.para$type[j] == "cem") {
         matched <-
           matchit(match.form,
@@ -185,20 +191,24 @@ for(i in chunk) {
       mod.fam <-
         switch(resp.type,
                normal = gaussian(link = "identity"),
-               binary = quasibinomial(link = "logit"))
+               binary = quasibinomial(link = "logit"),
+               tweedie = tw(link = log))
 
       mod.match <-
-        glm(mod.form,
+        gam(mod.form,
             family = mod.fam,
+            data = ls.match,
             weights = weights,
-            data = ls.match)
+            method = "ML")
 
       marginal <-
         avg_comparisons(mod.match,
                         variables = "type",
-                        vcov = "HC3",
-                        newdata = ls.match[type == "treatment"],
-                        wts = "weights")
+                        vcov = vcov(mod.match, freq = TRUE, sandwich = TRUE),
+                        wts = "weights",
+                        newdata = ls.match[type == "treatment"])
+
+      print(marginal$estimate)
 
       results.mod[[j]] <-
         list(matched = matched,
