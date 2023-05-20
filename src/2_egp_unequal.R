@@ -33,7 +33,7 @@ if(is.na(overwrite)) overwrite <- TRUE
 # egp.approx <- TRUE
 # overwrite <- TRUE
 
-egp.max.knots.som <- som.dim^2
+egp.max.knots.som <- som.dim^2 # Will be overwritten later!
 egp.max.knots.geo <- egp.k.geo*10
 
 path.base <- "../"
@@ -134,27 +134,27 @@ for(i in chunk) {
       som.egp <-
         egp_som(ls.fit,
                 topo = mod.para$som.topology[j],
-                x.dim = mod.para$som.dim[j],
-                y.dim = mod.para$som.dim[j],
+                n = mod.para$som.dim[j]^2,
+                dim.equal = FALSE,
                 epochs = mod.para$som.epochs[j],
                 vars = c("z1", "z2", "z3", "z4"),
                 parallel = n.threads)
     }
 
+    mod.para$egp.max.knots.som[j] <-
+      with(get_grid(som.egp), prod(xdim, ydim))
+
     ls.fit[,
            c("som.unit", "som.x", "som.y") :=
              get_bmu(som.egp, coord = TRUE, list = TRUE)]
-
-
-    message("Fitting GAM …")
-
 
     ls.fit[, type := factor(type, levels = levels(type), ordered = TRUE)]
 
     mod.fam <-
       switch(resp.type,
              normal = gaussian(link = "identity"),
-             binary = binomial(link = "logit"))
+             binary = binomial(link = "logit"),
+             tweedie = tw(link = "log"))
 
     if(j > 1) {
       para.same <-
@@ -181,6 +181,7 @@ for(i in chunk) {
                           xt = list(max.knots = egp.max.knots.geo)) +
                         s(som.x, som.y, bs = "gp", k = egp.k.som,
                           xt = list(max.knots = egp.max.knots.som)),
+                        family = mod.fam,
                         data = ls.fit,
                         select = TRUE,
                         discrete = TRUE,
@@ -194,6 +195,7 @@ for(i in chunk) {
                           xt = list(max.knots = egp.max.knots.geo)) +
                         s(som.x, som.y, bs = "gp", k = egp.k.som,
                           xt = list(max.knots = egp.max.knots.som)),
+                        family = mod.fam,
                         data = ls.fit,
                         select = TRUE,
                         method= "REML",
