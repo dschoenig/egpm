@@ -3386,11 +3386,11 @@ generate_landscape_4cov_nl_binary <- function(ls,
 
   cov.mat <-
     ls[,
-       c("treatment", cov.effects),
+       c(cov.effects, "res.sp"),
        with = FALSE] |>
     as.matrix()
 
-  a <- quantile(cov.mat %*% c(0, rep(1, cov.n)), 1-p.mean, names = FALSE)
+  a <- quantile(rowSums(cov.mat), 1-p.mean, names = FALSE)
 
   pars <- c(a = a)
 
@@ -3413,10 +3413,10 @@ generate_landscape_4cov_nl_binary <- function(ls,
   ls.bin[, response := fifelse(latent > 0, 1, 0)]
 
   ref.form <-
-    parse(text = paste(c("intercept", cov.effects),
+    parse(text = paste(c("intercept", cov.effects, "res.sp"),
                        collapse = " + "))
   trt.form <-
-    parse(text = paste(c("intercept", "treatment", cov.effects),
+    parse(text = paste(c("intercept", "treatment", cov.effects, "res.sp"),
                        collapse = " + "))
 
   mar.trt <-
@@ -3457,16 +3457,16 @@ generate_landscape_4cov_nl_tweedie <- function(ls,
 
   lp.form <-
     parse(text = paste(c("treatment",
-                         cov.effects),
+                         cov.effects, "res.sp"),
                        collapse = " + "))
 
   ls.tw[, linpred := eval(lp.form)]
-  ls.tw[, tw.mu := exp(linpred + res.sp)]
+  ls.tw[, tw.mu := exp(linpred)]
   ls.tw[, response := rtweedie(length(response),
                                power = tw.power,
                                mu = tw.mu,
                                phi = tw.disp)]
-  ls.tw[, residual := response - exp(linpred)]
+  ls.tw[, residual := response - exp(linpred-res.sp)]
   ls.tw[, zero := fifelse(response > 0, FALSE, TRUE)]
 
   mar.trt <- 
@@ -5771,3 +5771,12 @@ egp_marginal <- function(factual,
   
   return(marginal)
 }
+
+
+
+rmse <- function(x, y = mean(x), ...) {
+  rmse <- sqrt(mean((x - y)^2, ...))
+  return(rmse)
+}
+
+
