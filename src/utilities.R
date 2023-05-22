@@ -3373,56 +3373,36 @@ generate_landscape_4cov_nl <-
 
 
 generate_landscape_4cov_nl_binary <- function(ls,
-                                              p.mean,
-                                              res.rand.var,
-                                              res.logis.scale,
-                                              opt.grid,
-                                              opt.prec,
                                               ...) {
 
   cov.effects <- names(ls)[names(ls) %like% "f."]
-  cov.n <- length(cov.effects)
-
-
-  cov.mat <-
-    ls[,
-       c(cov.effects, "res.sp"),
-       with = FALSE] |>
-    as.matrix()
-
-  a <- quantile(rowSums(cov.mat), 1-p.mean, names = FALSE)
-
-  pars <- c(a = a)
 
   ls.bin <- copy(ls)
-  ls.bin[, `:=`(intercept = -pars[1],
-                res.rand = qlogis(pnorm(res.rand,
-                                        mean = 0,
-                                        sd = sqrt(res.rand.var)),
-                                  scale = res.logis.scale))]
-  ls.bin[, residual := res.sp + res.rand]
 
-  lat.form <-
-    parse(text = paste(c("intercept",
-                         "treatment",
-                         cov.effects,
-                         "residual"),
+  lp.form <-
+    parse(text = paste(c("treatment",
+                         cov.effects, "res.sp"),
                        collapse = " + "))
 
-  ls.bin[, latent := eval(lat.form)]
-  ls.bin[, response := fifelse(latent > 0, 1, 0)]
+  ls.bin[, linpred := eval(lp.form)]
+  ls.bin[, p := plogis(linpred)]
+  ls.bin[, response := rbinom(length(response),
+                              size = 1,
+                              prob = p)]
+  ls.bin[, residual := response - plogis(linpred-res.sp)]
+  ls.bin[, res.rand := response - plogis(linpred)]
 
   ref.form <-
-    parse(text = paste(c("intercept", cov.effects, "res.sp"),
+    parse(text = paste(c(cov.effects, "res.sp"),
                        collapse = " + "))
   trt.form <-
-    parse(text = paste(c("intercept", "treatment", cov.effects, "res.sp"),
+    parse(text = paste(c("treatment", cov.effects, "res.sp"),
                        collapse = " + "))
 
   mar.trt <-
     ls.bin[type == "treatment",
-           .(p.ref = sum(eval(ref.form) > 0) / .N,
-             p.trt = sum(eval(trt.form) > 0) / .N)]
+           .(p.ref = mean(plogis(eval(ref.form))),
+             p.trt = mean(plogis(eval(trt.form))))]
 
   n.poly.trt <- ls.bin[type == "treatment", length(unique(poly))]
 
@@ -3430,15 +3410,14 @@ generate_landscape_4cov_nl_binary <- function(ls,
   mar.trt <-
     rbind(mar.trt,
           ls.bin[type == "treatment",
-                 .(p.ref = sum(eval(ref.form) > 0) / .N,
-                   p.trt = sum(eval(trt.form) > 0) / .N),
+                 .(p.ref = mean(plogis(eval(ref.form))),
+                   p.trt = mean(plogis(eval(trt.form)))),
                  by = poly][order(poly)],
           fill = TRUE)
   setcolorder(mar.trt, c("poly", "p.ref", "p.trt"))
   }
 
   return(list(landscape = ls.bin,
-              scaling = pars,
               marginal = mar.trt))
 
 }
@@ -3454,7 +3433,6 @@ generate_landscape_4cov_nl_tweedie <- function(ls,
 
   ls.tw <- copy(ls)
 
-
   lp.form <-
     parse(text = paste(c("treatment",
                          cov.effects, "res.sp"),
@@ -3467,6 +3445,7 @@ generate_landscape_4cov_nl_tweedie <- function(ls,
                                mu = tw.mu,
                                phi = tw.disp)]
   ls.tw[, residual := response - exp(linpred-res.sp)]
+  ls.tw[, res.rand := response - exp(linpred)]
   ls.tw[, zero := fifelse(response > 0, FALSE, TRUE)]
 
   mar.trt <- 

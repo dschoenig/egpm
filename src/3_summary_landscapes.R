@@ -24,7 +24,6 @@ ids <- parameters$id
 cov.l <- list()
 optim.l <- list()
 marginal.l <- list()
-scaling.l <- list()
 
 for(i in ids) {
 
@@ -89,7 +88,6 @@ for(i in ids) {
       marginal.l[[i]][,
                       `:=`(p.diff = p.trt - p.ref,
                            p.ratio = p.trt/p.ref)]
-      scaling.l[[i]] <- as.data.table(as.list(ls$scaling))
     }
 
     if(resp.type == "tweedie") {
@@ -112,21 +110,11 @@ marginal[, type := factor(type, levels = c("treatment", "subarea"))]
 setcolorder(marginal, c("id", "type", "poly"))
 setorderv(marginal, c("id", "type", "poly"))
 
-if(resp.type %in% c("normal", "tweedie")) {
-  results <-
-    list(objectives = optim,
-         marginal = marginal,
-         balance = cov)
-}
+results <-
+  list(objectives = optim,
+       marginal = marginal,
+       balance = cov)
 
-if(resp.type == "binary") {
-  scaling <- rbindlist(scaling.l, idcol = "id")
-  results <-
-    list(objectives = optim,
-         marginal = marginal,
-         scaling = scaling,
-         balance = cov)
-}
 
 print(results)
 

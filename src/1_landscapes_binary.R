@@ -43,16 +43,11 @@ par.o <- readRDS(file.par.o)
 n <- nrow(par.o)
 
 set.seed(18820125) # Virginia Woolfe
-p.mean <- 0.5
-ls.seeds <- round(runif(n, 0, p.mean) * 1e8)
+ls.seeds <- round(runif(n, 0, 1) * 1e8)
 par.b <-
   data.table(id = par.o$id,
              seed = ls.seeds,
-             ls.original = ls.original,
-             p.mean = p.mean,
-             res.logis.scale = 1,
-             opt.prec = sqrt(.Machine$double.eps),
-             opt.grid = 1024
+             ls.original = ls.original
              )
 
 par.b[, file.name := stri_pad_left(id, ceiling(log10(n))+1, 0)]
