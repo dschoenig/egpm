@@ -174,7 +174,7 @@ for(i in chunk) {
           avg_comparisons(mod.glm,
                           variables = "type",
                           by = "poly",
-                          vcov = vcov(mod.glm, full = TRUE),
+			  vcov = vcov(mod.glm, freq = TRUE, sandwich = TRUE),
                           newdata = ls.fit[type == "treatment"][order(-poly)]) |>
           as.data.table() |>
           rbind(marginal, fill = TRUE)
@@ -226,7 +226,7 @@ for(i in chunk) {
       marginal <-
         avg_comparisons(mod.match,
                         variables = "type",
-                        vcov = vcov(mod.match, full = TRUE),
+			vcov = vcov(mod.match, freq = TRUE, sandwich = TRUE),
                         wts = "weights",
                         newdata = ls.match[type == "treatment"]) |>
         as.data.table()
@@ -237,7 +237,7 @@ for(i in chunk) {
           avg_comparisons(mod.match,
                           variables = "type",
                           by = "poly",
-                          vcov = vcov(mod.match, full = TRUE),
+			  vcov = vcov(mod.match, freq = TRUE, sandwich = TRUE),
                           wts = "weights",
                           newdata = ls.match[type == "treatment"][order(-poly)]) |>
           as.data.table() |>
