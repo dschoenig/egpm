@@ -19,7 +19,7 @@ if(is.na(overwrite)) overwrite <- TRUE
 # mod.type <- "match"
 # resp.type <- "tweedie"
 # sam.frac <- 0.01
-# task_id <- 1
+# task_id <- 91
 # task_count <- 1000
 # overwrite <- TRUE
 
@@ -110,7 +110,7 @@ for(i in chunk) {
     switch(resp.type,
            normal = gaussian(link = "identity"),
            binary = binomial(link = "logit"),
-           tweedie = tweedie(link = "log"))
+           tweedie = tw(link = "log"))
 
   results.mod <- list()
 
@@ -149,21 +149,22 @@ for(i in chunk) {
 
     if(mod.para$type[j] == "glm") {
 
-      # mod.glm <- NULL
-      # while(is.null(mod.glm)) {
-      #   try({
+      mod.glm <- NULL
+      while(is.null(mod.glm)) {
+        try({
           mod.glm <-
-            glmmTMB(mod.form,
-                    family = mod.fam,
-                    data = ls.fit)
-        # })
-        # if(is.null(mod.glm)) message("Model failed. Trying again …")
-      # }
+            gam(mod.form,
+                family = mod.fam,
+                data = ls.fit,
+                method = "ML")
+        })
+        if(is.null(mod.glm)) message("Model failed. Trying again …")
+      }
 
       marginal <-
         avg_comparisons(mod.glm,
                         variables = "type",
-                        vcov = vcov(mod.glm, full = TRUE),
+                        vcov = vcov(mod.glm, freq = TRUE, sandwich = TRUE),
                         newdata = ls.fit[type == "treatment"]) |>
         as.data.table()
       marginal[, poly := NA]
@@ -208,17 +209,18 @@ for(i in chunk) {
 
       ls.match <- match.data(matched)
 
-      # mod.match <- NULL
-      # while(is.null(mod.match)) {
-      #   try({
+      mod.match <- NULL
+      while(is.null(mod.match)) {
+        try({
           mod.match <-
-            glmmTMB(mod.form,
-                    family = mod.fam,
-                    data = ls.match,
-                    weights = weights)
-        # })
-        # if(is.null(mod.match)) message("Model failed. Trying again …")
-      # }
+            gam(mod.form,
+                family = mod.fam,
+                data = ls.match,
+                weights = weights,
+                method = "ML")
+        })
+        if(is.null(mod.match)) message("Model failed. Trying again …")
+      }
 
 
       marginal <-
