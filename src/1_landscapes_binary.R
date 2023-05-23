@@ -11,8 +11,8 @@ task.count <- as.integer(args[4])
 overwrite <- as.logical(args[5])
 if(is.na(overwrite)) overwrite <- TRUE
 
-# ls.original <- "imbalance_low"
-# ls.binary <- "binary_imbalance_low"
+# ls.original <- "imbalance_high"
+# ls.binary <- "binary_imbalance_high"
 # task.id <- 1
 # task.count <- 1
 
@@ -41,9 +41,10 @@ file.log <- paste0(path.ls.b, "simulate.log")
 
 par.o <- readRDS(file.par.o)
 n <- nrow(par.o)
+p.mean <- 0.5
 
 set.seed(18820125) # Virginia Woolfe
-ls.seeds <- round(runif(n, 0, 1) * 1e8)
+ls.seeds <- round(runif(n, 0, p.mean) * 1e8)
 par.b <-
   data.table(id = par.o$id,
              seed = ls.seeds,
@@ -83,7 +84,7 @@ for(i in chunk) {
     as.list(par.b[id == i,]) |>
     lapply(unlist, recursive = FALSE)
   ls.par$ls <- ls.o$landscape
-  ls.par$res.rand.var <- par.o[id == i, res.rand.var]
+  ls.par$verbose <- 2
   file.ls.b <- ls.par$file.path
   ls.b <- NULL
   while(is.null(ls.b)) {
@@ -110,4 +111,3 @@ for(i in chunk) {
   system(paste0('echo "', i, '" >> ', file.log), intern = TRUE)
 
 }
-

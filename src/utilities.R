@@ -3373,15 +3373,26 @@ generate_landscape_4cov_nl <-
 
 
 generate_landscape_4cov_nl_binary <- function(ls,
+                                              p.mean,
+                                              verbose,
                                               ...) {
 
   cov.effects <- names(ls)[names(ls) %like% "f."]
 
+  a <-
+    ls[,
+       -mean(rowSums(as.matrix(.SD), na.rm = TRUE), na.rm = TRUE),
+       .SDcols = c("treatment", cov.effects, "res.sp")]
+
   ls.bin <- copy(ls)
 
+  ls.bin[, intercept := a]
+
   lp.form <-
-    parse(text = paste(c("treatment",
-                         cov.effects, "res.sp"),
+    parse(text = paste(c("intercept",
+                         "treatment",
+                         cov.effects,
+                         "res.sp"),
                        collapse = " + "))
 
   ls.bin[, linpred := eval(lp.form)]
@@ -3393,10 +3404,10 @@ generate_landscape_4cov_nl_binary <- function(ls,
   ls.bin[, res.rand := response - plogis(linpred)]
 
   ref.form <-
-    parse(text = paste(c(cov.effects, "res.sp"),
+    parse(text = paste(c("intercept", cov.effects, "res.sp"),
                        collapse = " + "))
   trt.form <-
-    parse(text = paste(c("treatment", cov.effects, "res.sp"),
+    parse(text = paste(c("intercept", "treatment", cov.effects, "res.sp"),
                        collapse = " + "))
 
   mar.trt <-
