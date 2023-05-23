@@ -149,16 +149,16 @@ for(i in chunk) {
 
     if(mod.para$type[j] == "glm") {
 
-      mod.glm <- NULL
-      while(is.null(mod.glm)) {
-        try({
+      # mod.glm <- NULL
+      # while(is.null(mod.glm)) {
+      #   try({
           mod.glm <-
             glmmTMB(mod.form,
                     family = mod.fam,
                     data = ls.fit)
-        })
-        if(is.null(mod.glm)) message("Model failed. Trying again …")
-      }
+        # })
+        # if(is.null(mod.glm)) message("Model failed. Trying again …")
+      # }
 
       marginal <-
         avg_comparisons(mod.glm,
@@ -208,17 +208,17 @@ for(i in chunk) {
 
       ls.match <- match.data(matched)
 
-      mod.match <- NULL
-      while(is.null(mod.match)) {
-        try({
+      # mod.match <- NULL
+      # while(is.null(mod.match)) {
+      #   try({
           mod.match <-
             glmmTMB(mod.form,
                     family = mod.fam,
                     data = ls.match,
                     weights = weights)
-        })
-        if(is.null(mod.match)) message("Model failed. Trying again …")
-      }
+        # })
+        # if(is.null(mod.match)) message("Model failed. Trying again …")
+      # }
 
 
       marginal <-
