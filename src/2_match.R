@@ -15,13 +15,13 @@ task_count <- as.integer(args[6])
 overwrite <- as.logical(args[7])
 if(is.na(overwrite)) overwrite <- TRUE
 
-# ls.type <- "binary_imbalance_high"
-# mod.type <- "match"
-# resp.type <- "binary"
-# sam.frac <- 0.01
-# task_id <- 60
-# task_count <- 1000
-# overwrite <- TRUE
+ls.type <- "tweedie_imbalance_high"
+mod.type <- "match"
+resp.type <- "tweedie"
+sam.frac <- 0.01
+task_id <- 1
+task_count <- 1000
+overwrite <- TRUE
 
 path.base <- "../"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
@@ -110,7 +110,7 @@ for(i in chunk) {
     switch(resp.type,
            normal = gaussian(link = "identity"),
            binary = binomial(link = "logit"),
-           tweedie = tweedie(link = log))
+           tweedie = tweedie(link = "log"))
 
   results.mod <- list()
 

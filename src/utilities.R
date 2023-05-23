@@ -20,7 +20,7 @@ library(nloptr)
 library(GA)
 library(memoise)
 library(Matrix)
-library(statmod)
+# library(statmod)
 library(tweedie)
 
 cloglog <- function(mu) {
