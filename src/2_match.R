@@ -2,6 +2,7 @@ args <- commandArgs(trailingOnly = TRUE)
 
 library(MatchIt)
 library(marginaleffects)
+library(glmmTMB)
 
 source("utilities.R")
 
@@ -14,12 +15,12 @@ task_count <- as.integer(args[6])
 overwrite <- as.logical(args[7])
 if(is.na(overwrite)) overwrite <- TRUE
 
-# ls.type <- "tw_test"
+# ls.type <- "binary_imbalance_high"
 # mod.type <- "match"
-# resp.type <- "tweedie"
+# resp.type <- "binary"
 # sam.frac <- 0.01
-# task_id <- 1
-# task_count <- 100
+# task_id <- 60
+# task_count <- 1000
 # overwrite <- TRUE
 
 path.base <- "../"
@@ -105,6 +106,12 @@ for(i in chunk) {
 
   mod.para[, type := factor(type)]
 
+  mod.fam <-
+    switch(resp.type,
+           normal = gaussian(link = "identity"),
+           binary = binomial(link = "logit"),
+           tweedie = tweedie(link = log))
+
   results.mod <- list()
 
   for(j in 1:nrow(mod.para)) {
@@ -142,22 +149,21 @@ for(i in chunk) {
 
     if(mod.para$type[j] == "glm") {
 
-      mod.fam <-
-        switch(resp.type,
-               normal = gaussian(link = "identity"),
-               binary = binomial(link = "logit"),
-               tweedie = tw(link = log))
-
-      mod.glm <-
-        gam(mod.form,
-            family = mod.fam,
-            data = ls.fit,
-            method = "ML")
+      mod.glm <- NULL
+      while(is.null(mod.glm)) {
+        try({
+          mod.glm <-
+            glmmTMB(mod.form,
+                    family = mod.fam,
+                    data = ls.fit)
+        })
+        if(is.null(mod.glm)) message("Model failed. Trying again …")
+      }
 
       marginal <-
         avg_comparisons(mod.glm,
                         variables = "type",
-                        vcov = vcov(mod.glm, freq = TRUE, sandwich = TRUE),
+                        vcov = vcov(mod.glm, full = TRUE),
                         newdata = ls.fit[type == "treatment"]) |>
         as.data.table()
       marginal[, poly := NA]
@@ -167,7 +173,7 @@ for(i in chunk) {
           avg_comparisons(mod.glm,
                           variables = "type",
                           by = "poly",
-                          vcov = vcov(mod.glm, freq = TRUE, sandwich = TRUE),
+                          vcov = vcov(mod.glm, full = TRUE),
                           newdata = ls.fit[type == "treatment"][order(-poly)]) |>
           as.data.table() |>
           rbind(marginal, fill = TRUE)
@@ -202,23 +208,23 @@ for(i in chunk) {
 
       ls.match <- match.data(matched)
 
-      mod.fam <-
-        switch(resp.type,
-               normal = gaussian(link = "identity"),
-               binary = quasibinomial(link = "logit"),
-               tweedie = tw(link = log))
+      mod.match <- NULL
+      while(is.null(mod.match)) {
+        try({
+          mod.match <-
+            glmmTMB(mod.form,
+                    family = mod.fam,
+                    data = ls.match,
+                    weights = weights)
+        })
+        if(is.null(mod.match)) message("Model failed. Trying again …")
+      }
 
-      mod.match <-
-        gam(mod.form,
-            family = mod.fam,
-            data = ls.match,
-            weights = weights,
-            method = "ML")
 
       marginal <-
         avg_comparisons(mod.match,
                         variables = "type",
-                        vcov = vcov(mod.match, freq = TRUE, sandwich = TRUE),
+                        vcov = vcov(mod.match, full = TRUE),
                         wts = "weights",
                         newdata = ls.match[type == "treatment"]) |>
         as.data.table()
@@ -229,7 +235,7 @@ for(i in chunk) {
           avg_comparisons(mod.match,
                           variables = "type",
                           by = "poly",
-                          vcov = vcov(mod.match, freq = TRUE, sandwich = TRUE),
+                          vcov = vcov(mod.match, full = TRUE),
                           wts = "weights",
                           newdata = ls.match[type == "treatment"][order(-poly)]) |>
           as.data.table() |>
