@@ -27,6 +27,9 @@ c(
   "sandwich") |>
 install.packages()
 
+install.packages(c("rstan", "brms"),
+                 repos = c("https://mc-stan.org/r-packages/", getOption("repos")))
+
 data.table::update_dev_pkg()
 
 # install.packages("~/projects/pkgarchive/RandomFieldsUtils_1.2.5.tar.gz",
