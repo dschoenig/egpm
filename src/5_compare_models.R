@@ -5,9 +5,9 @@ source("utilities.R")
 path.base <- "../"
 path.results <- paste0(path.base, "results/")
 path.comp <- paste0(path.results, "comparison/")
-file.estimates <- paste0(path.results, "estimates.csv")
+file.estimates <- paste0(path.comp, "estimates.csv")
 
-file.mod <- paste0(path.comparison, "mod.brm.rds")
+file.mod <- paste0(path.comp, "mod.brm.rds")
 
 estimates <- fread(file.estimates)
 
@@ -82,8 +82,9 @@ priors <- c(prior(cauchy(0, 1), class = sd),
             prior(gamma(2, 1),  class = nu),
             prior(student_t(3, 0 , 1), class = b, dpar = sigma))
 
-ids <- sample(1:1000, 10)
-estimates.fit <- estimates.sub[ls.id %in% ids]
+# ids <- sample(1:1000, 10)
+# estimates.fit <- estimates.sub[ls.id %in% ids]
+estimates.fit <- estimates.sub
 
 mod.form <-
   bf(mar.std ~ name.short * ls.response * ls.imbalance +
@@ -98,13 +99,13 @@ mod.mar <- brm(bf(mar.std ~ name.short * ls.response * ls.imbalance +
                prior = priors,
                data = estimates.fit,
                chains = 4,
+               threads = 8,
                cores = 4,
-               warmup = 3000,
-               refresh = 100,
-               iter = 4000,
+               warmup = 8000,
+               iter = 10000,
+               control = list(max_treedepth = 15),
+               refresh = 10,
                empty = FALSE)
 
-summary(mod.mar)
-
-save(mod.mar, file.mod)
+saveRDS(mod.mar, file.mod)
 

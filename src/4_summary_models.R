@@ -36,7 +36,8 @@ landscapes[,
 path.base <- "../"
 path.landscapes <- paste0(path.base, "landscapes/")
 path.results <- paste0(path.base, "results/")
-file.estimates <- paste0(path.results, "estimates.csv")
+path.comp <- paste0(path.results, "comparison/")
+file.estimates <- paste0(path.comp, "estimates.csv")
 
 
 ## Get landscape info
