@@ -85,6 +85,13 @@ priors <- c(prior(cauchy(0, 1), class = sd),
 # ids <- sample(1:1000, 10)
 # estimates.fit <- estimates.sub[ls.id %in% ids]
 estimates.fit <- estimates.sub
+estimates.fit[,
+              `:=`(ls.response = factor(ls.response,
+                                        levels = c("normal", "tweedie", "binary")),
+                   ls.imbalance = factor(ls.imbalance,
+                                         levels = c("low", "high")),
+                   ls.id = factor(ls.id))]
+
 
 mod.form <-
   bf(mar.std ~ name.short * ls.response * ls.imbalance +
@@ -108,4 +115,6 @@ mod.mar <- brm(bf(mar.std ~ name.short * ls.response * ls.imbalance +
                empty = FALSE)
 
 saveRDS(mod.mar, file.mod)
+
+# salloc --account=def-cricrime --cpus-per-task=32 --mem=12G --time=0:30:00
 
