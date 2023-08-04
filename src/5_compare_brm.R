@@ -12,7 +12,7 @@ file.estimates <- paste0(path.comp, "estimates.csv")
 
 file.mod <- paste0(path.comp, "mod.brm.rds")
 
-estimates <- fread(file.estimates)
+estimates <- fread(file.estimates, yaml = TRUE)
 
 fit.dt <-
   CJ(
@@ -31,6 +31,18 @@ estimates.fit <-
   estimates[fit.dt,
             on = names(fit.dt),
             nomatch = NULL]
+
+estimates.fit[,
+              `:=`(ls.response = factor(ls.response,
+                                        levels = c("normal", "tweedie", "binary")),
+                   ls.imbalance = factor(ls.imbalance,
+                                         levels = c("low", "high")),
+                   ls.id = factor(ls.id),
+                   name.short = factor(name.short,
+                                       levels = c("EGP", "GLM",
+                                                  "CEM-ST", "CEM-SC", "CEM-FD",
+                                                  "NN-PS-NR", "NN-PS-RE",
+                                                  "NN-MA-NR", "NN-MA-RE")))]
 
 priors <- c(prior(cauchy(0, 1), class = sd),
             prior(student_t(3, 0 , 1), class = b),

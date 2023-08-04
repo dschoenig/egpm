@@ -165,7 +165,7 @@ estimates <-
 
 estimates[, mar.std := mar.est / mar.true]
 
-estimates[
+estimates[,
           `:=`(ls.response = factor(ls.response,
                                     levels = c("normal", "tweedie", "binary")),
                ls.imbalance = factor(ls.imbalance,

@@ -3,16 +3,12 @@ library(brms)
 
 source("utilities.R")
 
-overwrite <- TRUE
-
 path.base <- "../"
 path.results <- paste0(path.base, "results/")
 path.comp <- paste0(path.results, "comparison/")
 file.estimates <- paste0(path.comp, "estimates.csv")
 
-file.mod <- paste0(path.comp, "mod.brm.rds")
-
-estimates <- fread(file.estimates)
+estimates <- fread(file.estimates, yaml = TRUE)
 
 sub.dt <-
   CJ(
