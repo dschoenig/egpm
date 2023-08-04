@@ -44,13 +44,14 @@ n <- nrow(par.o)
 
 set.seed(19201210) # Clarice Lispector
 tw.power <- 1.5
+tw.disp <- 1
 ls.seeds <- round(runif(n, 0, tw.power) * 1e8)
 par.b <-
   data.table(id = par.o$id,
              seed = ls.seeds,
              ls.original = ls.original,
              tw.power = tw.power,
-             tw.disp = 1
+             tw.disp = tw.disp
              )
 
 par.b[, file.name := stri_pad_left(id, ceiling(log10(n))+1, 0)]

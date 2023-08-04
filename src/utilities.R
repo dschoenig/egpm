@@ -1601,6 +1601,7 @@ generate_areas_poly <- function(x.dim,
                                 opt.fine.constr = TRUE,
                                 opt.fine.tol = 1e-4,
                                 opt.cache = TRUE,
+                                out.poly = FALSE,
                                 ...
                                 ) {
 
@@ -2385,10 +2386,16 @@ generate_areas_poly <- function(x.dim,
                    "."))
   }
 
-  return(list(shape = poly.areas,
-              table = areas.dt[, .(x, y, poly, type)],
-              performance = c(imbalance = trt.imb,
-                              area.prop = trt.area)))
+  out.l <- 
+    list(shape = poly.areas,
+         table = areas.dt[, .(x, y, poly, type)],
+         performance = c(imbalance = trt.imb,
+                         area.prop = trt.area))
+  if(out.poly) {
+    out.l$polygons <- res.grid
+  }
+
+  return(out.l)
 }
 
 
@@ -2451,7 +2458,7 @@ generate_z1 <- function(x.dim,
   if(is.null(mix)) {
     z <- fbm
   } else {
-  z <- fbm.w * fbm + mix.w * scale_int(mix, mix.rescale)
+    z <- fbm.w * fbm + mix.w * scale_int(mix, mix.rescale)
   }
   z <-
     scale_int(z, int = rescale) |>
@@ -2464,12 +2471,12 @@ generate_z2 <- function(x.dim,
                         y.dim,
                         grad.phi = 0,
                         grad.shift = 0,
-                        grad.w = 0,
+                        grad.w = 1,
                         grad.x.scale = 1,
                         grad.y.scale = 1,
                         grad.rescale = c(0, 1),
                         mix = NULL,
-                        mix.w = 1,
+                        mix.w = 0,
                         mix.rescale = c(0, 1),
                         rescale = c(0, 1),
                         name = "z2") {
@@ -2863,7 +2870,7 @@ generate_treatment <- function(x.dim,
     cbind(grid.coord, dist.cen, dist.lim) |>
     as.data.table()
 
-  # Calculate dampening due to edge effects
+  # Calculate damping
 
   if(damp.type == "asymmetric") {
     dist.dt[, damp := inv_cloglog(((dist.lim / (dist.cen + dist.lim)) - damp.infl) / damp.scale)]
@@ -3373,7 +3380,6 @@ generate_landscape_4cov_nl <-
 
 
 generate_landscape_4cov_nl_binary <- function(ls,
-                                              p.mean,
                                               verbose,
                                               ...) {
 
@@ -3504,13 +3510,15 @@ plot_landscape_4cov_nl <- function(x,
                                    legend.eff.main = "Covariate\neffect",
                                    title.eff.int = "Covariate effects (interactions)",
                                    legend.eff.int = "Covariate\neffect",
-                                   limits.common = TRUE
+                                   limits.common = TRUE,
+                                   base.size = 10,
+                                   base.family = "IBMPlexSansCondensed"
                                    ) {
   # select options for landscape: overview, effects, all
 
   if(is.null(ls_theme)) {
     ls_theme <-
-      theme_minimal(base_family = "IBMPlexSansCondensed", base_size = 11) +
+      theme_minimal(base_family = base.family, base_size = base.size) +
       theme(plot.title = element_text(hjust = 0,
                                       face = "bold",
                                       margin = margin(l = 0, b = 5, t = 11)),
@@ -3794,7 +3802,26 @@ plot_landscape_4cov_nl <- function(x,
       ls_theme
     }
 
-    if(type %in% c("binary", "tweedie")) {
+  if(type == "binary") {
+      plots[["resid"]] <-
+        ggplot(x, aes(x = x, y = y, fill = residual)) +
+        geom_raster() +
+        scale_fill_continuous_divergingx(palette = "Roma",
+                                         rev = TRUE,
+                                         mid = 0,
+                                         limits = c(-1, 1),
+                                         oob = scales::squish
+                                         ) +
+        scale_x_continuous(expand = c(0, 0)) +
+        scale_y_continuous(expand = c(0, 0)) +
+        coord_fixed() +
+        guide_fill +
+        labs(title = title.resid, fill = legend.resid) +
+        ls_theme
+    }
+
+
+    if(type == "tweedie") {
       prec <- round(log10(quantile(x$residual, 0.55) - quantile(x$residual, 0.45)))
       # res.lim <- unname(quantile(x$residual, c(0.01, 0.99)))
       # res.min <- unname(quantile(x$residual, 0.01))
@@ -3945,7 +3972,9 @@ plot_functions_4cov_nl <- function(x = NULL,
                                    legend.int = "Partial\neffect",
                                    contour.bins = 11,
                                    fun_theme = NULL,
-                                   fun_guide = NULL) {
+                                   fun_guide = NULL,
+                                   base.size = 10,
+                                   main.nrow = 2) {
 
   if(!is.null(x)) {
     main <- x[[1]]
@@ -3965,7 +3994,7 @@ plot_functions_4cov_nl <- function(x = NULL,
 
   if(is.null(fun_theme)) {
     fun_theme <-
-      theme_light(base_family = "IBMPlexSansCondensed", base_size = 11) +
+      theme_light(base_family = "IBMPlexSansCondensed", base_size = base.size) +
         theme(
               plot.title = element_text(hjust = 0,
                                         face = "bold",
@@ -4014,7 +4043,7 @@ plot_functions_4cov_nl <- function(x = NULL,
       cbind(main, cov.lab) |>
       ggplot() +
         geom_line(aes(x = val, y = f)) +
-        facet_wrap(vars(cov.lab), nrow = 2) +
+        facet_wrap(vars(cov.lab), nrow = main.nrow) +
         scale_y_continuous(lim = lim.main) +
         labs(title = title.main,
              x = "Covariate value",
@@ -5768,5 +5797,23 @@ rmse <- function(x, y = mean(x), ...) {
   rmse <- sqrt(mean((x - y)^2, ...))
   return(rmse)
 }
+
+seq_ranspaced <- function(from, to, n, randomize = TRUE) {
+  step <- (to - from) / n
+  halfstep <- step / 2
+  seq_ranspaced <-
+    (seq(from + halfstep, to - halfstep, by = step) +
+     runif(n, -halfstep, halfstep))
+  if(randomize) {
+    seq_ranspaced <- sample(seq_ranspaced)
+  }
+  return(seq_ranspaced)
+}
+
+
+
+
+
+
 
 
