@@ -2,6 +2,8 @@
 
 c(
   "mgcv",
+  "brms",
+  "rstan",
   # "RandomFields",
   # "RandomFieldsUtils",
   "sf",
