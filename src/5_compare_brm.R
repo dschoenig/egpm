@@ -65,7 +65,7 @@ if(file.exists(file.mod) & overwrite == FALSE) {
                  data = estimates.fit,
                  chains = 4,
                  cores = 4,
-                 threads = 8,
+                 threads = 4,
                  warmup = 4000,
                  iter = 5000,
                  control = list(max_treedepth = 15),
