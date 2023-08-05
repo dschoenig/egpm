@@ -45,6 +45,7 @@ estimates.fit[,
                                                   "NN-MA-NR", "NN-MA-RE")))]
 
 priors <- c(prior(student_t(3, 0 , 0.5), class = sd),
+            prior(student_t(3, 0 , 1), class = Intercept),
             prior(student_t(3, 0 , 1), class = b),
             # prior(gamma(4, 1),  class = nu),
             prior(student_t(3, 0 , 1), class = b, dpar = sigma))
@@ -52,6 +53,7 @@ priors <- c(prior(student_t(3, 0 , 0.5), class = sd),
 mod.form <-
   bf(mar.std ~ name.short * ls.response * ls.imbalance +
                (1|ls.id:ls.imbalance:ls.response),
+     # nu = 4,
      sigma ~ name.short * ls.response * ls.imbalance)
 
 if(file.exists(file.mod) & overwrite == FALSE) {
@@ -66,8 +68,8 @@ if(file.exists(file.mod) & overwrite == FALSE) {
                  chains = 4,
                  cores = 4,
                  threads = 4,
-                 warmup = 4000,
-                 iter = 5000,
+                 warmup = 9000,
+                 iter = 10000,
                  control = list(max_treedepth = 15),
                  refresh = 10,
                  empty = FALSE)
