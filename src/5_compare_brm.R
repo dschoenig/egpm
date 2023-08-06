@@ -45,25 +45,26 @@ estimates.fit[,
                                                   "NN-MA-NR", "NN-MA-RE")))]
 
 priors <- c(
-            prior(cauchy(0, 1), class = sd),
-            prior(student_t(3, 1 , 1), class = Intercept),
-            prior(student_t(3, 0 , 1), class = b),
+            prior(student_t(5, 0, 0.5), class = sd),
+            prior(normal(1 , 2), class = Intercept),
+            prior(normal(0 , 2), class = b),
             # prior(gamma(4, 1),  class = nu),
-            prior(student_t(3, 0 , 1), class = b, dpar = sigma))
+            prior(normal(0, 2), class = b, dpar = sigma))
 
 mod.form <-
   bf(mar.std ~ name.short * ls.response * ls.imbalance +
                (1|ls.id:ls.imbalance:ls.response),
-     nu = 4,
+     # nu = 4,
      sigma ~ name.short * ls.response * ls.imbalance)
 
 if(file.exists(file.mod) & overwrite == FALSE) {
   mod.mar <- readRDS(file.mod)
 } else {
+
   mod.mar <- brm(bf(mar.std ~ name.short * ls.response * ls.imbalance +
                               (1|ls.id:ls.imbalance:ls.response),
                     sigma ~ name.short * ls.response * ls.imbalance),
-                 family = student(),
+                 # family = student(),
                  prior = priors,
                  data = estimates.fit,
                  chains = 4,
@@ -75,7 +76,7 @@ if(file.exists(file.mod) & overwrite == FALSE) {
                  refresh = 10,
                  empty = FALSE)
 
-  summary(mod.mar)
+  print(summary(mod.mar))
 
   saveRDS(mod.mar, file.mod)
 }
