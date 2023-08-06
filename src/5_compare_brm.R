@@ -131,11 +131,11 @@ if(file.exists(file.mod) & overwrite == FALSE) {
                  chains = 4,
                  cores = 4,
                  threads = 4,
-                 warmup = 5000,
-                 iter = 7500,
+                 warmup = 10000,
+                 iter = 20000,
                  # thin = 2,
                  control = list(max_treedepth = 15),
-                 refresh = 10,
+                 refresh = 25,
                  empty = FALSE)
 
   print(summary(mod.mar))
