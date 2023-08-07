@@ -119,7 +119,7 @@ priors <- c(
             prior(cauchy(0, 1), class = sd),
             prior(student_t(3, 1 , 1), class = Intercept),
             prior(student_t(3, 0 , 1), class = b),
-            prior(gamma(2, 1),  class = nu),
+            # prior(gamma(2, 1),  class = nu),
             prior(student_t(3, 0 , 1), class = Intercept, dpar = sigma),
             prior(student_t(3, 0, 1), class = b, dpar = sigma))
 
