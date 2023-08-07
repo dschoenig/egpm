@@ -155,6 +155,7 @@ if(file.exists(file.mod) & overwrite == FALSE) {
                  threads = 4,
                  warmup = 5000,
                  iter = 7500,
+                 init = 0,
                  # thin = 2,
                  control = list(max_treedepth = 15),
                  refresh = 25,
