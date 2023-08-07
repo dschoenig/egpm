@@ -44,20 +44,35 @@ estimates.fit[,
                                                   "NN-PS-NR", "NN-PS-RE",
                                                   "NN-MA-NR", "NN-MA-RE")))]
 
+ls.type.lev <-
+  with(estimates.fit,
+       paste0(rep(levels(ls.response), each = 2), "_",
+              rep(levels(ls.imbalance), times = 3)))
+
+estimates.fit[,
+              ls.type := factor(paste0(ls.response, "_", ls.imbalance),
+                                levels = ls.type.lev)]
+estimates.fit[,
+              ls.uid := ((as.integer(ls.type)-1) * 1000) + as.integer(as.character(ls.id))]
+
+
 # Test section #################
 
-# # priors <- c(prior(cauchy(0, 1), class = sd),
-# #             prior(student_t(3, 0 , 1), class = b),
-# #             prior(gamma(2, 1),  class = nu),
-# #             prior(student_t(3, 0 , 1), class = b, dpar = sigma))
+# priors <- c(
+#             prior(cauchy(0, 1), class = sd),
+#             # prior(student_t(3, 1 , 1), class = Intercept),
+#             prior(student_t(3, 1 , 1), class = b),
+#             prior(gamma(2, 1),  class = nu),
+#             prior(student_t(3, 0, 1), class = b, dpar = sigma))
 
 # ls.sam <- sample(1:1000, 10)
 # estimates.fit2 <- estimates.fit[ls.id %in% ls.sam]
 
-# mod.mar <- brm(bf(mar.std ~ name.short * ls.response * ls.imbalance +
-#                             (1|ls.id:ls.imbalance:ls.response),
-#                             # (1|ls.response + ls.imbalance:ls.response + ls.id:ls.imbalance:ls.response),
-#                   sigma ~ name.short * ls.response * ls.imbalance),
+# mod.form <-
+#   bf(mar.std ~ 0 + name.short + name.short:ls.type + (1|ls.uid),
+#      sigma ~ 0 + name.short + name.short:ls.type)
+
+# mod.mar <- brm(mod.form,
 #                family = student(),
 #                prior = priors,
 #                data = estimates.fit2,
@@ -105,6 +120,7 @@ priors <- c(
             prior(student_t(3, 1 , 1), class = Intercept),
             prior(student_t(3, 0 , 1), class = b),
             prior(gamma(2, 1),  class = nu),
+            prior(student_t(3, 0 , 1), class = Intercept, dpar = sigma),
             prior(student_t(3, 0, 1), class = b, dpar = sigma))
 
 # priors <- c(
@@ -114,16 +130,22 @@ priors <- c(
 #             # prior(gamma(4, 1),  class = nu),
 #             prior(normal(0, 2), class = b, dpar = sigma))
 
+
 mod.form <-
-  bf(mar.std ~ name.short * ls.response * ls.imbalance +
-               (1|ls.id:ls.imbalance:ls.response),
-     # nu = 4,
-     sigma ~ name.short * ls.response * ls.imbalance)
+  bf(mar.std ~ name.short + name.short:ls.type + (1|ls.uid),
+     sigma ~ name.short + name.short:ls.type)
+
+# mod.form <-
+#   bf(mar.std ~ name.short + name.short:ls.type
+#                (1|ls.id:ls.imbalance:ls.response),
+#      # nu = 4,
+#      sigma ~ name.short * ls.response * ls.imbalance)
 
 
 if(file.exists(file.mod) & overwrite == FALSE) {
   mod.mar <- readRDS(file.mod)
 } else {
+
   mod.mar <- brm(mod.form,
                  family = student(),
                  prior = priors,
@@ -131,8 +153,8 @@ if(file.exists(file.mod) & overwrite == FALSE) {
                  chains = 4,
                  cores = 4,
                  threads = 4,
-                 warmup = 10000,
-                 iter = 20000,
+                 warmup = 5000,
+                 iter = 7500,
                  # thin = 2,
                  control = list(max_treedepth = 15),
                  refresh = 25,
