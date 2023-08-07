@@ -132,8 +132,8 @@ priors <- c(
 
 
 mod.form <-
-  bf(mar.std ~ name.short + name.short:ls.type + (1|ls.uid),
-     sigma ~ name.short + name.short:ls.type)
+  bf(mar.std ~ name.short * ls.response * ls.imbalance + (1|ls.uid),
+     sigma ~ name.short * ls.response * ls.imbalance)
 
 # mod.form <-
 #   bf(mar.std ~ name.short + name.short:ls.type
