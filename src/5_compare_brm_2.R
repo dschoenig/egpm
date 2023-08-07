@@ -116,7 +116,7 @@ estimates.fit[,
 
 
 priors <- c(
-            prior(cauchy(0, 1), class = sd),
+            prior(student_t(3, 0, 1), class = sd),
             prior(student_t(3, 1 , 1), class = Intercept),
             prior(student_t(3, 0 , 1), class = b),
             prior(gamma(2, 1),  class = nu),
@@ -155,6 +155,7 @@ if(file.exists(file.mod) & overwrite == FALSE) {
                  threads = 4,
                  warmup = 5000,
                  iter = 7500,
+                 save_pars = save_pars(all = TRUE),
                  # init = 0,
                  # thin = 2,
                  # control = list(max_treedepth = 15),
