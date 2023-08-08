@@ -18,6 +18,9 @@ file.mod <- paste0(path.comp, "mod.brm.", mod.id, ".rds")
 
 estimates <- fread(file.estimates, yaml = TRUE)
 
+
+
+
 fit.dt <-
   CJ(
      ls.response = c("normal", "tweedie", "binary"),
@@ -163,11 +166,47 @@ if(mod.id == 3) {
                  refresh = 25,
                  empty = FALSE)
 
-    print(summary(mod.mar))
+  print(summary(mod.mar))
 
-    saveRDS(mod.mar, file.mod)
-  }
+  saveRDS(mod.mar, file.mod)
+}
 
+
+if(mod.id == 4) {
+
+  priors <- c(
+              prior(student_t(3, 0, 1), class = sd),
+              prior(student_t(3, 1, 1), class = Intercept),
+              prior(student_t(3, 0, 1), class = b),
+              prior(gamma(2, 0.1),  class = nu),
+              prior(student_t(3, 0, 1), class = Intercept, dpar = sigma),
+              prior(student_t(3, 0, 1), class = b, dpar = sigma))
+
+  mod.form <-
+    bf(mar.std ~ name.short + (1 | ls.uid),
+       sigma ~ name.short + (1 | ls.uid))
+
+  mod.mar <- brm(mod.form,
+                 family = student(),
+                 prior = priors,
+                 data = estimates.fit,
+                 chains = 4,
+                 cores = 4,
+                 threads = 4,
+                 warmup = 5000,
+                 iter = 7500,
+                 save_pars = save_pars(all = TRUE),
+                 # init = 0,
+                 # thin = 2,
+                 # control = list(max_treedepth = 15),
+                 refresh = 25,
+                 empty = FALSE)
+
+  print(summary(mod.mar))
+
+  saveRDS(mod.mar, file.mod)
+
+}
 
 # salloc --account=def-cricrime --cpus-per-task=32 --mem=12G --time=0:30:00
 
