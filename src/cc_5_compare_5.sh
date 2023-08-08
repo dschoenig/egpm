@@ -1,3 +1,4 @@
+#!/bin/bash
 #SBATCH --account=def-cricrime 
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=18G
