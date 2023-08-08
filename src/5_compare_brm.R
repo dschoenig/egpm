@@ -7,7 +7,7 @@ source("utilities.R")
 
 # overwrite <- TRUE
 mod.id <- as.integer(args[1])
-mod.id <- 2
+# mod.id <- 2
 
 path.base <- "../"
 path.results <- paste0(path.base, "results/")
