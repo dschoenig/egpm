@@ -94,9 +94,6 @@ if(mod.id == 1) {
                  refresh = 25,
                  empty = FALSE)
 
-    print(summary(mod.mar))
-
-    saveRDS(mod.mar, file.mod)
 }
 
 
@@ -130,9 +127,6 @@ if(mod.id == 2) {
                  refresh = 25,
                  empty = FALSE)
 
-    print(summary(mod.mar))
-
-    saveRDS(mod.mar, file.mod)
   }
 
 
@@ -166,9 +160,6 @@ if(mod.id == 3) {
                  refresh = 25,
                  empty = FALSE)
 
-  print(summary(mod.mar))
-
-  saveRDS(mod.mar, file.mod)
 }
 
 
@@ -201,10 +192,6 @@ if(mod.id == 4) {
                  # control = list(max_treedepth = 15),
                  refresh = 25,
                  empty = FALSE)
-
-  print(summary(mod.mar))
-
-  saveRDS(mod.mar, file.mod)
 
 }
 
@@ -239,10 +226,10 @@ if(mod.id == 5) {
                  refresh = 25,
                  empty = FALSE)
 
-  print(summary(mod.mar))
-
-  saveRDS(mod.mar, file.mod)
 }
+
+saveRDS(mod.mar, file.mod)
+
 
 # salloc --account=def-cricrime --cpus-per-task=32 --mem=12G --time=0:30:00
 
