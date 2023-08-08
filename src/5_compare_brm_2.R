@@ -115,13 +115,23 @@ estimates.fit[,
 #             prior(student_t(3, 0 , 1), class = b, dpar = sigma))
 
 
+# priors <- c(
+#             prior(student_t(3, 0, 1), class = sd),
+#             prior(student_t(3, 1 , 1), class = Intercept),
+#             prior(student_t(3, 0 , 1), class = b),
+#             prior(gamma(2, 1),  class = nu),
+#             prior(student_t(3, 0 , 1), class = Intercept, dpar = sigma),
+#             prior(student_t(3, 0, 1), class = b, dpar = sigma))
+
 priors <- c(
-            prior(student_t(3, 0, 1), class = sd),
-            prior(student_t(3, 1 , 1), class = Intercept),
-            prior(student_t(3, 0 , 1), class = b),
+            prior(normal(0, 1), class = sd),
+            prior(normal(1 , 1), class = Intercept),
+            prior(normal(0 , 1), class = b),
             prior(gamma(2, 1),  class = nu),
-            prior(student_t(3, 0 , 1), class = Intercept, dpar = sigma),
-            prior(student_t(3, 0, 1), class = b, dpar = sigma))
+            prior(normal(0, 1), class = Intercept, dpar = sigma),
+            prior(normal(0, 1), class = b, dpar = sigma))
+
+
 
 # priors <- c(
 #             prior(student_t(3, 0, 5), class = sd),

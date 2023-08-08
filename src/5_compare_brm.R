@@ -10,7 +10,7 @@ path.results <- paste0(path.base, "results/")
 path.comp <- paste0(path.results, "comparison/")
 file.estimates <- paste0(path.comp, "estimates.csv")
 
-file.mod <- paste0(path.comp, "mod.brm.rds")
+file.mod <- paste0(path.comp, "mod.brm_1.rds")
 
 estimates <- fread(file.estimates, yaml = TRUE)
 
@@ -115,13 +115,23 @@ estimates.fit[,
 #             prior(student_t(3, 0 , 1), class = b, dpar = sigma))
 
 
+# priors <- c(
+#             prior(student_t(3, 0, 1), class = sd),
+#             prior(student_t(3, 1 , 1), class = Intercept),
+#             prior(student_t(3, 0 , 1), class = b),
+#             prior(gamma(2, 1),  class = nu),
+#             prior(student_t(3, 0 , 1), class = Intercept, dpar = sigma),
+#             prior(student_t(3, 0, 1), class = b, dpar = sigma))
+
 priors <- c(
-            prior(cauchy(0, 1), class = sd),
-            prior(student_t(3, 1 , 1), class = Intercept),
-            prior(student_t(3, 0 , 1), class = b),
+            prior(normal(0, 1), class = sd),
+            prior(normal(0, 10), class = Intercept),
+            prior(normal(0 ,1), class = b),
             prior(gamma(2, 1),  class = nu),
-            prior(student_t(3, 0 , 1), class = Intercept, dpar = sigma),
-            prior(student_t(3, 0, 1), class = b, dpar = sigma))
+            prior(normal(0, 1), class = Intercept, dpar = sigma),
+            prior(normal(0, 1), class = b, dpar = sigma))
+
+
 
 # priors <- c(
 #             prior(student_t(3, 0, 5), class = sd),
@@ -132,8 +142,8 @@ priors <- c(
 
 
 mod.form <-
-  bf(mar.std ~ name.short * ls.response * ls.imbalance + (1|ls.uid),
-     sigma ~ name.short * ls.response * ls.imbalance)
+  bf(mar.std ~ name.short + (1|ls.uid),
+     sigma ~ name.short)
 
 # mod.form <-
 #   bf(mar.std ~ name.short + name.short:ls.type
@@ -155,9 +165,10 @@ if(file.exists(file.mod) & overwrite == FALSE) {
                  threads = 4,
                  warmup = 5000,
                  iter = 7500,
-                 init = 0,
+                 save_pars = save_pars(all = TRUE),
+                 # init = 0,
                  # thin = 2,
-                 control = list(max_treedepth = 15),
+                 # control = list(max_treedepth = 15),
                  refresh = 25,
                  empty = FALSE)
 
