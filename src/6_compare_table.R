@@ -34,9 +34,8 @@ estimates.sub[
               # ls.response == "tweedie" & ls.imbalance == "low"
               ,
               .(bias = mean(mar.std-1),
-                cv = sd(mar.std)/mean(mar.std),
-                ser = sum(sign(mar.est) != sign(mar.true)) / .N,
                 rmse = rmse(mar.std, 1)),
+                ser = sum(sign(mar.est) != sign(mar.true)) / .N,
                 by = .(name.short, mod.id,
                        method,
                        match.distance,
@@ -54,7 +53,6 @@ estimates.sub[,
                                          levels = c("low", "high")),
                    ls.id = factor(ls.id))]
 
-fwrite(estimates.sub, file.estfit)
 
 
 
