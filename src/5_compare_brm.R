@@ -7,7 +7,7 @@ source("utilities.R")
 
 # overwrite <- TRUE
 mod.id <- as.integer(args[1])
-# mod.id <- 1
+mod.id <- 2
 
 path.base <- "../"
 path.results <- paste0(path.base, "results/")
@@ -60,11 +60,6 @@ estimates.fit[,
               ls.uid := ((as.integer(ls.type)-1) * 1000) + as.integer(as.character(ls.id))]
 
 
-# priors <- c(prior(cauchy(0, 1), class = sd),
-#             prior(student_t(3, 0 , 1), class = b),
-#             prior(gamma(2, 1),  class = nu),
-#             prior(student_t(3, 0 , 1), class = b, dpar = sigma))
-
 
 if(mod.id == 1) {
 
@@ -114,7 +109,7 @@ if(mod.id == 2) {
               # prior(student_t(3, 0, 1), class = b, dpar = sigma))
 
   mod.form <-
-    bf(mar.std ~ name.short + (1 + name.short | ls.uid))
+    bf(mar.std ~ name.short + (1 | ls.uid))
 
   mod.mar <- brm(mod.form,
                  family = student(),
@@ -149,7 +144,7 @@ if(mod.id == 3) {
               prior(student_t(3, 0, 1), class = b, dpar = sigma))
 
   mod.form <-
-    bf(mar.std ~ name.short + (1 + name.short | ls.uid),
+    bf(mar.std ~ name.short + (1 | ls.uid),
        sigma ~ name.short)
 
   mod.mar <- brm(mod.form,
