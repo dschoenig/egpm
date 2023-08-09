@@ -467,6 +467,42 @@ if(mod.id == 12) {
 }
 
 
+if(mod.id == 13) {
+
+  priors <- c(
+              prior(student_t(3, 0, 0.5), class = sd),
+              prior(student_t(3, 0, 0.5), class = sd, dpar = sigma),
+              prior(student_t(3, 1, 0.5), class = Intercept),
+              prior(student_t(3, 0, 0.5), class = b),
+              prior(gamma(2, 0.1),  class = nu),
+              prior(student_t(3, 0, 0.5), class = Intercept, dpar = sigma),
+              prior(student_t(3, 0, 0.5), class = b, dpar = sigma))
+
+  mod.form <-
+    bf(mar.std ~ name.short*ls.response*ls.imbalance + (1 | ls.uid),
+       sigma ~ name.short*ls.response*ls.imbalance + (1 | ls.uid))
+
+  mod.mar <- brm(mod.form,
+                 family = student(),
+                 prior = priors,
+                 data = estimates.fit,
+                 chains = 4,
+                 cores = 4,
+                 threads = 4,
+                 warmup = 10000,
+                 iter = 20000,
+                 # save_pars = save_pars(all = TRUE),
+                 # init = 0,
+                 thin = 4,
+                 # control = list(max_treedepth = 15),
+                 refresh = 25,
+                 empty = FALSE)
+
+}
+
+
+
+
 saveRDS(mod.mar, file.mod)
 
 
