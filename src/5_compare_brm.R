@@ -363,21 +363,21 @@ if(mod.id == 9) {
 
 }
 
+
 if(mod.id == 10) {
 
-  estimates.fit[,
-                `:=`(mod.off.mu = 1)]
-
   priors <- c(
-              prior(student_t(3, 0, 1), class = sd),
-              prior(student_t(3, 0, 1), class = sd, dpar = sigma),
-              prior(student_t(3, 0, 1), class = b),
+              prior(normal(0, 1), class = sd),
+              prior(normal(0, 1), class = sd, dpar = sigma),
+              prior(normal(1, 1), class = Intercept),
+              prior(normal(0, 1), class = b),
               prior(gamma(2, 0.1),  class = nu),
-              prior(student_t(3, 0, 1), class = b, dpar = sigma))
+              prior(normal(0, 1), class = Intercept, dpar = sigma),
+              prior(normal(0, 1), class = b, dpar = sigma))
 
   mod.form <-
-    bf(mar.std ~ 0 + offset(mod.mu.off) + name.short:ls.response:ls.imbalance + (1 | ls.uid),
-       sigma ~ 0 + name.short:ls.response:ls.imbalance + (1 | ls.uid))
+    bf(mar.std ~ name.short + (1 | ls.uid),
+       sigma ~ name.short + (1 | ls.uid))
 
   mod.mar <- brm(mod.form,
                  family = student(),
@@ -389,13 +389,51 @@ if(mod.id == 10) {
                  warmup = 10000,
                  iter = 20000,
                  # save_pars = save_pars(all = TRUE),
-                 init = 0,
+                 # init = 0,
                  thin = 4,
                  # control = list(max_treedepth = 15),
                  refresh = 25,
                  empty = FALSE)
 
 }
+
+
+
+
+if(mod.id == 11) {
+
+  priors <- c(
+              prior(normal(0, 1), class = sd),
+              prior(normal(0, 1), class = sd, dpar = sigma),
+              prior(normal(1, 1), class = Intercept),
+              prior(normal(0, 1), class = b),
+              prior(gamma(2, 0.1),  class = nu),
+              prior(normal(0, 1), class = Intercept, dpar = sigma),
+              prior(normal(0, 1), class = b, dpar = sigma))
+
+  mod.form <-
+    bf(mar.std ~ name.short*ls.response*ls.imbalance + (1 | ls.uid),
+       sigma ~ name.short*ls.response*ls.imbalance + (1 | ls.uid))
+
+  mod.mar <- brm(mod.form,
+                 family = student(),
+                 prior = priors,
+                 data = estimates.fit,
+                 chains = 4,
+                 cores = 4,
+                 threads = 4,
+                 warmup = 10000,
+                 iter = 20000,
+                 # save_pars = save_pars(all = TRUE),
+                 # init = 0,
+                 thin = 4,
+                 # control = list(max_treedepth = 15),
+                 refresh = 25,
+                 empty = FALSE)
+
+}
+
+
 
 
 saveRDS(mod.mar, file.mod)
