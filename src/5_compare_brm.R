@@ -186,9 +186,9 @@ if(mod.id == 4) {
                  threads = 4,
                  warmup = 10000,
                  iter = 20000,
-                 save_pars = save_pars(all = TRUE),
+                 # save_pars = save_pars(all = TRUE),
                  # init = 0,
-                 # thin = 2,
+                 thin = 4,
                  # control = list(max_treedepth = 15),
                  refresh = 25,
                  empty = FALSE)
@@ -219,9 +219,9 @@ if(mod.id == 5) {
                  threads = 4,
                  warmup = 10000,
                  iter = 20000,
-                 save_pars = save_pars(all = TRUE),
+                 # save_pars = save_pars(all = TRUE),
                  # init = 0,
-                 # thin = 2,
+                 thin = 4,
                  # control = list(max_treedepth = 15),
                  refresh = 25,
                  empty = FALSE)
