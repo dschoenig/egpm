@@ -365,6 +365,9 @@ if(mod.id == 9) {
 
 if(mod.id == 10) {
 
+  estimates.fit[,
+                `:=`(mod.off.mu = 1)]
+
   priors <- c(
               prior(student_t(3, 0, 1), class = sd),
               prior(student_t(3, 0, 1), class = sd, dpar = sigma),
@@ -373,8 +376,8 @@ if(mod.id == 10) {
               prior(student_t(3, 0, 1), class = b, dpar = sigma))
 
   mod.form <-
-    bf(mar.std ~ 1 + name.short:ls.response:ls.imbalance + (1 | ls.uid),
-       sigma ~ 1 + name.short:ls.response:ls.imbalance + (1 | ls.uid))
+    bf(mar.std ~ 0 + offset(mod.mu.off) + name.short:ls.response:ls.imbalance + (1 | ls.uid),
+       sigma ~ 0 + name.short:ls.response:ls.imbalance + (1 | ls.uid))
 
   mod.mar <- brm(mod.form,
                  family = student(),
