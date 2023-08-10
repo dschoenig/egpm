@@ -588,9 +588,9 @@ if(mod.id == 16) {
               prior(student_t(3, 0, 1), class = sd, dpar = sigma))
 
   mod.form <-
-    bf(mar.std ~ name.short + (1 | ls.uid),
-       nu ~ name.short + (1 | ls.uid),
-       sigma ~ name.short + (1 | ls.uid))
+    bf(mar.std ~ name.short + (1 |l| ls.uid),
+       nu ~ name.short + (1 |l| ls.uid),
+       sigma ~ name.short + (1 |l| ls.uid))
 
   mod.mar <- brm(mod.form,
                  family = student(),
@@ -616,4 +616,5 @@ saveRDS(mod.mar, file.mod)
 
 
 # salloc --account=def-cricrime --cpus-per-task=32 --mem=12G --time=0:30:00
+
 
