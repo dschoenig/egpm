@@ -639,7 +639,7 @@ if(mod.id == 17) {
                  warmup = 10000,
                  iter = 20000,
                  # save_pars = save_pars(all = TRUE),
-                 # init = 0,
+                 init = 0,
                  thin = 2,
                  control = list(adapt_delta = 0.7),
                  refresh = 25,
