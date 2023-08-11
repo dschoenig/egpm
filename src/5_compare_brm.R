@@ -755,6 +755,43 @@ if(mod.id == 20) {
 }
 
 
+if(mod.id == 21) {
+
+  priors <- c(
+              prior(student_t(3, 1, 1), class = Intercept),
+              prior(student_t(3, 0, 1), class = b),
+              prior(student_t(3, 0, 1), class = sd),
+              prior(student_t(3, 2, 1), class = Intercept, dpar = nu),
+              prior(student_t(3, 0, 1), class = b, dpar = nu),
+              prior(student_t(3, 0, 1), class = sd, dpar = nu),
+              prior(student_t(3, 0, 1), class = Intercept, dpar = sigma),
+              prior(student_t(3, 0, 1), class = b, dpar = sigma),
+              prior(student_t(3, 0, 1), class = sd, dpar = sigma))
+
+  mod.form <-
+    bf(mar.std ~ name.short*ls.response*ls.imbalance + (1 |l| ls.uid),
+       nu ~ name.short*ls.response*ls.imbalance + (1 |l| ls.uid),
+       sigma ~ name.short*ls.response*ls.imbalance + (1 |l| ls.uid))
+
+  mod.mar <- brm(mod.form,
+                 family = student(),
+                 prior = priors,
+                 data = estimates.fit,
+                 chains = 4,
+                 cores = 4,
+                 threads = 8,
+                 warmup = 5000,
+                 iter = 25000,
+                 # save_pars = save_pars(all = TRUE),
+                 init = 0,
+                 thin = 4,
+                 # control = list(adapt_delta = 0.7),
+                 refresh = 25,
+                 empty = FALSE)
+
+}
+
+
 saveRDS(mod.mar, file.mod)
 
 
