@@ -834,11 +834,9 @@ if(mod.id == 23) {
 
   priors <- c(
               prior(student_t(3, 1, 1), class = Intercept),
-              prior(student_t(3, 0, 1), class = b),
               prior(student_t(3, 0, 1), class = sd),
               prior(gamma(2, 0.1),  class = nu),
               prior(student_t(3, 0, 1), class = Intercept, dpar = sigma),
-              prior(student_t(3, 0, 1), class = b, dpar = sigma),
               prior(student_t(3, 0, 1), class = sd, dpar = sigma))
 
   mod.form <-
@@ -868,11 +866,9 @@ if(mod.id == 24) {
 
 priors <- c(
             prior(student_t(3, 1, 1), class = Intercept),
-            prior(student_t(3, 0, 1), class = b),
             prior(student_t(3, 0, 1), class = sd),
             prior(gamma(2, 0.1),  class = nu),
             prior(student_t(3, 0, 1), class = Intercept, dpar = sigma),
-            prior(student_t(3, 0, 1), class = b, dpar = sigma),
             prior(student_t(3, 0, 1), class = sd, dpar = sigma))
 
 mod.form <-
