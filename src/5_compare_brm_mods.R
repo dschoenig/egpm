@@ -903,13 +903,6 @@ if(mod.id == 25) {
 
   estimates.fit <- estimates.fit[ls.type == "normal_high"]
 
-
-  priors <- c(
-              prior(if(mod.id == 23) {
-
-  estimates.fit <- estimates.fit[ls.type == "normal_high"]
-
-
   priors <- c(
               prior(normal(1, 5), class = Intercept),
               prior(normal(0, 3), class = sd),
