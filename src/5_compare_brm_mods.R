@@ -7,7 +7,7 @@ source("utilities.R")
 
 # overwrite <- TRUE
 mod.id <- as.integer(args[1])
-# mod.id <- 2
+mod.id <- 23
 
 path.base <- "../"
 path.results <- paste0(path.base, "results/")
@@ -61,9 +61,6 @@ estimates.fit[,
                                 levels = ls.type.lev)]
 estimates.fit[,
               ls.uid := ((as.integer(ls.type)-1) * 1000) + as.integer(as.character(ls.id))]
-
-# TEST
-estimates.fit <- estimates.fit[ls.type == "normal_high"]
 
 
 
@@ -832,6 +829,9 @@ if(mod.id == 22) {
 
 if(mod.id == 23) {
 
+  estimates.fit <- estimates.fit[ls.type == "normal_high"]
+
+
   priors <- c(
               prior(student_t(3, 1, 1), class = Intercept),
               prior(student_t(3, 0, 1), class = sd),
@@ -862,36 +862,117 @@ if(mod.id == 23) {
 }
 
 
-if(mod.id == 24) {
+if(mod.id == 23) {
 
-priors <- c(
-            prior(student_t(3, 1, 1), class = Intercept),
-            prior(student_t(3, 0, 1), class = sd),
-            prior(gamma(2, 0.1),  class = nu),
-            prior(student_t(3, 0, 1), class = Intercept, dpar = sigma),
-            prior(student_t(3, 0, 1), class = sd, dpar = sigma))
+  estimates.fit <- estimates.fit[ls.type == "normal_high"]
 
-mod.form <-
-  bf(mar.std ~ 1 + (1 |i| name.short) + (1 |i| ls.uid),
-     sigma ~ 1 + (1 |i| name.short))
 
-mod.mar <- brm(mod.form,
-               family = student(),
-               prior = priors,
-               data = estimates.fit,
-               chains = 4,
-               cores = 4,
-               threads = 8,
-               warmup = 5000,
-               iter = 25000,
-               # save_pars = save_pars(all = TRUE),
-               init = 0,
-               thin = 4,
-               # control = list(adapt_delta = 0.7),
-               refresh = 25,
-               empty = FALSE)
+  priors <- c(
+              prior(student_t(3, 1, 1), class = Intercept),
+              prior(student_t(3, 0, 1), class = sd),
+              prior(student_t(3, 0, 1), class = Intercept, dpar = nu),
+              prior(student_t(3, 0, 1), class = sd, dpar = nu),
+              prior(student_t(3, 0, 1), class = Intercept, dpar = sigma),
+              prior(student_t(3, 0, 1), class = sd, dpar = sigma))
+
+  mod.form <-
+    bf(mar.std ~ 1 + (1 |m| name.short),
+       nu ~ 1 + (1 |m| name.short),
+       sigma ~ 1 + (1 |m| name.short))
+
+  mod.mar <- brm(mod.form,
+                 family = student(),
+                 prior = priors,
+                 data = estimates.fit,
+                 chains = 4,
+                 cores = 4,
+                 threads = 8,
+                 warmup = 5000,
+                 iter = 25000,
+                 # save_pars = save_pars(all = TRUE),
+                 init = 0,
+                 thin = 4,
+                 # control = list(adapt_delta = 0.7),
+                 refresh = 25,
+                 empty = FALSE)
 
 }
+
+
+if(mod.id == 24) {
+
+  estimates.fit <- estimates.fit[ls.type == "normal_high"]
+
+
+  priors <- c(
+              prior(if(mod.id == 23) {
+
+  estimates.fit <- estimates.fit[ls.type == "normal_high"]
+
+
+  priors <- c(
+              prior(normal(1, 5), class = Intercept),
+              prior(normal(0, 3), class = sd),
+              prior(normal(0, 5), class = Intercept, dpar = nu),
+              prior(normal(0, 3), class = sd, dpar = nu),
+              prior(normal(0, 5), class = Intercept, dpar = sigma),
+              prior(normal(0, 3), class = sd, dpar = sigma))
+
+  mod.form <-
+    bf(mar.std ~ 1 + (1 |m| name.short),
+       nu ~ 1 + (1 |m| name.short),
+       sigma ~ 1 + (1 |m| name.short))
+
+  mod.mar <- brm(mod.form,
+                 family = student(),
+                 prior = priors,
+                 data = estimates.fit,
+                 chains = 4,
+                 cores = 4,
+                 threads = 8,
+                 warmup = 5000,
+                 iter = 25000,
+                 # save_pars = save_pars(all = TRUE),
+                 init = 0,
+                 thin = 4,
+                 # control = list(adapt_delta = 0.7),
+                 refresh = 25,
+                 empty = FALSE)
+
+}
+
+(3, 1, 1), class = Intercept),
+              prior(student_t(3, 0, 1), class = sd),
+              prior(student_t(3, 0, 1), class = Intercept, dpar = nu),
+              prior(student_t(3, 0, 1), class = sd, dpar = nu),
+              prior(student_t(3, 0, 1), class = Intercept, dpar = sigma),
+              prior(student_t(3, 0, 1), class = sd, dpar = sigma))
+
+  mod.form <-
+    bf(mar.std ~ 1 + (1 |m| name.short),
+       nu ~ 1 + (1 |m| name.short),
+       sigma ~ 1 + (1 |m| name.short))
+
+  mod.mar <- brm(mod.form,
+                 family = student(),
+                 prior = priors,
+                 data = estimates.fit,
+                 chains = 4,
+                 cores = 4,
+                 threads = 8,
+                 warmup = 5000,
+                 iter = 25000,
+                 # save_pars = save_pars(all = TRUE),
+                 init = 0,
+                 thin = 4,
+                 # control = list(adapt_delta = 0.7),
+                 refresh = 25,
+                 empty = FALSE)
+
+}
+
+
+
 
 saveRDS(mod.mar, file.mod)
 
