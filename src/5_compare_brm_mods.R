@@ -843,7 +843,7 @@ if(mod.id == 23) {
 
   mod.form <-
     bf(mar.std ~ 1 + (1 |m| name.short) + (1 |l| ls.uid),
-       sigma ~ 1 + (1 |m| name.short) + (1 |l| ls.uid))
+       sigma ~ 1 + (1 |m| name.short))
 
   mod.mar <- brm(mod.form,
                  family = student(),
@@ -877,7 +877,7 @@ priors <- c(
 
 mod.form <-
   bf(mar.std ~ 1 + (1 |i| name.short) + (1 |i| ls.uid),
-     sigma ~ 1 + (1 |i| name.short) + (1 |i| ls.uid))
+     sigma ~ 1 + (1 |i| name.short))
 
 mod.mar <- brm(mod.form,
                family = student(),
