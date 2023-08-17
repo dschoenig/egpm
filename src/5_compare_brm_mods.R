@@ -983,9 +983,18 @@ if(mod.id == 27) {
               prior(student_t(3, 0, 1), class = sd, dpar = sigma))
 
   mod.form <-
-    bf(mar.std ~ 1 + (1 |m| name.short) + (1 |l| ls.type) + (1 |i| name.short:ls.type),
-       nu ~ 1 + (1 |m| name.short) + (1 |l| ls.type) + (1 |i| name.short:ls.type),
-       sigma ~ 1 + (1 |m| name.short) + (1 |l| ls.type) + (1 |i| name.short:ls.type))
+    bf(mar.std ~ 1 +
+                 (1 |r| ls.response) +
+                 (1 |i| ls.imbalance:ls.response) +
+                 (1 |m| name.short:ls.imbalance:ls.response),
+       nu ~ 1 +
+            (1 |r| ls.response) +
+            (1 |i| ls.imbalance:ls.response) +
+            (1 |m| name.short:ls.imbalance:ls.response),
+       sigma ~ 1 +
+               (1 |r| ls.response) +
+               (1 |i| ls.imbalance:ls.response) +
+               (1 |m| name.short:ls.imbalance:ls.response))
 
   mod.mar <- brm(mod.form,
                  family = student(),
@@ -1004,6 +1013,49 @@ if(mod.id == 27) {
                  empty = FALSE)
 
 }
+
+
+if(mod.id == 28) {
+
+  # estimates.fit <- estimates.fit[ls.type == "normal_high"]
+
+  priors <- c(
+              prior(student_t(3, 0, 1), class = b),
+              prior(student_t(3, 0, 1), class = sd),
+              prior(student_t(3, 0, 1), class = b, dpar = nu),
+              prior(student_t(3, 0, 1), class = sd, dpar = nu),
+              prior(student_t(3, 0, 1), class = b, dpar = nu),
+              prior(student_t(3, 0, 1), class = sd, dpar = sigma))
+
+  mod.form <-
+    bf(mar.std ~ 0 + name.short +
+                 (0 + name.short |r| ls.response) +
+                 (0 + name.short |i| ls.imbalance:ls.response),
+       nu ~ 0 + name.short +
+            (0 + name.short |r| ls.response) +
+            (0 + name.short |i| ls.imbalance:ls.response),
+       sigma ~ 0 + name.short +
+               (0 + name.short |r| ls.response) +
+               (0 + name.short |i| ls.imbalance:ls.response))
+
+  mod.mar <- brm(mod.form,
+                 family = student(),
+                 prior = priors,
+                 data = estimates.fit,
+                 chains = 4,
+                 cores = 4,
+                 threads = 8,
+                 warmup = 5000,
+                 iter = 10000,
+                 # save_pars = save_pars(all = TRUE),
+                 init = 0,
+                 thin = 2,
+                 # control = list(adapt_delta = 0.7),
+                 refresh = 25,
+                 empty = FALSE)
+
+}
+
 
 
 
