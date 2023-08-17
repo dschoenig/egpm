@@ -1024,7 +1024,7 @@ if(mod.id == 28) {
               prior(student_t(3, 0, 1), class = sd),
               prior(student_t(3, 0, 1), class = b, dpar = nu),
               prior(student_t(3, 0, 1), class = sd, dpar = nu),
-              prior(student_t(3, 0, 1), class = b, dpar = nu),
+              prior(student_t(3, 0, 1), class = b, dpar = sigma),
               prior(student_t(3, 0, 1), class = sd, dpar = sigma))
 
   mod.form <-
