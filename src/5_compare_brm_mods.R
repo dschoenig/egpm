@@ -864,8 +864,7 @@ if(mod.id == 23) {
 
 if(mod.id == 24) {
 
-  estimates.fit <- estimates.fit[ls.type == "normal_high"]
-
+  # estimates.fit <- estimates.fit[ls.type == "normal_high"]
 
   priors <- c(
               prior(student_t(3, 1, 1), class = Intercept),
@@ -886,7 +885,7 @@ if(mod.id == 24) {
                  data = estimates.fit,
                  chains = 4,
                  cores = 4,
-                 threads = 8,
+                 threads = 4,
                  warmup = 5000,
                  iter = 10000,
                  # save_pars = save_pars(all = TRUE),
