@@ -983,9 +983,9 @@ if(mod.id == 27) {
               prior(student_t(3, 0, 1), class = sd, dpar = sigma))
 
   mod.form <-
-    bf(mar.std ~ 1 + (1 |m| name.short*ls.type),
-       nu ~ 1 + (1 |m| name.short*ls.type),
-       sigma ~ 1 + (1 |m| name.short*ls.type))
+    bf(mar.std ~ 1 + (1 |m| name.short) + (1 |l| ls.type) + (1 |i| name.short:ls.type),
+       nu ~ 1 + (1 |m| name.short) + (1 |l| ls.type) + (1 |i| name.short:ls.type),
+       sigma ~ 1 + (1 |m| name.short) + (1 |l| ls.type) + (1 |i| name.short:ls.type))
 
   mod.mar <- brm(mod.form,
                  family = student(),
@@ -993,7 +993,7 @@ if(mod.id == 27) {
                  data = estimates.fit,
                  chains = 4,
                  cores = 4,
-                 threads = 4,
+                 threads = 8,
                  warmup = 5000,
                  iter = 10000,
                  # save_pars = save_pars(all = TRUE),
