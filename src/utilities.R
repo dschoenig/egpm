@@ -5791,12 +5791,35 @@ egp_marginal <- function(factual,
   return(marginal)
 }
 
-
+bias <- function(x, y = 1, ...) {
+  bias <- mean(x, ...) - 1
+  return(bias)
+}
 
 rmse <- function(x, y = mean(x), ...) {
   rmse <- sqrt(mean((x - y)^2, ...))
   return(rmse)
 }
+
+ser <- function(x, y = 1, ...) {
+  ser <- sum(sign(y) * x < 0)/length(x)
+  return(ser)
+}
+
+
+prob_format <- function(x, num.prec = 2) {
+  x.f <-
+    ifelse(round(x, num.prec) < 1,
+           format(round(x, num.prec), nsmall = num.prec),
+           paste0("> ", as.character(1-10^-num.prec)))
+  return(x.f)
+}
+
+num_format <- function(x, num.prec = 3) {
+  x.f <- format(round(x, num.prec), nsmall = num.prec)
+  return(x.f)
+}
+
 
 seq_ranspaced <- function(from, to, n, randomize = TRUE) {
   step <- (to - from) / n
