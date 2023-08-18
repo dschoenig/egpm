@@ -77,8 +77,12 @@ priors <- c(
             prior(student_t(3, 0, 1), class = sd, dpar = sigma))
 
 mod.form <-
-  bf(mar.std ~ name.short + (1 |l| ls.uid),
-     sigma ~ name.short + (1 |l| ls.uid))
+  bf(mar.std ~
+       1 + (1 |m| name.short),
+     nu ~
+       1 + (1 |m| name.short),
+     sigma ~
+       1 + (1 |m| name.short))
 
 mod.mar <- brm(mod.form,
                family = student(),

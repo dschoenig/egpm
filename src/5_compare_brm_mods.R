@@ -1131,6 +1131,15 @@ if(mod.id == 30) {
        sigma ~
          1 + name.short*ls.response*ls.imbalance)
 
+  # mod.form <-
+  #   bf(mar.std ~
+  #        1 + name.short,
+  #      nu ~
+  #        1 + name.short,
+  #      sigma ~
+  #        1 + name.short)
+
+
   mod.mar <- brm(mod.form,
                  family = student(),
                  prior = priors,
@@ -1149,6 +1158,48 @@ if(mod.id == 30) {
 
 }
 
+
+
+if(mod.id == 31) {
+
+  # estimates.fit <- estimates.fit[ls.type == "normal_high"]
+
+  priors <- c(
+              prior(student_t(3, 1, 1), class = Intercept),
+              prior(student_t(3, 0, 1), class = sd),
+              prior(student_t(3, 0, 1), class = Intercept, dpar = nu),
+              prior(student_t(3, 0, 1), class = sd, dpar = nu),
+              prior(student_t(3, 0, 1), class = Intercept, dpar = sigma),
+              prior(student_t(3, 0, 1), class = sd, dpar = sigma))
+
+  mod.form <-
+    bf(mar.std ~
+         1 +
+         (1 |i| ls.imbalance:ls.response:name.short),
+       nu ~
+         1 +
+         (1 |i| ls.imbalance:ls.response:name.short),
+       sigma ~
+         1 +
+         (1 |i| ls.imbalance:ls.response:name.short))
+
+  mod.mar <- brm(mod.form,
+                 family = student(),
+                 prior = priors,
+                 data = estimates.fit,
+                 chains = 4,
+                 cores = 4,
+                 threads = 8,
+                 warmup = 5000,
+                 iter = 10000,
+                 # save_pars = save_pars(all = TRUE),
+                 init = 0,
+                 thin = 2,
+                 # control = list(adapt_delta = 0.9),
+                 refresh = 25,
+                 empty = FALSE)
+
+}
 
 
 saveRDS(mod.mar, file.mod)
