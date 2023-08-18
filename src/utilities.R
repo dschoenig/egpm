@@ -5821,6 +5821,21 @@ num_format <- function(x, num.prec = 3) {
 }
 
 
+draws_dt <- function(x, data = NULL, value.name = "value") {
+  colnames(x) <- paste0(".draw", 1:ncol(x))
+  x.dt <- as.data.table(x)
+  if(!is.null(x.dt)) {
+    x.dt <- cbind(x.dt, data)
+  }
+  x.dt <-
+    melt(x.dt,
+         measure.vars = measure(.draw = as.integer,
+                                pattern = "\\.draw(.*)"),
+         value.name = value.name)
+  return(x.dt)
+}
+
+
 seq_ranspaced <- function(from, to, n, randomize = TRUE) {
   step <- (to - from) / n
   halfstep <- step / 2

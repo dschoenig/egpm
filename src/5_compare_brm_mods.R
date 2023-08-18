@@ -1202,6 +1202,51 @@ if(mod.id == 31) {
 }
 
 
+if(mod.id == 32) {
+
+  # estimates.fit <- estimates.fit[ls.type == "normal_high"]
+
+  priors <- c(
+              prior(student_t(3, 1, 2.5), class = b),
+              prior(student_t(3, 0, 1), class = b, dpar = nu),
+              prior(student_t(3, 0, 1), class = b, dpar = sigma))
+
+  mod.form <-
+    bf(mar.std ~
+         0 + name.short*ls.response*ls.imbalance,
+       nu ~
+         0 + name.short*ls.response*ls.imbalance,
+       sigma ~
+         0 + name.short*ls.response*ls.imbalance)
+
+  # mod.form <-
+  #   bf(mar.std ~
+  #        0 + name.short,
+  #      nu ~
+  #        0 + name.short,
+  #      sigma ~
+  #        0 + name.short)
+
+
+  mod.mar <- brm(mod.form,
+                 family = student(),
+                 prior = priors,
+                 data = estimates.fit,
+                 chains = 4,
+                 cores = 4,
+                 threads = 8,
+                 warmup = 5000,
+                 iter = 10000,
+                 # save_pars = save_pars(all = TRUE),
+                 # init = 0,
+                 thin = 2,
+                 # control = list(adapt_delta = 0.9),
+                 refresh = 25,
+                 empty = FALSE)
+
+}
+
+
 saveRDS(mod.mar, file.mod)
 
 
