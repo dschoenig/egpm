@@ -125,7 +125,7 @@ mod.mar <- brm(mod.form,
                # save_pars = save_pars(all = TRUE),
                # init = 0,
                thin = 2,
-               # control = list(adapt_delta = 0.7),
+               control = list(adapt_delta = 0.9),
                refresh = 25,
                empty = FALSE)
 
