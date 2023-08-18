@@ -1020,23 +1020,29 @@ if(mod.id == 28) {
   # estimates.fit <- estimates.fit[ls.type == "normal_high"]
 
   priors <- c(
-              prior(student_t(3, 0, 1), class = b),
+              prior(student_t(3, 1, 1), class = Intercept),
               prior(student_t(3, 0, 1), class = sd),
-              prior(student_t(3, 0, 1), class = b, dpar = nu),
+              prior(student_t(3, 0, 1), class = Intercept, dpar = nu),
               prior(student_t(3, 0, 1), class = sd, dpar = nu),
-              prior(student_t(3, 0, 1), class = b, dpar = sigma),
+              prior(student_t(3, 0, 1), class = Intercept, dpar = sigma),
               prior(student_t(3, 0, 1), class = sd, dpar = sigma))
 
   mod.form <-
-    bf(mar.std ~ 0 + name.short +
-                 (0 + name.short |r| ls.response) +
-                 (0 + name.short |i| ls.imbalance:ls.response),
-       nu ~ 0 + name.short +
-            (0 + name.short |r| ls.response) +
-            (0 + name.short |i| ls.imbalance:ls.response),
-       sigma ~ 0 + name.short +
-               (0 + name.short |r| ls.response) +
-               (0 + name.short |i| ls.imbalance:ls.response))
+    bf(mar.std ~
+         1 +
+         (1 |m| name.short) +
+         (1 |r| ls.response:name.short) +
+         (1 |i| ls.imbalance:ls.response:name.short),
+       nu ~
+         1 +
+         (1 |m| name.short) +
+         (1 |r| ls.response:name.short) +
+         (1 |i| ls.imbalance:ls.response:name.short),
+       sigma ~
+         1 +
+         (1 |m| name.short) +
+         (1 |r| ls.response:name.short) +
+         (1 |i| ls.imbalance:ls.response:name.short))
 
   mod.mar <- brm(mod.form,
                  family = student(),
