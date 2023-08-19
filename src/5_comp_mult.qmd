@@ -1,0 +1,617 @@
+---
+title: "Comparison of predictions - multiple models"
+date: today
+date-format: iso
+published-title: Date
+author: Daniel Schoenig
+citeproc: true
+bibliography: /home/danielschoenig/cloud/phd/literature/bibliographies/phd_all.json
+csl: /home/danielschoenig/cloud/phd/literature/styles/apa.csl
+toc: true
+lof: true
+number-sections: true
+cache: false
+execute:
+  echo: false
+  warning: false
+format-links: false
+format:
+  pdf: 
+    fig-pos: H
+    fig-width: 7
+    fig-dpi: 150
+    fig-format: png
+    documentclass: scrartcl
+    papersize: letter
+    mainfont: IBM Plex Serif
+    sansfont: IBM Plex Sans
+    monofont: IBM Plex Mono
+    latex-tinytex: false
+    pdf-engine: xelatex
+    header-includes:
+      - \usepackage{setspace}
+      - \onehalfspacing
+      - \usepackage{eulervm}
+      - \usepackage{unicode-math}
+      - \usepackage[format=plain]{caption}
+      - \setkomafont{caption}{\footnotesize}
+      - \setkomafont{captionlabel}{\footnotesize\bfseries}
+  html:
+    fig-format: png
+    fig-width: 7
+    fig-dpi: 150
+    embed-resources: true
+---
+
+```{r}
+#| include: false
+
+library(brms)
+library(data.table)
+library(DHARMa)
+library(bayesplot)
+
+source("utilities.R")
+
+# draw.ids.pred <- sample(1:1e4, 100)
+draw.ids.pred <- 1:1e4
+draw.ids.dharma <- sample(1:1e4, 1000)
+
+path.base <- "../"
+path.results <- paste0(path.base, "results/")
+path.comp <- paste0(path.results, "comparison/")
+file.estimates <- paste0(path.comp, "estimates.csv")
+
+estimates <- fread(file.estimates, yaml = TRUE)
+
+fit.dt <-
+  CJ(
+     ls.response = c("normal", "tweedie", "binary"),
+     ls.imbalance = c("high", "low"),
+     area.type = c("treatment"),
+     mod.name = c("egp_som25", "match"),
+     egp.som.topology = c(NA, "rectangular"),
+     egp.cf.nb = c(NA, "sequential"),
+     egp.geo.w = c(NA, TRUE),
+     match.mod.cov = c(NA, "interact"),
+     match.trt.int = c(NA, FALSE),
+     sorted = FALSE)
+
+estimates.fit <- 
+  estimates[fit.dt,
+            on = names(fit.dt),
+            nomatch = NULL]
+
+estimates.fit[,
+              `:=`(ls.response = factor(ls.response,
+                                        levels = c("normal", "tweedie", "binary")),
+                   ls.imbalance = factor(ls.imbalance,
+                                         levels = c("low", "high")),
+                   ls.id = factor(ls.id),
+                   name.short = factor(name.short,
+                                       levels = c("EGP", "GLM",
+                                                  "CEM-ST", "CEM-SC", "CEM-FD",
+                                                  "NN-PS-NR", "NN-PS-RE",
+                                                  "NN-MA-NR", "NN-MA-RE")))]
+
+ls.type.lev <-
+  with(estimates.fit,
+       paste0(rep(levels(ls.response), each = 2), "_",
+              rep(levels(ls.imbalance), times = 3)))
+
+estimates.fit[,
+              ls.type := factor(paste0(ls.response, "_", ls.imbalance),
+                                levels = ls.type.lev)]
+estimates.fit[,
+              ls.uid := as.integer((as.integer(ls.type)-1) * 1000) + as.integer(as.character(ls.id))]
+
+
+method.chunk <- estimates.fit[, unique(name.short)]
+ls.chunk <- estimates.fit[, unique(ls.type)]
+pred.j <- list()
+for(j in seq_along(ls.chunk)) {
+  message(paste("Landscape type", j))
+  ls.foc <- ls.chunk[j]
+  mod <- readRDS(paste0("../results/comparison/mod.", ls.foc, ".rds"))
+  pred.i <- list()
+  for(i in seq_along(method.chunk)) {
+    message(paste("Method", i))
+    method.foc <- method.chunk[i]
+    pred.data <- estimates.fit[ls.type == ls.foc & name.short == method.foc]
+    pred.mat <-
+      t(posterior_predict(mod,
+                          newdata = pred.data,
+                          draw_ids = draw.ids.pred))
+    pred.method <- draws_dt(pred.mat, pred.data)
+    rm(pred.mat)
+    pred.i[[i]] <-
+      pred.method[,
+                  .(bias = bias(value, 1),
+                    rmse = rmse(value, 1),
+                    ser = ser(value)),
+                  by = c(".draw", "ls.response", "ls.imbalance")] |>
+      melt(id.vars = c(".draw", "ls.response", "ls.imbalance"),
+           measure.vars = c("bias", "rmse", "ser"),
+           variable.name = "stat",
+           value.name = "value")
+    rm(pred.method)
+    gc()
+  }
+  names(pred.i) <- method.chunk
+  pred.i.dt <- rbindlist(pred.i, idcol = "name.short")
+  pred.i.dt[, name.short := factor(name.short, levels = levels(estimates.fit$name.short))]
+  pred.j[[j]] <- pred.i.dt
+}
+
+pred.dt <- rbindlist(pred.j)
+setorder(pred.dt, ls.response, ls.imbalance, name.short, .draw)
+
+
+est.dt <-
+  estimates.fit[order(name.short),
+                .(bias = bias(mar.std, 1),
+                  rmse = rmse(mar.std, 1),
+                  ser = ser(mar.std)),
+                by = .(ls.response, ls.imbalance, name.short)]
+
+
+prepare_ppc <- function(estimates, predictions, ls.response, ls.imbalance) {
+
+  ls.resp <- ls.response
+  ls.imb <- ls.imbalance
+
+  grouping <- estimates[ls.response == ls.resp & ls.imbalance == ls.imb
+              ][order(name.short), name.short]
+
+
+  y.bias <-
+    estimates[ls.response == ls.resp & ls.imbalance == ls.imb
+           ][order(name.short), bias]
+  yrep.bias <-
+    dcast(predictions[stat == "bias" & ls.response == ls.resp & ls.imbalance == ls.imb,
+                  .(.draw, name.short, value)],
+          name.short ~ .draw, value.var = "value")[order(name.short), -"name.short"] |>
+    as.matrix() |>
+    t()
+  
+  ppc.bias <-
+    ppc_stat_grouped(y = y.bias,
+                     yrep = yrep.bias,
+                     stat = identity,
+                     group = grouping) +
+    theme_default()
+
+
+  y.rmse <-
+    estimates[ls.response == ls.resp & ls.imbalance == ls.imb
+           ][order(name.short), rmse]
+  yrep.rmse <-
+    dcast(predictions[stat == "rmse" & ls.response == ls.resp & ls.imbalance == ls.imb,
+                  .(.draw, name.short, value)],
+          name.short ~ .draw, value.var = "value")[order(name.short), -"name.short"] |>
+    as.matrix() |>
+    t()
+  
+  ppc.rmse <-
+    ppc_stat_grouped(y = y.rmse,
+                     yrep = yrep.rmse,
+                     stat = identity,
+                     group = grouping) +
+    theme_default()
+
+
+  y.ser <-
+    estimates[ls.response == ls.resp & ls.imbalance == ls.imb
+           ][order(name.short), ser]
+  yrep.ser <-
+    dcast(predictions[stat == "ser" & ls.response == ls.resp & ls.imbalance == ls.imb,
+                  .(.draw, name.short, value)],
+          name.short ~ .draw, value.var = "value")[order(name.short), -"name.short"] |>
+    as.matrix() |>
+    t()
+  
+  ppc.ser <-
+    ppc_stat_grouped(y = y.ser,
+                     yrep = yrep.ser,
+                     stat = identity,
+                     group = grouping) +
+    theme_default()
+
+
+  comps <- CJ(comp1 = unique(estimates$name.short),
+              comp2 = unique(estimates$name.short))
+  comps <- comps[comp1 != comp2]
+  comps[, `:=`(comp1.id = as.integer(comp1),
+               comp2.id = as.integer(comp2))]
+  comps[, group := paste(comp2, comp1, sep = ".vs.")]
+  comps.sel <- comps[comp1 == "EGP"]
+
+  y.bias.diff <- numeric(nrow(comps.sel))
+  yrep.bias.diff <- matrix(0, nrow = nrow(yrep.bias), ncol = nrow(comps.sel))
+  for(i in 1:nrow(comps.sel)) {
+    comp1 <- comps.sel[i, comp1.id]
+    comp2 <- comps.sel[i, comp2.id]
+    y.bias.diff[i] <- y.bias[comp2] - y.bias[comp1]
+    yrep.bias.diff[,i] <- yrep.bias[, comp2] - yrep.bias[, comp1]
+  }
+
+  ppc.bias.diff <-
+    ppc_stat_grouped(y = y.bias.diff,
+                     yrep = yrep.bias.diff,
+                     stat = identity,
+                     group = comps.sel$group) +
+    theme_default()
+
+
+  y.rmse.diff <- numeric(nrow(comps.sel))
+  yrep.rmse.diff <- matrix(0, nrow = nrow(yrep.rmse), ncol = nrow(comps.sel))
+  for(i in 1:nrow(comps.sel)) {
+    comp1 <- comps.sel[i, comp1.id]
+    comp2 <- comps.sel[i, comp2.id]
+    y.rmse.diff[i] <- y.rmse[comp2] - y.rmse[comp1]
+    yrep.rmse.diff[,i] <- yrep.rmse[, comp2] - yrep.rmse[, comp1]
+  }
+
+  ppc.rmse.diff <-
+    ppc_stat_grouped(y = y.rmse.diff,
+                     yrep = yrep.rmse.diff,
+                     stat = identity,
+                     group = comps.sel$group) +
+    theme_default()
+
+
+  y.ser.diff <- numeric(nrow(comps.sel))
+  yrep.ser.diff <- matrix(0, nrow = nrow(yrep.ser), ncol = nrow(comps.sel))
+  for(i in 1:nrow(comps.sel)) {
+    comp1 <- comps.sel[i, comp1.id]
+    comp2 <- comps.sel[i, comp2.id]
+    y.ser.diff[i] <- y.ser[comp2] - y.ser[comp1]
+    yrep.ser.diff[,i] <- yrep.ser[, comp2] - yrep.ser[, comp1]
+  }
+
+  ppc.ser.diff <-
+    ppc_stat_grouped(y = y.ser.diff,
+                     yrep = yrep.ser.diff,
+                     stat = identity,
+                     group = comps.sel$group) +
+    theme_default()
+
+  plots <-
+    list(bias = ppc.bias,
+         rmse = ppc.rmse,
+         ser = ppc.ser,
+         bias.diff = ppc.bias.diff,
+         rmse.diff = ppc.rmse.diff,
+         ser.diff = ppc.ser.diff)
+}
+
+```
+
+
+
+# Gaussian response
+
+## Low imbalance
+
+```{r}
+#| include: FALSE
+ppc.normal_low <- prepare_ppc(est.dt, pred.dt, "normal", "low")
+```
+
+### Residuals
+
+```{r}
+res.data <- estimates.fit[ls.response == "normal" & ls.imbalance == "low"]
+mod <- readRDS("../results/comparison/mod.normal_low.rds")
+mod.check <- createDHARMa(
+  simulatedResponse = t(posterior_predict(mod, 
+                                          newdata = res.data,
+                                          draw_ids = draw.ids.dharma)),
+  observedResponse = res.data$mar.std,
+  fittedPredictedResponse = apply(t(posterior_epred(mod,
+                                      newdata = res.data,
+                                      draw_ids = draw.ids.dharma)), 1, mean))
+
+plot(mod.check)
+```
+
+### PPC: performance metrics
+
+```{r}
+ppc.normal_low$bias
+```
+
+```{r}
+ppc.normal_low$rmse
+```
+
+```{r}
+ppc.normal_low$ser
+```
+
+### PPC: performance differences vs. EGP
+
+
+```{r}
+ppc.normal_low$bias.diff
+```
+
+```{r}
+ppc.normal_low$rmse.diff
+```
+
+```{r}
+ppc.normal_low$ser.diff
+```
+
+## High imbalance
+
+```{r}
+#| include: FALSE
+ppc.normal_high <- prepare_ppc(est.dt, pred.dt, "normal", "high")
+```
+
+### Residuals
+
+```{r}
+res.data <- estimates.fit[ls.response == "normal" & ls.imbalance == "high"]
+mod <- readRDS("../results/comparison/mod.normal_high.rds")
+mod.check <- createDHARMa(
+  simulatedResponse = t(posterior_predict(mod, 
+                                          newdata = res.data,
+                                          draw_ids = draw.ids.dharma)),
+  observedResponse = res.data$mar.std,
+  fittedPredictedResponse = apply(t(posterior_epred(mod,
+                                      newdata = res.data,
+                                      draw_ids = draw.ids.dharma)), 1, mean))
+
+plot(mod.check)
+```
+
+### PPC: performance metrics
+
+```{r}
+ppc.normal_high$bias
+```
+
+```{r}
+ppc.normal_high$rmse
+```
+
+```{r}
+ppc.normal_high$ser
+```
+
+### PPC: performance differences vs. EGP
+
+
+```{r}
+ppc.normal_high$bias.diff
+```
+
+```{r}
+ppc.normal_high$rmse.diff
+```
+
+```{r}
+ppc.normal_high$ser.diff
+```
+
+
+# Tweedie response
+
+## Low imbalance
+
+```{r}
+#| include: FALSE
+ppc.tweedie_low <- prepare_ppc(est.dt, pred.dt, "tweedie", "low")
+```
+
+### Residuals
+
+```{r}
+res.data <- estimates.fit[ls.response == "tweedie" & ls.imbalance == "low"]
+mod <- readRDS("../results/comparison/mod.tweedie_low.rds")
+mod.check <- createDHARMa(
+  simulatedResponse = t(posterior_predict(mod, 
+                                          newdata = res.data,
+                                          draw_ids = draw.ids.dharma)),
+  observedResponse = res.data$mar.std,
+  fittedPredictedResponse = apply(t(posterior_epred(mod,
+                                      newdata = res.data,
+                                      draw_ids = draw.ids.dharma)), 1, mean))
+
+plot(mod.check)
+```
+
+### PPC: performance metrics
+
+```{r}
+ppc.tweedie_low$bias
+```
+
+```{r}
+ppc.tweedie_low$rmse
+```
+
+```{r}
+ppc.tweedie_low$ser
+```
+
+### PPC: performance differences vs. EGP
+
+
+```{r}
+ppc.tweedie_low$bias.diff
+```
+
+```{r}
+ppc.tweedie_low$rmse.diff
+```
+
+```{r}
+ppc.tweedie_low$ser.diff
+```
+
+## High imbalance
+
+```{r}
+#| include: FALSE
+ppc.tweedie_high <- prepare_ppc(est.dt, pred.dt, "tweedie", "high")
+```
+
+### Residuals
+
+```{r}
+res.data <- estimates.fit[ls.response == "tweedie" & ls.imbalance == "high"]
+mod <- readRDS("../results/comparison/mod.tweedie_high.rds")
+mod.check <- createDHARMa(
+  simulatedResponse = t(posterior_predict(mod, 
+                                          newdata = res.data,
+                                          draw_ids = draw.ids.dharma)),
+  observedResponse = res.data$mar.std,
+  fittedPredictedResponse = apply(t(posterior_epred(mod,
+                                      newdata = res.data,
+                                      draw_ids = draw.ids.dharma)), 1, mean))
+
+plot(mod.check)
+```
+
+### PPC: performance metrics
+
+```{r}
+ppc.tweedie_high$bias
+```
+
+```{r}
+ppc.tweedie_high$rmse
+```
+
+```{r}
+ppc.tweedie_high$ser
+```
+
+### PPC: performance differences vs. EGP
+
+
+```{r}
+ppc.tweedie_high$bias.diff
+```
+
+```{r}
+ppc.tweedie_high$rmse.diff
+```
+
+```{r}
+ppc.tweedie_high$ser.diff
+```
+
+
+# Binary response
+
+## Low imbalance
+
+```{r}
+#| include: FALSE
+ppc.binary_low <- prepare_ppc(est.dt, pred.dt, "binary", "low")
+```
+
+### Residuals
+
+```{r}
+res.data <- estimates.fit[ls.response == "binary" & ls.imbalance == "low"]
+mod <- readRDS("../results/comparison/mod.binary_low.rds")
+mod.check <- createDHARMa(
+  simulatedResponse = t(posterior_predict(mod, 
+                                          newdata = res.data,
+                                          draw_ids = draw.ids.dharma)),
+  observedResponse = res.data$mar.std,
+  fittedPredictedResponse = apply(t(posterior_epred(mod,
+                                      newdata = res.data,
+                                      draw_ids = draw.ids.dharma)), 1, mean))
+
+plot(mod.check)
+```
+
+### PPC: performance metrics
+
+```{r}
+ppc.binary_low$bias
+```
+
+```{r}
+ppc.binary_low$rmse
+```
+
+```{r}
+ppc.binary_low$ser
+```
+
+### PPC: performance differences vs. EGP
+
+
+```{r}
+ppc.binary_low$bias.diff
+```
+
+```{r}
+ppc.binary_low$rmse.diff
+```
+
+```{r}
+ppc.binary_low$ser.diff
+```
+
+## High imbalance
+
+```{r}
+#| include: FALSE
+ppc.binary_high <- prepare_ppc(est.dt, pred.dt, "binary", "high")
+```
+
+### Residuals
+
+```{r}
+res.data <- estimates.fit[ls.response == "binary" & ls.imbalance == "high"]
+mod <- readRDS("../results/comparison/mod.binary_high.rds")
+mod.check <- createDHARMa(
+  simulatedResponse = t(posterior_predict(mod, 
+                                          newdata = res.data,
+                                          draw_ids = draw.ids.dharma)),
+  observedResponse = res.data$mar.std,
+  fittedPredictedResponse = apply(t(posterior_epred(mod,
+                                      newdata = res.data,
+                                      draw_ids = draw.ids.dharma)), 1, mean))
+
+plot(mod.check)
+```
+
+### PPC: performance metrics
+
+```{r}
+ppc.binary_high$bias
+```
+
+```{r}
+ppc.binary_high$rmse
+```
+
+```{r}
+ppc.binary_high$ser
+```
+
+### PPC: performance differences vs. EGP
+
+
+```{r}
+ppc.binary_high$bias.diff
+```
+
+```{r}
+ppc.binary_high$rmse.diff
+```
+
+```{r}
+ppc.binary_high$ser.diff
+```
+
