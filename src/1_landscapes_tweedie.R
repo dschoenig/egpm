@@ -88,7 +88,7 @@ for(i in chunk) {
   ls.b <- NULL
   while(is.null(ls.b)) {
     try({ls.b <- do.call(generate_landscape_4cov_nl_tweedie, ls.par)})
-    if(is.null(ls)) message("Simulation failed. Trying again …")
+    if(is.null(ls.b)) message("Simulation failed. Trying again …")
   }
 
   print(ls.b$marginal)

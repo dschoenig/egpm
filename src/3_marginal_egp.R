@@ -39,6 +39,12 @@ for(i in ids) {
 
   mod.res <- readRDS(files.mod[i])
 
+  mod.res <- NULL
+  while(is.null(mod.res)) {
+    try({mod.res <- readRDS(files.mod[i])})
+    if(is.null(mod.res)) message("Loading model failed. Trying again …")
+  }
+
   marginals.j <- list()
   terms.j <- list()
   dev.expl.j <- list()
