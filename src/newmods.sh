@@ -179,9 +179,9 @@ sbatch cc_3_marginal_tweedie_high_egp_som10.sh
 
 rm -rf ../models/imbalance_low/egp_som10*
 rm -rf ../models/binary_imbalance_low/egp_som10*
-rm -rf ../models/binary_imbalance_low/egp_som10*
+rm -rf ../models/binary_imbalance_high/egp_som10*
 rm -rf ../models/tweedie_imbalance_low/egp_som10*
-rm -rf ../models/tweedie_imbalance_low/egp_som10*
+rm -rf ../models/tweedie_imbalance_high/egp_som10*
 
 
 # EGP SOM 50
@@ -209,9 +209,9 @@ sbatch cc_3_marginal_tweedie_high_egp_som50.sh
 
 rm -rf ../models/imbalance_low/egp_som50*
 rm -rf ../models/binary_imbalance_low/egp_som50*
-rm -rf ../models/binary_imbalance_low/egp_som50*
+rm -rf ../models/binary_imbalance_high/egp_som50*
 rm -rf ../models/tweedie_imbalance_low/egp_som50*
-rm -rf ../models/tweedie_imbalance_low/egp_som50*
+rm -rf ../models/tweedie_imbalance_high/egp_som50*
 
 
 # EGP 25 unequal all landscapes
@@ -239,9 +239,9 @@ sbatch cc_3_marginal_tweedie_high_egp_som25_unequal.sh
 
 rm -rf ../models/imbalance_low/egp_som25_unequal*
 rm -rf ../models/binary_imbalance_low/egp_som25_unequal*
-rm -rf ../models/binary_imbalance_low/egp_som25_unequal*
+rm -rf ../models/binary_imbalance_high/egp_som25_unequal*
 rm -rf ../models/tweedie_imbalance_low/egp_som25_unequal*
-rm -rf ../models/tweedie_imbalance_low/egp_som25_unequal*
+rm -rf ../models/tweedie_imbalance_high/egp_som25_unequal*
 
 
 # EGP large sample all landscapes
@@ -269,9 +269,9 @@ sbatch cc_3_marginal_tweedie_high_egp_som25_sam02.sh
 
 rm -rf ../models/imbalance_low/egp_som25_sam02*
 rm -rf ../models/binary_imbalance_low/egp_som25_sam02*
-rm -rf ../models/binary_imbalance_low/egp_som25_sam02*
+rm -rf ../models/binary_imbalance_high/egp_som25_sam02*
 rm -rf ../models/tweedie_imbalance_low/egp_som25_sam02*
-rm -rf ../models/tweedie_imbalance_low/egp_som25_sam02*
+rm -rf ../models/tweedie_imbalance_high/egp_som25_sam02*
 
 
 # EGP large sample all landscapes
@@ -299,6 +299,6 @@ sbatch cc_3_marginal_tweedie_high_egp_som25_sam005.sh
 
 rm -rf ../models/imbalance_low/egp_som25_sam005*
 rm -rf ../models/binary_imbalance_low/egp_som25_sam005*
-rm -rf ../models/binary_imbalance_low/egp_som25_sam005*
+rm -rf ../models/binary_imbalance_high/egp_som25_sam005*
 rm -rf ../models/tweedie_imbalance_low/egp_som25_sam005*
-rm -rf ../models/tweedie_imbalance_low/egp_som25_sam005*
+rm -rf ../models/tweedie_imbalance_high/egp_som25_sam005*
