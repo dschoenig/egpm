@@ -116,8 +116,8 @@ mod.mar[,
                subarea.id = poly)]        
 mod.mar <- mod.mar[, -c("group.id", "poly")]
 setnames(mod.mar,
-         c("mean", "se", "q2.5", "q97.5"),
-         paste0("mar.", c("est", "se", "q2.5", "q97.5")))
+         c("mean", "median", "se", "q0.5", "q2.5", "q5", "q25", "q75", "q95", "q97.5", "q99.5"),
+         paste0("mar.", c("est", "median", "se", "q0.5", "q2.5", "q5", "q25", "q75", "q95", "q97.5", "q99.5")))
 setnames(mod.mar,
          c("type", "cf.nb.strategy", "geo",
            "som.dim", "som.epochs", "som.topology",

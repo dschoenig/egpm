@@ -50,9 +50,16 @@ for(i in ids) {
     marginals.j[[j]] <- 
       mod.res$models[[j]]$marginal[,
                                    .(mean = mean(marginal),
+                                     median = median(marginal),
                                      se = sd(marginal),
+                                     q0.5 = quantile(marginal, 0.005),
                                      q2.5 = quantile(marginal, 0.025),
-                                     q97.5 = quantile(marginal, 0.975)),
+                                     q5 = quantile(marginal, 0.05),
+                                     q25 = quantile(marginal, 0.25),
+                                     q75 = quantile(marginal, 0.75),
+                                     q95 = quantile(marginal, 0.95),
+                                     q97.5 = quantile(marginal, 0.975),
+                                     q99.5 = quantile(marginal, 0.995)),
                                    by = grp.vars
                                    ]
 
