@@ -37,8 +37,6 @@ for(i in ids) {
 
   message(paste0("Summarizing results for landscape ", i, " …"))
 
-  mod.res <- readRDS(files.mod[i])
-
   mod.res <- NULL
   while(is.null(mod.res)) {
     try({mod.res <- readRDS(files.mod[i])})

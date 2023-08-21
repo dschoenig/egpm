@@ -188,7 +188,7 @@ sbatch cc_3_marginal_tweedie_high_egp_som10.sh
 # rm -rf ../models/binary_imbalance_high/egp_som10*
 # rm -rf ../models/tweedie_imbalance_low/egp_som10*
 # rm -rf ../models/tweedie_imbalance_high/egp_som10*
-
+# rm ../models/*/egp_som10_*.rds
 
 # EGP SOM 50
 ## Normal
@@ -219,6 +219,7 @@ sbatch cc_3_marginal_tweedie_high_egp_som50.sh
 # rm -rf ../models/binary_imbalance_high/egp_som50*
 # rm -rf ../models/tweedie_imbalance_low/egp_som50*
 # rm -rf ../models/tweedie_imbalance_high/egp_som50*
+# rm ../models/*/egp_som50_*.rds
 
 
 # EGP 25 unequal all landscapes
