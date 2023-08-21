@@ -38,9 +38,16 @@ for(i in ids) {
   message(paste0("Summarizing results for landscape ", i, " …"))
 
   mod.res <- NULL
+  n <- 0
   while(is.null(mod.res)) {
     try({mod.res <- readRDS(files.mod[i])})
-    if(is.null(mod.res)) message("Loading model failed. Trying again …")
+    if(is.null(mod.res)) {
+      n <- n + 1
+      if(n <= 10) {
+        message("Loading model failed. Trying again …")
+      } else {
+        stop("Loading model failed.")
+    }
   }
 
   marginals.j <- list()
