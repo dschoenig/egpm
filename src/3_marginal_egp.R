@@ -47,6 +47,7 @@ for(i in ids) {
         message("Loading model failed. Trying again …")
       } else {
         stop("Loading model failed.")
+      }
     }
   }
 
