@@ -65,7 +65,7 @@ for(i in ids.proc) {
       n <- n + 1
       if(n <= 10) {
         message(paste0("Loading model ", i, " failed. Trying again …"))
-        Sys.sleep(5)
+        Sys.sleep(10)
       } else {
         message("Loading model failed. Saving intermediary output …")
         int.out <-
