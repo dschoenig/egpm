@@ -65,7 +65,7 @@ for(i in ids.proc) {
       n <- n + 1
       if(n <= 10) {
         message(paste0("Loading model ", i, " failed. Trying again …"))
-        Sys.sleep(10)
+        Sys.sleep(5)
       } else {
         message("Loading model failed. Saving intermediary output …")
         int.out <-
@@ -148,7 +148,9 @@ for(i in ids.proc) {
            marginals.i = marginals.i,
            terms.i = terms.i,
            dev.expl.i = dev.expl.i)
-    saveRDS(int.out, file.results.inter)
+    con.int <- file(file.results.inter)
+    saveRDS(int.out, con.int)
+    close(con.int)
     tb <- Sys.time()
     te <- tb-ta
     print(te)
