@@ -8,8 +8,8 @@ args <- commandArgs(trailingOnly = TRUE)
 ls.type <- args[1]
 mod.type <- args[2]
 
-# ls.type <- "binary_imbalance_high"
-# mod.type <- "egp_som25"
+ls.type <- "binary_imbalance_high"
+mod.type <- "egp_som25"
 
 path.base <- "../"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
@@ -20,6 +20,7 @@ if(!dir.exists(path.results)) dir.create(path.results, recursive = TRUE)
 
 file.results <- paste0(path.results, mod.type, ".rds")
 file.results.inter <- paste0(path.results, mod.type, ".inter.rds")
+file.results.inter.old <- paste0(path.results, mod.type, ".inter.OLD.rds")
 file.parameters <- paste0(path.ls, "parameters.rds")
 
 
@@ -37,13 +38,16 @@ if(file.exists(file.results.inter)) {
   dev.expl.i <- res.int$dev.expl.i
   start.i <- res.int$i.proc
   rm(res.int)
+  file.copy(from = file.results.inter,
+            to = file.results.inter.old,
+            overwrite = TRUE)
 } else {
   params.i <- list()
   marginals.i <- list()
   terms.i <- list()
   dev.expl.i <- list()
   start.i <- ids[1]
-  # start.i <- 963
+  start.i <- 963
 }
 
 ids.proc <- ids[ids >= start.i]
@@ -81,7 +85,7 @@ for(i in ids.proc) {
         nf <- 0
         while(is.null(fout)) {
           try({fout <- file.copy(from = file.inter.temp, to = file.results.inter,
-                                 overwrite = TRUE, copy.mode = FALSE)})
+                                 overwrite = TRUE, copy.mode = FALSE)})
           if(is.null(fout)) {
             nf <- nf + 1
             if(nf <= 10) {
@@ -195,6 +199,23 @@ results <-
        terms = terms,
        deviance = dev.expl)
 
-saveRDS(results, file.results)
+file.res.temp <- tempfile(fileext = ".rds")
 
-
+saveRDS(results, file.res.temp, compress = FALSE)
+fout <- NULL
+nf <- 0
+while(is.null(fout)) {
+  try({fout <- file.copy(from = file.res.temp, to = file.results,
+                         overwrite = TRUE, copy.mode = FALSE)})
+  if(is.null(fout)) {
+    nf <- nf + 1
+    if(nf <= 10) {
+    message("Saving failed. Trying again …")
+    Sys.sleep(10)
+    } else {
+    message("Try dumping workspace …")
+    save.image(paste0(file.results, ".ABORTED.RData"))
+    stop("Aborted due to read error. Workspace saved.")
+    }
+  }
+}
