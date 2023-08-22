@@ -57,6 +57,14 @@ block <- 25
 
 file.inter.temp <- tempfile(fileext = ".rds")
 
+
+
+          try({fout <- file.copy(
+            from = "../results/binary_imbalance_high/egp_som25.rds",
+            to = "../results/binary_imbalance_high/egp_som25_copy.rds",
+                                 overwrite = TRUE, copy.mode = FALSE)})
+
+
 ta <- Sys.time()
 for(i in ids.proc) {
 
@@ -87,7 +95,7 @@ for(i in ids.proc) {
         while(is.null(fout)) {
           try({fout <- file.copy(from = file.inter.temp, to = file.results.inter,
                                  overwrite = TRUE, copy.mode = FALSE)})
-          if(is.null(fout)) {
+          if(is.null(fout) | fout == FALSE) {
             nf <- nf + 1
             if(nf <= 10) {
             message("Saving failed. Trying again …")
@@ -211,7 +219,7 @@ nf <- 0
 while(is.null(fout)) {
   try({fout <- file.copy(from = file.res.temp, to = file.results,
                          overwrite = TRUE, copy.mode = FALSE)})
-  if(is.null(fout)) {
+  if(is.null(fout) | fout == FALSE) {
     nf <- nf + 1
     if(nf <= 10) {
     message("Saving failed. Trying again …")
@@ -219,7 +227,7 @@ while(is.null(fout)) {
     } else {
     message("Try dumping workspace …")
     save.image(paste0(file.results, ".ABORTED.RData"))
-    stop("Aborted due to read error. Workspace saved.")
+    stop("Aborted due to write error. Workspace saved.")
     }
   }
 }

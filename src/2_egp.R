@@ -269,7 +269,7 @@ for(i in chunk) {
          models = results.mod)
 
 
-  saveRDS(object = results.ls, file = files.tmp[i.step])
+  saveRDS(object = results.ls, file = files.tmp[i.step], compress = FALSE)
 
   rm(results.mod) 
   
