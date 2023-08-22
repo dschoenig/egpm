@@ -5836,6 +5836,193 @@ draws_dt <- function(x, data = NULL, value.name = "value") {
 }
 
 
+subset_estimates <- function(estimates, sub) {
+
+  for(i in seq_along(names(sub))) {
+    col.name <- names(sub)[i]
+    if(is.factor(estimates[[col.name]])) {
+      col.lev <- levels(estimates[[col.name]])
+      sub[,
+             fcol := factor(fcol,
+                              levels = col.lev),
+             env = list(fcol = col.name)]
+    }
+  }
+
+  estimates.sub <- 
+    estimates[sub,
+              on = names(sub),
+              nomatch = NULL]
+
+  return(estimates.sub)
+
+}
+
+
+
+compare_performance <- function(estimates,
+                                by.method = "name.short",
+                                by.landscape = NULL,
+                                comparisons = NULL,
+                                value.var = "mar.std",
+                                true.val = 1) {
+
+  by.comb <- c(by.landscape, by.method)
+  method.cols <- as.character(unique(estimates[[by.method]]))
+
+  est.sum <-
+    estimates[,
+              .(bias = bias(var.sel, true.val),
+                rmse = rmse(var.sel, true.val),
+                ser = ser(var.sel)),
+              by = by.comb,
+              env = list(var.sel = value.var)]
+
+  stat.cast <-
+    paste(paste(c(by.landscape, ".stat"), collapse = "+"),
+          "~",
+          paste(by.method, collapse = "+")) |>
+    as.formula()
+
+  method.cast <-
+    paste(paste(c(by.landscape, by.method), collapse = "+"),
+          "~ .stat") |>
+    as.formula()
+
+  if(!is.null(comparisons)) {
+    est.comp.l <- list()
+
+    for (i in seq_along(comparisons)) {
+      comp.var <- comparisons[i]
+      stat.names <- c("bias", "rmse", "ser")
+      comp.names <-   paste0(stat.names, paste0(".vs.", tolower(comp.var)))
+      est.comp.l[[i]] <-
+        melt(est.sum,
+             measure.vars = stat.names,
+             variable.name = ".stat",
+             value.name = ".value") |>
+        dcast(stat.cast,
+              value.var = ".value") |>
+        _[,
+          lapply(.SD, \(x) abs(x) - .SD[, abs(comp.sel)]),
+          by = c(by.landscape, ".stat"),
+          .SDcols = method.cols,
+          env = list(comp.sel = comp.var)] |>
+        melt(id.vars = c(by.landscape, ".stat"),
+             variable.name = by.method,
+             value.name = ".value") |>
+        dcast(method.cast,
+              value.var = ".value") |>
+        setnames(stat.names, comp.names)
+    }
+    
+    for(i in seq_along(est.comp.l)) {
+      est.sum <- merge(est.sum, est.comp.l[[i]])
+    }
+
+  }
+  
+  return(est.sum)
+}
+
+
+compare_permutation <- function(estimates,
+                                by.method = "name.short",
+                                by.landscape = NULL,
+                                ls.id = "ls.uid",
+                                comparisons = c("EGP", "GLM"),
+                                value.var = "mar.std",
+                                true.val = 1,
+                                n.mc = 1e4,
+                                chunk.size = 1e3
+                                ) {
+
+  est.sum <-
+    compare_performance(estimates,
+                        by.method = by.method,
+                        by.landscape = by.landscape,
+                        comparisons = comparisons,
+                        value.var = value.var,
+                        true.val = true.val)
+
+  mc.chunks <- chunk_seq(1, n.mc, chunk.size)
+
+  est.p.l <- list()
+
+  for(i in seq_along(mc.chunks$from)) {
+    
+    message(paste0("MC chunk ", i, "/", length(mc.chunks$from)),
+                   " (permutations ",
+                   mc.chunks$from[i], ":", mc.chunks$to[i], ") …")
+
+    mc.iter.idx <- with(mc.chunks, from[i]:to[i])
+
+    n.obs <- nrow(estimates) 
+    est.mc <- copy(estimates[, c(by.landscape, by.method, ls.id, value.var), with = FALSE])
+    est.mc <- est.mc[rep(1:.N, times = length(mc.iter.idx))]
+    est.mc[, .mc.iter := rep(mc.iter.idx, each = n.obs)]
+    est.mc[, .obs.id := 1:.N]
+
+    val.perm <-
+      est.mc[,
+             .(.obs.id,
+               .perm = as.numeric(sample(val.col, .N))),
+             by = c(".mc.iter", ls.id),
+             env = list(val.col = value.var)]
+
+    est.mc <- merge(est.mc, val.perm)
+
+    stat.names <- c("bias", "rmse", "ser")
+    comp.names <- lapply(comparisons,
+                         \(x) paste0(stat.names, paste0(".vs.", tolower(x))))
+    p.names <- lapply(comparisons,
+                      \(x) paste0(stat.names, paste0(".p.", tolower(x))))
+
+    est.mc.sum <- 
+      compare_performance(est.mc,
+                          by.method = by.method,
+                          by.landscape = c(".mc.iter", by.landscape),
+                          comparisons = comparisons,
+                          value.var = ".perm",
+                          true.val = true.val)
+
+      est.p.l[[i]] <- est.mc.sum
+  }
+
+
+  est.p <- rbindlist(est.p.l)
+
+  setnames(est.p,
+           c(stat.names, unlist(comp.names)),
+           paste0("mc.", c(stat.names, unlist(comp.names))))
+
+  est.p <- merge(est.p, est.sum)
+
+  for(j in seq_along(comp.names)) {
+    comp.cols <- comp.names[[j]]
+    for(k in seq_along(comp.cols)) {
+      est.p[,
+            p.col := (abs(comp.col) >= abs(true.col)),
+            env = list(p.col = p.names[[j]][k],
+                       comp.col = paste0("mc.", comp.cols[k]),
+                       true.col = comp.cols[k])]
+    }
+  }
+    
+  est.p <-
+    est.p[,
+          lapply(.SD, \(x) sum(x)/.N),
+          by = c(by.method, by.landscape),
+          .SDcols = unlist(p.names)]
+
+  est.res <- merge(est.sum, est.p)
+
+  return(est.p)
+}
+
+
+
+
 seq_ranspaced <- function(from, to, n, randomize = TRUE) {
   step <- (to - from) / n
   halfstep <- step / 2
@@ -5848,7 +6035,12 @@ seq_ranspaced <- function(from, to, n, randomize = TRUE) {
   return(seq_ranspaced)
 }
 
-
+read.rds <- function(x, ...) {
+  conn <- file(x)
+  on.exit(close(conn))
+  y <- readRDS(conn, ...)
+  return(y)
+}
 
 
 

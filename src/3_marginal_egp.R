@@ -8,7 +8,7 @@ args <- commandArgs(trailingOnly = TRUE)
 ls.type <- args[1]
 mod.type <- args[2]
 
-# ls.type <- "imbalance_high"
+# ls.type <- "binary_imbalance_high"
 # mod.type <- "egp_som25"
 
 path.base <- "../"
@@ -19,34 +19,63 @@ path.results <- paste0(path.base, "results/", ls.type, "/")
 if(!dir.exists(path.results)) dir.create(path.results, recursive = TRUE)
 
 file.results <- paste0(path.results, mod.type, ".rds")
+file.results.inter <- paste0(path.results, mod.type, ".inter.rds")
+file.parameters <- paste0(path.ls, "parameters.rds")
 
-files.mod <-
-  paste0(path.mod, list.files(path.mod)) |>
-  stri_subset(regex = paste0(mod.type, "_\\d+.rds$"))
 
-ids <- as.integer(stri_match_last_regex(files.mod, "\\d+")[,1])
+para <- readRDS(file.parameters)
 
-params.i <- list()
-marginals.i <- list()
-terms.i <- list()
-dev.expl.i <- list()
+ids <- as.integer(para$file.name)
 
-for(i in ids) {
+files.mod <- paste0(path.mod, mod.type, "_", para$file.name, ".rds")
 
-  ta <- Sys.time()
+if(file.exists(file.results.inter)) {
+  res.int <- read.rds(file.results.inter)
+  params.i <- res.int$params.i
+  marginals.i <- res.int$marginals.i
+  terms.i <- res.int$terms.i
+  dev.expl.i <- res.int$dev.expl.i
+  start.i <- res.int$i.proc
+  rm(res.int)
+} else {
+  params.i <- list()
+  marginals.i <- list()
+  terms.i <- list()
+  dev.expl.i <- list()
+  start.i <- ids[1]
+  # start.i <- 963
+}
 
-  message(paste0("Summarizing results for landscape ", i, " …"))
+ids.proc <- ids[ids >= start.i]
+
+block <- 25
+
+ta <- Sys.time()
+for(i in ids.proc) {
+
+  if(i == ids.proc[1]) {
+    message(paste0("Starting with model ", i, " …"))
+  }
 
   mod.res <- NULL
   n <- 0
   while(is.null(mod.res)) {
-    try({mod.res <- readRDS(files.mod[i])})
+    try({mod.res <- read.rds(files.mod[i])})
     if(is.null(mod.res)) {
       n <- n + 1
       if(n <= 10) {
-        message("Loading model failed. Trying again …")
+        message(paste0("Loading model ", i, " failed. Trying again …"))
+        Sys.sleep(5)
       } else {
-        stop("Loading model failed.")
+        message("Loading model failed. Saving intermediary output …")
+        int.out <-
+          list(i.proc = i,
+               params.i = params.i,
+               marginals.i = marginals.i,
+               terms.i = terms.i,
+               dev.expl.i = dev.expl.i)
+        saveRDS(int.out, file.results.inter)
+        stop("Aborted due to read error")
       }
     }
   }
@@ -102,14 +131,30 @@ for(i in ids) {
   }
 
   params.i[[i]] <- mod.res$parameters
+
+  rm(mod.res)
+  gc()
+
   params.i[[i]][, mod.id := 1:.N]
   marginals.i[[i]] <- rbindlist(marginals.j, idcol = "mod.id")
   terms.i[[i]] <- rbindlist(terms.j, idcol = "mod.id")
   dev.expl.i[[i]] <- rbindlist(dev.expl.j, idcol = "mod.id")
 
-  tb <- Sys.time()
-  te <- tb-ta
-  print(te)
+  if(i %% block == 0) {
+    message(paste0("Model ", i, "/", length(ids), "."))
+    int.out <-
+      list(i.proc = i+1,
+           params.i = params.i,
+           marginals.i = marginals.i,
+           terms.i = terms.i,
+           dev.expl.i = dev.expl.i)
+    saveRDS(int.out, file.results.inter)
+    tb <- Sys.time()
+    te <- tb-ta
+    print(te)
+    rm(tb, te)
+    ta <- Sys.time()
+  }
 
 }
 
