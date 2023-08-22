@@ -50,6 +50,8 @@ ids.proc <- ids[ids >= start.i]
 
 block <- 25
 
+file.inter.temp <- tempfile(fileext = ".rds")
+
 ta <- Sys.time()
 for(i in ids.proc) {
 
@@ -65,7 +67,7 @@ for(i in ids.proc) {
       n <- n + 1
       if(n <= 10) {
         message(paste0("Loading model ", i, " failed. Trying again …"))
-        Sys.sleep(5)
+        Sys.sleep(10)
       } else {
         message("Loading model failed. Saving intermediary output …")
         int.out <-
@@ -74,8 +76,25 @@ for(i in ids.proc) {
                marginals.i = marginals.i,
                terms.i = terms.i,
                dev.expl.i = dev.expl.i)
-        saveRDS(int.out, file.results.inter)
-        stop("Aborted due to read error")
+        saveRDS(int.out, file.inter.temp, compress = FALSE)
+        fout <- NULL
+        nf <- 0
+        while(is.null(fout)) {
+          try({fout <- file.copy(from = file.inter.temp, to = file.results.inter)})
+          if(is.null(fout)) {
+            nf <- nf + 1
+            if(nf <= 10) {
+            message("Saving failed. Trying again …")
+            Sys.sleep(10)
+            } else {
+            message("Try dumping workspace …")
+            save.image(paste0(file.results, ".ABORTED.RData"))
+            stop("Aborted due to read error. Workspace saved.")
+            }
+          } else {
+            stop("Aborted due to read error. Results saved.")
+          }
+        }
       }
     }
   }
@@ -142,15 +161,15 @@ for(i in ids.proc) {
 
   if(i %% block == 0) {
     message(paste0("Model ", i, "/", length(ids), "."))
-    int.out <-
-      list(i.proc = i+1,
-           params.i = params.i,
-           marginals.i = marginals.i,
-           terms.i = terms.i,
-           dev.expl.i = dev.expl.i)
-    con.int <- file(file.results.inter)
-    saveRDS(int.out, con.int)
-    close(con.int)
+    # int.out <-
+    #   list(i.proc = i+1,
+    #        params.i = params.i,
+    #        marginals.i = marginals.i,
+    #        terms.i = terms.i,
+    #        dev.expl.i = dev.expl.i)
+    # con.int <- file(file.results.inter)
+    # saveRDS(int.out, con.int)
+    # close(con.int)
     tb <- Sys.time()
     te <- tb-ta
     print(te)
