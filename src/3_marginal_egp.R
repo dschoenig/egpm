@@ -80,7 +80,8 @@ for(i in ids.proc) {
         fout <- NULL
         nf <- 0
         while(is.null(fout)) {
-          try({fout <- file.copy(from = file.inter.temp, to = file.results.inter)})
+          try({fout <- file.copy(from = file.inter.temp, to = file.results.inter,
+                                 overwrite = TRUE, copy.mode = FALSE)})
           if(is.null(fout)) {
             nf <- nf + 1
             if(nf <= 10) {
