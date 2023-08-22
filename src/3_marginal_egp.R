@@ -8,8 +8,8 @@ args <- commandArgs(trailingOnly = TRUE)
 ls.type <- args[1]
 mod.type <- args[2]
 
-ls.type <- "binary_imbalance_high"
-mod.type <- "egp_som25"
+# ls.type <- "binary_imbalance_high"
+# mod.type <- "egp_som25"
 
 path.base <- "../"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
@@ -47,7 +47,7 @@ if(file.exists(file.results.inter)) {
   terms.i <- list()
   dev.expl.i <- list()
   start.i <- ids[1]
-  start.i <- 963
+  # start.i <- 963
 }
 
 ids.proc <- ids[ids >= start.i]
