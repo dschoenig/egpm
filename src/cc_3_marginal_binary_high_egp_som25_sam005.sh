@@ -2,7 +2,7 @@
 #SBATCH --account=def-cricrime 
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=12G
-#SBATCH --time=2:00:00
+#SBATCH --time=4:00:00
 #SBATCH --mail-user=schonig.daniel@courrier.uqam.ca
 #SBATCH --mail-type=ALL
 
