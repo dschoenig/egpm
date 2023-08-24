@@ -53,17 +53,10 @@ if(file.exists(file.results.inter)) {
 
 ids.proc <- ids[ids >= start.i]
 
-block <- 25
+block.save <- 100
+block.report <- 10
 
 file.inter.temp <- tempfile(fileext = ".rds")
-
-
-
-          try({fout <- file.copy(
-            from = "../results/binary_imbalance_high/egp_som25.rds",
-            to = "../results/binary_imbalance_high/egp_som25_copy.rds",
-                                 overwrite = TRUE, copy.mode = FALSE)})
-
 
 ta <- Sys.time()
 for(i in ids.proc) {
@@ -75,7 +68,8 @@ for(i in ids.proc) {
   mod.res <- NULL
   n <- 0
   while(is.null(mod.res)) {
-    try({mod.res <- read.rds(files.mod[i])})
+    # try({mod.res <- read.rds(files.mod[i])})
+    try({mod.res <- readRDS(files.mod[i])})
     if(is.null(mod.res)) {
       n <- n + 1
       if(n <= 10) {
@@ -173,22 +167,24 @@ for(i in ids.proc) {
   terms.i[[i]] <- rbindlist(terms.j, idcol = "mod.id")
   dev.expl.i[[i]] <- rbindlist(dev.expl.j, idcol = "mod.id")
 
-  if(i %% block == 0) {
+  if(i %% block.report == 0) {
     message(paste0("Model ", i, "/", length(ids), "."))
-    # int.out <-
-    #   list(i.proc = i+1,
-    #        params.i = params.i,
-    #        marginals.i = marginals.i,
-    #        terms.i = terms.i,
-    #        dev.expl.i = dev.expl.i)
-    # con.int <- file(file.results.inter)
-    # saveRDS(int.out, con.int)
-    # close(con.int)
     tb <- Sys.time()
     te <- tb-ta
     print(te)
     rm(tb, te)
     ta <- Sys.time()
+  }
+
+  if(i %% block.save == 0) {
+    message("Saving intermediary results …")
+    int.out <-
+      list(i.proc = i+1,
+           params.i = params.i,
+           marginals.i = marginals.i,
+           terms.i = terms.i,
+           dev.expl.i = dev.expl.i)
+    saveRDS(int.out, con.int, compress = FALSE)
   }
 
 }
