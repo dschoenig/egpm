@@ -177,14 +177,14 @@ for(i in ids.proc) {
   }
 
   if(i %% block.save == 0) {
-    message("Saving intermediary results …")
+    message(paste0("Saving intermediary results (model ", i, "/", length(ids), ") …"))
     int.out <-
       list(i.proc = i+1,
            params.i = params.i,
            marginals.i = marginals.i,
            terms.i = terms.i,
            dev.expl.i = dev.expl.i)
-    saveRDS(int.out, con.int, compress = FALSE)
+    saveRDS(int.out, file.results.inter, compress = FALSE)
   }
 
 }
