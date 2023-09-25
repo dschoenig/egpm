@@ -24,7 +24,8 @@ c(
   "Matrix",
   "MatchIt",
   "marginaleffects",
-  "sandwich") |>
+  "sandwich",
+  "tweedie") |>
 install.packages()
 
 install.packages(c("rstan", "brms"),
@@ -37,5 +38,5 @@ data.table::update_dev_pkg()
 # install.packages("~/projects/pkgarchive/RandomFields_3.3.14.tar.gz",
 #                  repos = NULL, type = "source")
 
-devtools::install_github("cran/RandomFields")
 devtools::install_github("cran/RandomFieldsUtils")
+devtools::install_github("cran/RandomFields")

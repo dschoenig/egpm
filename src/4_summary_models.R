@@ -37,7 +37,8 @@ path.base <- "../"
 path.landscapes <- paste0(path.base, "landscapes/")
 path.results <- paste0(path.base, "results/")
 path.comp <- paste0(path.results, "comparison/")
-file.estimates <- paste0(path.comp, "estimates.csv")
+file.estimates.csv <- paste0(path.comp, "estimates.csv")
+file.estimates.rds <- paste0(path.comp, "estimates.rds")
 
 
 ## Get landscape info
@@ -118,6 +119,8 @@ mod.mar <- mod.mar[, -c("group.id", "poly")]
 setnames(mod.mar,
          c("mean", "median", "se", "q0.5", "q2.5", "q5", "q25", "q75", "q95", "q97.5", "q99.5"),
          paste0("mar.", c("est", "median", "se", "q0.5", "q2.5", "q5", "q25", "q75", "q95", "q97.5", "q99.5")))
+         # c("mean", "se", "q2.5", "q97.5"),
+         # paste0("mar.", c("est", "se", "q2.5", "q97.5")))
 setnames(mod.mar,
          c("type", "cf.nb.strategy", "geo",
            "som.dim", "som.epochs", "som.topology",
@@ -165,25 +168,58 @@ estimates <-
 
 estimates[, mar.std := mar.est / mar.true]
 
+
 estimates[,
-          `:=`(ls.response = factor(ls.response,
+          `:=`(egp.som.topology = factor(egp.som.topology,
+                                         levels = c("rectangular",
+                                                    "hexagonal")),
+               egp.cf.nb = factor(egp.cf.nb,
+                                  levels = c("sequential",
+                                             "expand")),
+               match.distance = factor(match.distance,
+                                       levels = c("glm",
+                                                  "mahalanobis")),
+               match.cutpoints = factor(match.cutpoints,
+                                        levels = c("st", "sc", "fd")),
+               match.mod.cov = factor(match.mod.cov,
+                                      levels = c("exclude",
+                                                 "include",
+                                                 "interact")),
+               area.type = factor(area.type,
+                                  levels = c("treatment", "subarea")),
+               ls.response = factor(ls.response,
                                     levels = c("normal", "tweedie", "binary")),
                ls.imbalance = factor(ls.imbalance,
                                      levels = c("low", "high")),
                ls.id = factor(ls.id))]
 
+ls.type.lev <-
+  with(estimates,
+       paste0(rep(levels(ls.response), each = 2), "_",
+              rep(levels(ls.imbalance), times = 3)))
+
+estimates[,
+          ls.type := factor(paste0(ls.response, "_", ls.imbalance),
+                                levels = ls.type.lev)]
+estimates[,
+          ls.uid :=
+            as.integer((as.integer(ls.type)-1) * 1000) +
+            as.integer(as.character(ls.id))]
+
+setorder(estimates, ls.response, ls.imbalance, ls.id, name.short)
+
 est.names <- names(estimates)
 
-ls.cols <- c("ls.name", "ls.response", "ls.imbalance", "ls.id",
+ls.cols <- c("ls.uid", "ls.type", "ls.name", "ls.response", "ls.imbalance", "ls.id",
              "area.type", "subarea.id", "sam.frac")
 mod.cols <- c("name.short", "method", "mod.name", "mod.id")
 egp.cols <- est.names[est.names %like% "egp."]
 match.cols <- est.names[est.names %like% "match."]
 mar.cols <- est.names[est.names %like% "mar."]
-
 setcolorder(estimates, c(ls.cols, mod.cols, egp.cols, match.cols, mar.cols))
 
-fwrite(estimates, file.estimates, yaml = TRUE, na = "NA")
+fwrite(estimates, file.estimates.csv, yaml = TRUE, na = "NA")
+saveRDS(estimates, file.estimates.rds)
 
 
 # egp.comp <-

@@ -17,6 +17,94 @@ estimates <- fread(file.estimates, yaml = TRUE)
 mod <- readRDS("../results/comparison/mod.brm.28.rds")
 
 
+path.base <- "../"
+path.results <- paste0(path.base, "results/")
+path.comp <- paste0(path.results, "comparison/")
+file.estimates <- paste0(path.comp, "estimates.csv")
+
+estimates <- fread(file.estimates, yaml = TRUE)
+
+fit.dt <-
+  CJ(
+     ls.response = c("normal", "tweedie", "binary"),
+     ls.imbalance = c("high", "low"),
+     area.type = c("treatment"),
+     mod.name = c("egp_som25", "match"),
+     egp.som.topology = c(NA, "rectangular"),
+     egp.cf.nb = c(NA, "sequential"),
+     egp.geo.w = c(NA, TRUE),
+     match.mod.cov = c(NA, "interact"),
+     match.trt.int = c(NA, FALSE),
+     sorted = FALSE)
+
+estimates.fit <- 
+  estimates[fit.dt,
+            on = names(fit.dt),
+            nomatch = NULL]
+
+estimates.fit[,
+              `:=`(ls.response = factor(ls.response,
+                                        levels = c("normal", "tweedie", "binary")),
+                   ls.imbalance = factor(ls.imbalance,
+                                         levels = c("low", "high")),
+                   ls.id = factor(ls.id),
+                   name.short = factor(name.short,
+                                       levels = c("EGP", "GLM",
+                                                  "CEM-ST", "CEM-SC", "CEM-FD",
+                                                  "NN-PS-NR", "NN-PS-RE",
+                                                  "NN-MA-NR", "NN-MA-RE")))]
+
+ls.type.lev <-
+  with(estimates.fit,
+       paste0(rep(levels(ls.response), each = 2), "_",
+              rep(levels(ls.imbalance), times = 3)))
+
+estimates.fit[,
+              ls.type := factor(paste0(ls.response, "_", ls.imbalance),
+                                levels = ls.type.lev)]
+estimates.fit[,
+              ls.uid := as.integer((as.integer(ls.type)-1) * 1000) + as.integer(as.character(ls.id))]
+
+
+method.chunk <- estimates.fit[, unique(name.short)]
+pred.l <- list()
+for(i in seq_along(method.chunk)) {
+  method.foc <- method.chunk[i]
+  pred.mat <-
+    t(posterior_predict(mod,
+                        newdata = estimates.fit[name.short == method.foc],
+                        draw_ids = draw.ids.pred))
+  pred.method <- draws_dt(pred.mat, estimates.fit[name.short == method.foc])
+  rm(pred.mat)
+  pred.l[[i]] <-
+    pred.method[,
+                .(bias = bias(value, 1),
+                  rmse = rmse(value, 1),
+                  ser = ser(value)),
+                by = c(".draw")] |>
+    melt(id.vars = c(".draw"),
+         measure.vars = c("bias", "rmse", "ser"),
+         variable.name = "stat",
+         value.name = "value")
+  rm(pred.method)
+  gc()
+  message(i)
+}
+
+names(pred.l) <- method.chunk
+pred.dt <- rbindlist(pred.l, idcol = "name.short")
+pred.dt[, name.short := factor(name.short, levels = levels(estimates.fit$name.short))]
+setorder(pred.dt, name.short, .draw)
+
+
+est.dt <-
+  estimates.fit[order(name.short),
+                .(bias = bias(mar.std, 1),
+                  rmse = rmse(mar.std, 1),
+                  ser = ser(mar.std)),
+                by = .(name.short)]
+
+
 prepare_table_all <- function(estimates, predictions) {
 
   pred.dt <- predictions

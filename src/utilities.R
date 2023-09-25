@@ -5808,10 +5808,14 @@ ser <- function(x, y = 1, ...) {
 
 
 prob_format <- function(x, num.prec = 2) {
-  x.f <-
-    ifelse(round(x, num.prec) < 1,
-           format(round(x, num.prec), nsmall = num.prec),
-           paste0("> ", as.character(1-10^-num.prec)))
+  x.round <- round(x, num.prec)
+  x.f <- character(length(x))
+  id.max <- x.round == 1
+  id.min <- x.round == 0
+  id.btw <- !id.max & !id.min
+  x.f[id.max] <- paste0("> ", as.character(1-10^-num.prec))
+  x.f[id.min] <- paste0("< ", as.character(10^-num.prec))
+  x.f[id.btw] <- format(x.round[id.btw], nsmall = num.prec)
   return(x.f)
 }
 
@@ -5819,6 +5823,31 @@ num_format <- function(x, num.prec = 3) {
   x.f <- format(round(x, num.prec), nsmall = num.prec)
   return(x.f)
 }
+
+measures = c("bias", "rmse", "ser")
+num.pattern = "\\.vs\\."
+                         prob.pattern = "\\.p\\."
+                         num.prec = 3
+
+format_table <- function(x,
+                         measures = c("bias", "rmse", "ser"),
+                         num.pattern = "\\.vs\\.",
+                         prob.pattern = "\\.p\\.",
+                         num.prec = 3) {
+  cols.num <- c(measures, grep(num.pattern, names(x), value = TRUE))
+  cols.prob <- grep(prob.pattern, names(x), value = TRUE)
+  x.print <- copy(x)
+  x.print[,
+          (cols) := lapply(.SD, num_format),
+          .SDcols = cols.num,
+          env = list(cols = I(cols.num))]
+  x.print[,
+          (cols) := lapply(.SD, prob_format),
+          .SDcols = cols.prob,
+          env = list(cols = I(cols.prob))]
+  return(x.print)
+}
+
 
 
 draws_dt <- function(x, data = NULL, value.name = "value") {
@@ -5856,6 +5885,20 @@ subset_estimates <- function(estimates, sub) {
 
   return(estimates.sub)
 
+}
+
+set_levels_dt <- function(x, template) {
+  x2 <- copy(x)
+  for(i in seq_along(names(x))) {
+    col.name <- names(x)[i]
+    if(is.factor(template[[col.name]])) {
+      col.lev <- levels(template[[col.name]])
+      x2[,
+         fcol := factor(fcol, levels = col.lev),
+         env = list(fcol = col.name)]
+    }
+  }
+  return(x2)
 }
 
 
@@ -5934,7 +5977,8 @@ compare_permutation <- function(estimates,
                                 value.var = "mar.std",
                                 true.val = 1,
                                 n.mc = 1e4,
-                                chunk.size = 1e3
+                                chunk.size = 1e3,
+                                verbose = TRUE
                                 ) {
 
   est.sum <-
@@ -5950,10 +5994,12 @@ compare_permutation <- function(estimates,
   est.p.l <- list()
 
   for(i in seq_along(mc.chunks$from)) {
-    
-    message(paste0("MC chunk ", i, "/", length(mc.chunks$from)),
-                   " (permutations ",
-                   mc.chunks$from[i], ":", mc.chunks$to[i], ") …")
+
+    if(verbose) {
+      message(paste0("Permutation chunk ", i, "/", length(mc.chunks$from)),
+                     " (permutations ",
+                     mc.chunks$from[i], ":", mc.chunks$to[i], ") …")
+    }
 
     mc.iter.idx <- with(mc.chunks, from[i]:to[i])
 

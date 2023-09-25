@@ -2,6 +2,7 @@ landscapes/
 log/
 models/
 results/
+results_old/
 tests/
 src/scratch.R
 session*.vim

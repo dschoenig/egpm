@@ -335,3 +335,113 @@ sbatch cc_3_marginal_tweedie_high_egp_som25.sh
 # rm -rf ../models/binary_imbalance_high/egp_som25.*
 # rm -rf ../models/tweedie_imbalance_low/egp_som25.*
 # rm -rf ../models/tweedie_imbalance_high/egp_som25.*
+
+
+## NEW RUNS BY LANDSCAPE ------------------------------------
+
+# sbatch cc_2_models_high_egp_som10.sh
+# sbatch cc_2_models_high_egp_som25.sh
+sbatch cc_2_models_high_egp_som50.sh
+sbatch cc_2_models_high_egp_som25_sam02.sh
+sbatch cc_2_models_high_egp_som25_sam005.sh
+sbatch cc_2_models_high_egp_som25_unequal.sh
+
+# sbatch cc_3_marginal_high_egp_som10.sh
+# sbatch cc_3_marginal_high_egp_som25.sh
+sbatch cc_3_marginal_high_egp_som50.sh
+sbatch cc_3_marginal_high_egp_som25_sam02.sh
+sbatch cc_3_marginal_high_egp_som25_sam005.sh
+sbatch cc_3_marginal_high_egp_som25_unequal.sh
+
+# rm -rf ../models/imbalance_high
+
+
+# sbatch cc_2_models_low_egp_som10.sh
+# sbatch cc_2_models_low_egp_som25.sh
+sbatch cc_2_models_low_egp_som50.sh
+sbatch cc_2_models_low_egp_som25_sam02.sh
+sbatch cc_2_models_low_egp_som25_sam005.sh
+sbatch cc_2_models_low_egp_som25_unequal.sh
+
+# sbatch cc_3_marginal_low_egp_som10.sh
+# sbatch cc_3_marginal_low_egp_som25.sh
+sbatch cc_3_marginal_low_egp_som50.sh
+sbatch cc_3_marginal_low_egp_som25_sam02.sh
+sbatch cc_3_marginal_low_egp_som25_sam005.sh
+sbatch cc_3_marginal_low_egp_som25_unequal.sh
+
+# rm -rf ../models/imbalance_low
+
+
+#---
+
+
+# sbatch cc_2_models_binary_high_egp_som10.sh
+sbatch cc_2_models_binary_high_egp_som25.sh
+sbatch cc_2_models_binary_high_egp_som50.sh
+sbatch cc_2_models_binary_high_egp_som25_sam02.sh
+sbatch cc_2_models_binary_high_egp_som25_sam005.sh
+sbatch cc_2_models_binary_high_egp_som25_unequal.sh
+
+# sbatch cc_3_marginal_binary_high_egp_som10.sh
+sbatch cc_3_marginal_binary_high_egp_som25.sh
+sbatch cc_3_marginal_binary_high_egp_som50.sh
+sbatch cc_3_marginal_binary_high_egp_som25_sam02.sh
+sbatch cc_3_marginal_binary_high_egp_som25_sam005.sh
+sbatch cc_3_marginal_binary_high_egp_som25_unequal.sh
+
+# rm -rf ../models/imbalance_binary_high
+
+
+# sbatch cc_2_models_binary_low_egp_som10.sh
+# sbatch cc_2_models_binary_low_egp_som25.sh
+sbatch cc_2_models_binary_low_egp_som50.sh
+sbatch cc_2_models_binary_low_egp_som25_sam02.sh
+sbatch cc_2_models_binary_low_egp_som25_sam005.sh
+sbatch cc_2_models_binary_low_egp_som25_unequal.sh
+
+# sbatch cc_3_marginal_binary_low_egp_som10.sh
+# sbatch cc_3_marginal_binary_low_egp_som25.sh
+sbatch cc_3_marginal_binary_low_egp_som50.sh
+sbatch cc_3_marginal_binary_low_egp_som25_sam02.sh
+sbatch cc_3_marginal_binary_low_egp_som25_sam005.sh
+sbatch cc_3_marginal_binary_low_egp_som25_unequal.sh
+
+# rm -rf ../models/imbalance_binary_low
+
+
+#---
+
+
+# sbatch cc_2_models_tweedie_high_egp_som10.sh
+# sbatch cc_2_models_tweedie_high_egp_som25.sh
+sbatch cc_2_models_tweedie_high_egp_som50.sh
+sbatch cc_2_models_tweedie_high_egp_som25_sam02.sh
+sbatch cc_2_models_tweedie_high_egp_som25_sam005.sh
+sbatch cc_2_models_tweedie_high_egp_som25_unequal.sh
+
+# sbatch cc_3_marginal_tweedie_high_egp_som10.sh
+# sbatch cc_3_marginal_tweedie_high_egp_som25.sh
+sbatch cc_3_marginal_tweedie_high_egp_som50.sh
+sbatch cc_3_marginal_tweedie_high_egp_som25_sam02.sh
+sbatch cc_3_marginal_tweedie_high_egp_som25_sam005.sh
+sbatch cc_3_marginal_tweedie_high_egp_som25_unequal.sh
+
+# rm -rf ../models/imbalance_tweedie_high
+
+
+# sbatch cc_2_models_tweedie_low_egp_som10.sh
+# sbatch cc_2_models_tweedie_low_egp_som25.sh
+sbatch cc_2_models_tweedie_low_egp_som50.sh
+sbatch cc_2_models_tweedie_low_egp_som25_sam02.sh
+sbatch cc_2_models_tweedie_low_egp_som25_sam005.sh
+sbatch cc_2_models_tweedie_low_egp_som25_unequal.sh
+
+# sbatch cc_3_marginal_tweedie_low_egp_som10.sh
+# sbatch cc_3_marginal_tweedie_low_egp_som25.sh
+sbatch cc_3_marginal_tweedie_low_egp_som50.sh
+sbatch cc_3_marginal_tweedie_low_egp_som25_sam02.sh
+sbatch cc_3_marginal_tweedie_low_egp_som25_sam005.sh
+sbatch cc_3_marginal_tweedie_low_egp_som25_unequal.sh
+
+# rm -rf ../models/imbalance_tweedie_low
