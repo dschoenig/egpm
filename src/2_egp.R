@@ -19,19 +19,19 @@ task_count <- as.integer(args[12])
 overwrite <- as.logical(args[13])
 if(is.na(overwrite)) overwrite <- TRUE
 
-ls.type <- "noeff_imbalance_high"
-mod.type <- "egp_som25"
-resp.type <- "normal"
-n.threads <- 4
-task_id <- 407
-task_count <- 1000
-sam.frac <- 0.01
-som.dim <- 25
-som.epochs <- 1000
-egp.k.som <- 250
-egp.k.geo <- 250
-egp.approx <- TRUE
-overwrite <- TRUE
+# ls.type <- "noeff_imbalance_high"
+# mod.type <- "egp_som25"
+# resp.type <- "normal"
+# n.threads <- 4
+# task_id <- 407
+# task_count <- 1000
+# sam.frac <- 0.01
+# som.dim <- 25
+# som.epochs <- 1000
+# egp.k.som <- 250
+# egp.k.geo <- 250
+# egp.approx <- TRUE
+# overwrite <- TRUE
 
 egp.max.knots.som <- som.dim^2
 egp.max.knots.geo <- egp.k.geo*10
