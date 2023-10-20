@@ -193,6 +193,10 @@ estimates[,
                                      levels = c("low", "high")),
                ls.id = factor(ls.id))]
 
+estimates[method == "egp",
+          egp.som.unequal := fifelse(mod.name %like% "unequal", TRUE, FALSE)]
+
+
 ls.type.lev <-
   with(estimates,
        paste0(rep(levels(ls.response), each = 2), "_",
@@ -213,7 +217,7 @@ est.names <- names(estimates)
 ls.cols <- c("ls.uid", "ls.type", "ls.name", "ls.response", "ls.imbalance", "ls.id",
              "area.type", "subarea.id", "sam.frac")
 mod.cols <- c("name.short", "method", "mod.name", "mod.id")
-egp.cols <- est.names[est.names %like% "egp."]
+egp.cols <- sort(est.names[est.names %like% "egp."])
 match.cols <- est.names[est.names %like% "match."]
 mar.cols <- est.names[est.names %like% "mar."]
 setcolorder(estimates, c(ls.cols, mod.cols, egp.cols, match.cols, mar.cols))

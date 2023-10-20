@@ -22,6 +22,10 @@ library(memoise)
 library(Matrix)
 # library(statmod)
 library(tweedie)
+library(future)
+library(doFuture)
+library(foreach)
+library(progressr)
 
 cloglog <- function(mu) {
   log(-log(1 - mu))
@@ -3512,7 +3516,9 @@ plot_landscape_4cov_nl <- function(x,
                                    legend.eff.int = "Covariate\neffect",
                                    limits.common = TRUE,
                                    base.size = 10,
-                                   base.family = "IBMPlexSansCondensed"
+                                   base.family = "IBMPlexSansCondensed",
+                                   pal.eff = "Cividis",
+                                   pal.eff.rev = FALSE
                                    ) {
   # select options for landscape: overview, effects, all
 
@@ -3738,13 +3744,15 @@ plot_landscape_4cov_nl <- function(x,
     #          fill = "Covariate\neffects") +
     #     ls_theme
     # }
-
+    # browser()
     plots[["eff.main"]] <-
       eff.dt[effect %in% eff.main] |>
       ggplot(aes(x = x, y = y, fill = value)) +
       geom_raster() +
-      scale_fill_continuous_divergingx(palette = "Roma", rev = TRUE, mid = 0,
+      scale_fill_continuous_divergingx(palette = pal.eff, rev = pal.eff.rev, mid = 0,
                                        limits = lim.effects) +
+      # scale_fill_continuous_diverging(palette = "Tropic",
+      #                                 limits = lim.effects) +
       scale_x_continuous(expand = c(0, 0)) +
       scale_y_continuous(expand = c(0, 0)) +
       coord_fixed() +
@@ -3759,9 +3767,11 @@ plot_landscape_4cov_nl <- function(x,
       eff.dt[effect %in% eff.int] |>
       ggplot(aes(x = x, y = y, fill = value)) +
       geom_raster() +
-      scale_fill_continuous_divergingx(palette = "Roma",
-                                       rev = TRUE, mid = 0,
+      scale_fill_continuous_divergingx(palette = pal.eff,
+                                       rev = pal.eff.rev, mid = 0,
                                        limits = lim.effects) +
+      # scale_fill_continuous_diverging(palette = "Tropic",
+      #                                 limits = lim.effects) +
       scale_x_continuous(expand = c(0, 0)) +
       scale_y_continuous(expand = c(0, 0)) +
       coord_fixed() +
@@ -3777,8 +3787,10 @@ plot_landscape_4cov_nl <- function(x,
     plots[["trt"]] <-
       ggplot(x, aes(x = x, y = y, fill = treatment)) +
       geom_raster() +
-      scale_fill_continuous_divergingx(palette = "Roma", rev = TRUE, mid = 0,
+      scale_fill_continuous_divergingx(palette = pal.eff, rev = pal.eff.rev, mid = 0,
                                        limits = lim.effects) +
+      # scale_fill_continuous_diverging(palette = "Tropic",
+      #                                 limits = lim.effects) +
       scale_x_continuous(expand = c(0, 0)) +
       scale_y_continuous(expand = c(0, 0)) +
       coord_fixed() +
@@ -3792,8 +3804,10 @@ plot_landscape_4cov_nl <- function(x,
     plots[["resid"]] <-
       ggplot(x, aes(x = x, y = y, fill = residual)) +
       geom_raster() +
-      scale_fill_continuous_divergingx(palette = "Roma", rev = TRUE, mid = 0,
+      scale_fill_continuous_divergingx(palette = pal.eff, rev = pal.eff.rev, mid = 0,
                                        limits = lim.effects) +
+      # scale_fill_continuous_diverging(palette = "Tropic",
+      #                                 limits = lim.effects) +
       scale_x_continuous(expand = c(0, 0)) +
       scale_y_continuous(expand = c(0, 0)) +
       coord_fixed() +
@@ -3806,12 +3820,15 @@ plot_landscape_4cov_nl <- function(x,
       plots[["resid"]] <-
         ggplot(x, aes(x = x, y = y, fill = residual)) +
         geom_raster() +
-        scale_fill_continuous_divergingx(palette = "Roma",
-                                         rev = TRUE,
+        scale_fill_continuous_divergingx(palette = pal.eff,
+                                         rev = pal.eff.rev,
                                          mid = 0,
                                          limits = c(-1, 1),
                                          oob = scales::squish
                                          ) +
+        # scale_fill_continuous_diverging(palette = "Tropic",
+        #                                  limits = c(-1, 1),
+                                         # oob = scales::squish)
         scale_x_continuous(expand = c(0, 0)) +
         scale_y_continuous(expand = c(0, 0)) +
         coord_fixed() +
@@ -3841,8 +3858,8 @@ plot_landscape_4cov_nl <- function(x,
       plots[["resid"]] <-
         ggplot(x, aes(x = x, y = y, fill = residual)) +
         geom_raster() +
-        scale_fill_continuous_divergingx(palette = "Roma",
-                                         rev = TRUE,
+        scale_fill_continuous_divergingx(palette = pal.eff,
+                                         rev = pal.eff.rev,
                                          mid = 0,
                                          # trans = scales::pseudo_log_trans(base = 10),
                                          trans = scales::modulus_trans(0),
@@ -3852,6 +3869,13 @@ plot_landscape_4cov_nl <- function(x,
                                          # labels = scales::label_log(),
                                          oob = scales::squish
                                          ) +
+        # scale_fill_continuous_diverging(palette = "Tropic",
+        #                                 trans = scales::modulus_trans(0),
+        #                                 limits = res.lim,
+        #                                 # breaks = scales::breaks_pretty(5),
+        #                                 breaks = res.breaks,
+        #                                 # labels = scales::label_log(),
+        #                                 oob = scales::squish) +
         scale_x_continuous(expand = c(0, 0)) +
         scale_y_continuous(expand = c(0, 0)) +
         coord_fixed() +
@@ -4294,6 +4318,8 @@ egp_som <- function(data,
 
   if(scale) {
     x.scaled <- scale(x, center = TRUE, scale = TRUE)
+  } else {
+    x.scaled <- x
   }
 
   scale.att <- list(mean = apply(x, 2, mean, na.rm = TRUE),
@@ -5908,6 +5934,7 @@ compare_performance <- function(estimates,
                                 by.landscape = NULL,
                                 comparisons = NULL,
                                 value.var = "mar.std",
+                                comp.sep = "_vs_",
                                 true.val = 1) {
 
   by.comb <- c(by.landscape, by.method)
@@ -5938,7 +5965,7 @@ compare_performance <- function(estimates,
     for (i in seq_along(comparisons)) {
       comp.var <- comparisons[i]
       stat.names <- c("bias", "rmse", "ser")
-      comp.names <-   paste0(stat.names, paste0(".vs.", tolower(comp.var)))
+      comp.names <-   paste0(stat.names, paste0("_vs_", tolower(comp.var)))
       est.comp.l[[i]] <-
         melt(est.sum,
              measure.vars = stat.names,
@@ -5947,7 +5974,8 @@ compare_performance <- function(estimates,
         dcast(stat.cast,
               value.var = ".value") |>
         _[,
-          lapply(.SD, \(x) abs(x) - .SD[, abs(comp.sel)]),
+          # lapply(.SD, \(x) abs(x) - .SD[, abs(comp.sel)]),
+          lapply(.SD, \(x) x - .SD[, comp.sel]),
           by = c(by.landscape, ".stat"),
           .SDcols = method.cols,
           env = list(comp.sel = comp.var)] |>
@@ -5966,6 +5994,235 @@ compare_performance <- function(estimates,
   }
   
   return(est.sum)
+}
+
+
+
+compare_boot <- function(estimates,
+                         by.method = "name.short",
+                         by.landscape = NULL,
+                         ls.id = "ls.uid",
+                         comparisons = c("EGP", "GLM"),
+                         comp.sep = "_vs_",
+                         value.var = "mar.std",
+                         true.val = 1,
+                         ci.width = 0.95,
+                         pe.type = "data",
+                         n.boot = 1e4,
+                         chunk.size = 1e3,
+                         future.type = "multicore",
+                         n.cores = 4,
+                         progress = TRUE
+                         ) {
+  stat.names <- c("bias", "rmse", "ser")
+  comp.names <- lapply(comparisons,
+                       \(x) paste0(stat.names, paste0(comp.sep, tolower(x))))
+
+  message("Preparing bootstrap samples …")
+
+  boot.idx <-
+    replicate(n = n.boot,
+              expr =
+                estimates[,
+                          .(ls.col = sample(ls.col,
+                                            size = length(unique(ls.col)),
+                                            replace = TRUE)),
+                          by = by.landscape,
+                          env = list(ls.col = ls.id)],
+              simplify = FALSE) |>
+    rbindlist(idcol = ".bootrep")
+
+  boot.chunks <- chunk_seq(1, n.boot, chunk.size)
+
+
+  message("Calculating performance measures …")
+
+  if(progress) {
+    p <- progressor(along = boot.chunks$from)
+  }
+
+  registerDoFuture()
+  if(n.cores > 1) {
+    plan(future.type, workers =n.cores)
+  } else {
+    plan("sequential")
+  }
+
+  est.sum.boot <-
+    foreach(i = seq_along(boot.chunks$from), .combine = rbind) %dopar% {
+    # foreach(i = 1:2, .combine = rbind) %dopar% {
+      
+      setDTthreads(1)
+
+      # if(verbose) {
+      #   message(paste0("Bootstrap chunk ", i, "/", length(boot.chunks$from)),
+      #                  " (replicates ",
+      #                  boot.chunks$from[i], ":", boot.chunks$to[i], ") …")
+      # }
+
+      boot.iter.idx <- with(boot.chunks, from[i]:to[i])
+
+      est.boot <-
+        estimates[boot.idx[.bootrep %in% boot.iter.idx],
+                  on = c(by.landscape, ls.id),
+                  allow.cartesian = TRUE]
+
+      est.boot.sum <- 
+        compare_performance(est.boot,
+                            by.method = by.method,
+                            by.landscape = c(".bootrep", by.landscape),
+                            comparisons = comparisons,
+                            value.var = value.var,
+                            true.val = true.val,
+                            comp.sep = comp.sep)
+      if(progress) {
+        p(sprintf("i=%g", i))
+      }
+      return(est.boot.sum)
+    }
+
+  est.sum.means <- copy(est.sum.boot)
+  est.sum.sd <- copy(est.sum.boot)
+
+  est.cols <- c(stat.names, unlist(comp.names))
+ 
+  mean.cols <- paste0(est.cols, ".mean")
+  if(pe.type == "boot") {
+    est.sum.mean <-
+      est.sum.boot[,
+                   lapply(.SD, mean),
+                   by = c(by.landscape, by.method),
+                   .SDcols = est.cols]
+    setnames(est.sum.mean,
+             est.cols,
+             mean.cols)
+  } else {
+    est.sum.mean <- 
+      compare_performance(estimates,
+                          by.method = by.method,
+                          by.landscape = by.landscape,
+                          comparisons = comparisons,
+                          value.var = value.var,
+                          true.val = true.val,
+                          comp.sep = comp.sep)
+    setnames(est.sum.mean,
+             est.cols,
+             mean.cols)
+  }
+
+  se.cols <- paste0(est.cols, ".se")
+  est.sum.se <-
+    est.sum.boot[,
+                 lapply(.SD, sd),
+                 by = c(by.landscape, by.method),
+                 .SDcols = est.cols]
+  setnames(est.sum.se,
+           est.cols,
+           se.cols)
+
+
+  ci_l.cols <- paste0(est.cols, ".ci_l")
+  ci_u.cols <- paste0(est.cols, ".ci_u")
+  est.sum.ci_l <-
+    est.sum.boot[,
+                 lapply(.SD, \(x) quantile(x, (1-ci.width)/2)),
+                 by = c(by.landscape, by.method),
+                 .SDcols = est.cols]
+    setnames(est.sum.ci_l,
+             est.cols,
+             ci_l.cols)
+  est.sum.ci_u <-
+    est.sum.boot[,
+                 lapply(.SD, \(x) quantile(x, ci.width + ((1-ci.width)/2))),
+                 by = c(by.landscape, by.method),
+                 .SDcols = est.cols]
+    setnames(est.sum.ci_u,
+             est.cols,
+             ci_u.cols)
+
+  est.sum.ci <-
+    merge(est.sum.ci_l, est.sum.ci_u,
+          by = c(by.landscape, by.method))
+
+  est.sum.uc <-
+    merge(est.sum.se, est.sum.ci, by = c(by.landscape, by.method))
+  uc.cols <- c(se.cols, ci_l.cols, ci_u.cols)
+
+  colorder <-
+    matrix(c(mean.cols, uc.cols),
+           nrow = length(mean.cols), byrow = FALSE) |>
+  t() |>
+  as.vector()
+
+  est.sum.all <-
+    merge(est.sum.mean, est.sum.uc, by = c(by.landscape, by.method))
+
+  setcolorder(est.sum.all,
+              c(by.landscape, by.method, colorder))
+
+  return(est.sum.all)
+
+}
+
+
+
+comparisons_cast <- function(x,
+                             by.method = "name.short",
+                             by.landscape = c("ls.response", "ls.imbalance"),
+                             comp.sep = "_vs_",
+                             comp.method = c("egp", "glm"),
+                             suffix.sep = ".",
+                             prefix.stat = c("bias", "rmse", "ser"),
+                             suffix.mean = c("mean"),
+                             suffix.se = c("se"),
+                             suffix.ci = c("ci_l", "ci_u")) {
+
+  xi <- copy(x)
+
+  xn <- names(x)
+  stat.cols <- c(".id", xn[!xn %in% c(by.method, by.landscape)])
+  id.cols <- c(".id", by.method, by.landscape)
+  stat.comp.cols <- c(".id", stat.cols[stri_detect_fixed(stat.cols, comp.sep)])
+  stat.abs.cols <- stat.cols[stri_detect_fixed(stat.cols, comp.sep, negate = TRUE)]
+
+  xi[, .id := 1:.N]
+
+  x.abs <-
+    melt(xi[, ..stat.abs.cols],
+         id.vars = ".id",
+         measure.vars = measure(.stat = as.character,
+                                .est = as.character,
+                                pattern = "(.+)\\.(.+)")) |>
+    dcast(.id + .stat ~ .est)
+  x.abs[, .comp := NA]
+
+  x.comp <-
+    melt(xi[, ..stat.comp.cols],
+         id.vars = ".id",
+         measure.vars = measure(.stat = as.character,
+                                .comp = as.character,
+                                .est = as.character,
+                                pattern = "(.+)_vs_(.+)\\.(.+)")) |>
+    dcast(.id + .stat + .comp ~ .est)
+
+
+  xl <-
+    merge(xi[, ..id.cols],
+          rbind(x.abs, x.comp),
+          by = ".id", sort = FALSE)
+  est.cols <- c(by.landscape, by.method,
+                ".stat", ".comp",
+                suffix.mean, suffix.se, suffix.ci)
+  xl <- xl[, ..est.cols]
+
+  xl[.stat %in% prefix.stat & .comp %in% comp.method,
+     `:=`(.stat = factor(.stat, levels = prefix.stat),
+          .comp = factor(.comp, levels = comp.method))]
+
+  setorderv(xl, c(by.landscape, by.method, ".comp", ".stat"))
+
+  return(xl)
+
 }
 
 
@@ -6064,6 +6321,785 @@ compare_permutation <- function(estimates,
   est.res <- merge(est.sum, est.p)
 
   return(est.p)
+}
+
+
+classify_estimates <- function(x,
+                               ls.id = "ls.id",
+                               group.vars = c("ls.response", "ls.imbalance"),
+                               est.point = "mar.est",
+                               est.ci = c("mar.q2.5", "mar.q97.5"),
+                               est.true = "mar.true",
+                               est.res = 0.025,
+                               int.name = ".type",
+                               rank.name = ".rank"
+                               ) {
+  col.sel <- c(ls.id, est.point, est.ci, est.true, group.vars)
+  x <- copy(x[, col.sel, with = FALSE])
+  colnames.old <- c(ls.id, est.point, est.ci, est.true)
+  colnames.new <- c(".id", ".p", ".cl", ".cu", ".true")
+  setnames(x, colnames.old, colnames.new)
+  col.std <- c(".p", ".cl", ".cu")
+
+  x[,
+    (col.std) := lapply(.SD, \(x) x/.true),
+    .SDcols = col.std]
+  # x[order(.p), .rank := 1:.N, by = group.vars]
+
+
+  r.min <- floor(min(x$.p))
+  r.max <- ceiling(max(x$.p))
+  # r.min <- floor(min(x$.cl))
+  # r.max <- ceiling(max(x$.cu))
+  r.step <- est.res
+  # r.step <- (r.max - r.min) / res
+
+  xc <-
+    CJ(.id = sort(unique(x$.id)),
+       .est = seq(r.min+(r.step/2), r.max-(r.step/2), by = r.step)) |>
+    merge(x, by = ".id", allow.cartesian = TRUE)
+
+  xc[,
+     .ci.within := ifelse(.est >= .cl & .est <= .cu,
+                        TRUE, FALSE)]
+
+  xc[,
+     .p.within := (abs(.est - .p) < min(abs(.est - .p)) + r.step/2 &
+                  abs(.est - .p) > min(abs(.est - .p)) - r.step/2),
+     by = ".id"]
+
+  xc[,
+     .type := fcase(.ci.within == TRUE & .cl > 0 & .cl <= 1 & .cu >= 1, "correct",
+                       .ci.within == TRUE & .cl > 1 & .cu > 1, "over",
+                       .ci.within == TRUE & .cl > 0 & .cl < 1 & .cu < 1, "under",
+                       .ci.within == TRUE & .cl <= 0 & .cu >= 0, "non",
+                       .ci.within == TRUE & .cl < 0 & .cu < 0, "sign",
+                       default = NA)]
+
+
+
+  # xc[, type := ifelse(.p.within == TRUE, "mean", .type)]
+
+  # xc[,
+  #    `:=`(.type = factor(.type, levels = c("over", "correct", "under", "non", "sign")),
+  #         type = factor(type, levels = c("mean", "over", "correct", "under", "non", "sign")))]
+
+  xc[, `:=`(.type = factor(.type, levels = c("over", "correct", "under", "non", "sign")))]
+
+  # xc[!is.na(.type), unique(.type), by = c(group.vars, ".id")][, .(n =
+  # .N), by = c(group.vars, ".id")]
+  # xc[!is.na(.type), unique(.type), by = c(group.vars, ".id")][, .(n = .N), by = c(".id")][n < 6]
+
+  x.ls <- 
+    xc[!is.na(.type),
+         .(.p = unique(.p),
+           .cl = unique(.cl),
+           .cu = unique(.cu),
+           .true = unique(.true),
+           .type = unique(.type)),
+         by = c(group.vars, ".id")
+         ]
+
+  x.ranks <-
+    x.ls[order(-.type, .p),
+         .(.id, .rank = 1:.N),
+         by = group.vars]
+
+  x.rast <-
+    merge(xc, x.ranks, by = c(group.vars, ".id")) |>
+    _[, -c(".p.within", ".ci.within")]
+
+  x.ls[, .type := relevel(.type, "correct")]
+  x.rast[, .type := relevel(.type, "correct")]
+
+  setnames(x.ls, colnames.new, colnames.old)
+  setnames(x.ls, ".type", int.name)
+  setcolorder(x.ls, c(group.vars, ls.id))
+  setorderv(x.ls, c(group.vars, ls.id))
+
+  setnames(x.rast, colnames.new, colnames.old)
+  setnames(x.rast, ".rank", rank.name)
+  setcolorder(x.rast, c(group.vars, ls.id))
+  setorderv(x.rast, c(group.vars, ls.id))
+
+  x.res <- list(ls = x.ls,
+                rast = x.rast)
+
+
+  return(x.res)
+
+}
+
+
+# format_comparisons_old <- function(x,
+#                                measure.comb.string = "%.3f (%.3f)",
+#                                comp.var = "name.short",
+#                                diff.vars = c(EGP = "egp", GLM = "glm"),
+#                                diff.sep = "_vs_",
+#                                diff.empty = "–",
+#                                gap.val = "",
+#                                group.vars = c("ls.response", "ls.imbalance"),
+#                                group.labs = list(NULL, NULL),
+#                                group.combfun = list(identity, tolower),
+#                                lab.fix = c("", " outcome, ", ""),
+#                                stat.names = c("bias", "rmse", "ser"),
+#                                suffix.mean = c(".mean"),
+#                                suffix.se = c(".se")
+#                                ) {
+
+#   if(is.null(group.labs[[1]])) {
+#     group1.labs <- c(normal = "Gaussian", tweedie = "Tweedie", binary = "Binary")
+#     group1.labs <- factor(group1.labs, levels = group1.labs)
+#   }
+#   if(is.null(group.labs[[2]])) {
+#     group2.labs <- c(low = "Moderate imbalance", high = "High imbalance", all = "All")
+#     group2.labs <- factor(group2.labs, levels = group2.labs)
+#   }
+
+#   # comb.string <- "%.3f ± %.3f"
+#   # comb.string <- "%.3f<br>(%.3f)"
+#   comb.string <- measure.comb.string
+  
+#   diff.vars2 <- c(list(NULL), as.list(diff.vars))
+
+
+#   col.measure <- matrix(FALSE, nrow = ncol(x), ncol = length(stat.names))
+#   for(i in seq_along(stat.names)) {
+#     col.measure[,i] <-
+#       stri_detect_fixed(names(x), stat.names[i]) &
+#       (stri_detect_fixed(names(x), suffix.mean) |
+#        stri_detect_fixed(names(x), suffix.se))
+#   }
+#   col.measure <- apply(col.measure, 1, any)
+#   names.measure <- names(x)[col.measure]
+#   col.idx <- names(x) %in% c(group.vars, comp.var)
+#   names.idx <- names(x)[col.idx]
+#   names.include <- c(names.idx, names.measure)
+
+#   x.format <- copy(x[, ..names.include])
+  
+#   diff.cols.all <- character(0)
+
+#   for(i in seq_along(diff.vars2)) {
+   
+#     if(is.null(diff.vars2[[i]])) {
+#       diff.col.sep <- NULL
+#     } else {
+#       diff.col.sep <- diff.sep
+#     }
+
+#     diff.cols <- paste0(stat.names, diff.col.sep, diff.vars2[[i]])
+#     diff.cols.mean <- paste0(stat.names, diff.col.sep, diff.vars2[[i]], suffix.mean)
+#     diff.cols.se <- paste0(stat.names, diff.col.sep, diff.vars2[[i]], suffix.se)
+
+#     for(j in seq_along(diff.cols)) {
+
+#       format.env <-
+#         list(
+#              comp.col = comp.var,
+#              diff.col = diff.cols[j],
+#              diff.col.mean = diff.cols.mean[j],
+#              diff.col.se = diff.cols.se[j])
+
+#       if(is.null(diff.vars2[[i]])) {
+#         x.format[,
+#                  diff.col := sprintf(comb.string, diff.col.mean, diff.col.se),
+#                  env = format.env]
+#       } else {
+#         x.format[,
+#                  diff.col := 
+#                    ifelse(comp.col != names(diff.vars2)[i],
+#                           sprintf(comb.string, diff.col.mean, diff.col.se),
+#                           diff.empty),
+#                  env = format.env]
+#       }
+#     }
+#     if(i > 1) {
+#       gap.col <- paste0(".gap", i-1)
+#       diff.cols.all <- c(diff.cols.all, gap.col, diff.cols)
+#       x.format[,
+#                gap := gap.val,
+#                env = list(gap = gap.col)]
+#     } else {
+#       diff.cols.all <- c(diff.cols.all, diff.cols)
+#     }
+#   }
+
+#   x.format <- x.format[, c(group.vars, comp.var, diff.cols.all), with = FALSE]
+
+#   format_zeros <- function(x) {
+#     stri_replace_all_fixed(x, "0.000", "0") |>
+#     stri_replace_all_regex("^-(0\\h)", "$1")
+#   }
+
+#   format_minus <- function(x) {
+#     stri_replace_all_regex(x, "-(\\d)", "−$1")
+#   }
+
+#   x.format[,
+#            (diff.cols.all) := lapply(.SD, format_zeros),
+#            .SDcols = diff.cols.all]
+
+#   x.format[,
+#            (diff.cols.all) := lapply(.SD, format_minus),
+#            .SDcols = diff.cols.all]
+
+#   group.env <- list(group1.col = group.vars[1],
+#                     group2.col = group.vars[2])
+
+#   if(length(group.vars == 2)) {
+#     group.labs <- 
+#       unique(x.format[order(group1.col, group2.col),
+#                       .(group1.col, group2.col),
+#                       env = group.env]) |>
+#       _[,
+#         .(group1.col,
+#           group2.col,
+#           group.lab = paste0(lab.fix[1],
+#                              group.combfun[[1]](group1.labs[as.character(group1.col)]), 
+#                              lab.fix[2],
+#                              group.combfun[[2]](group2.labs[as.character(group2.col)]),
+#                              lab.fix[3])),
+#           env = group.env]
+#     group.labs[, group.lab := factor(group.lab, levels = group.lab)]
+#   } else {
+#     group.labs <- 
+#       unique(x.format[order(group1.col),
+#                       .(group1.col),
+#                       env = group.env]) |>
+#       _[,
+#         .(group1.col,
+#           group.lab = paste0(lab.fix[1],
+#                              group.combfun[[1]](group1.labs[as.character(group1.col)]),
+#                              lab.fix[2])), 
+#           env = group.env]
+#     group.labs[, group.lab := factor(group.lab, levels = group.lab)]
+#   }
+
+#   x.format <-
+#     merge(group.labs, x.format, by = group.vars)
+#   x.format <- x.format[, !names(x.format) %in% group.vars, with = FALSE]
+#   setorder(x.format, group.lab)
+
+#   return(x.format)
+# }
+
+
+format_comparisons <- function(x,
+                               measure.comb.string = "%.3f (%.3f)",
+                               comp.var = "name.short",
+                               diff.vars = c(EGP = "egp", GLM = "glm"),
+                               diff.sep = "_vs_",
+                               diff.empty = "",
+                               gap.val = "",
+                               group.vars = c("ls.response", "ls.imbalance"),
+                               group.vars.out = FALSE,
+                               group.labs = list(NULL, NULL),
+                               group.combfun = list(identity, tolower),
+                               group.name = ".group",
+                               lab.fix = c("", " outcome, ", ""),
+                               stat.names = c("bias", "rmse", "ser"),
+                               suffix.mean = c(".mean"),
+                               suffix.se = c(".se"),
+                               partition = TRUE,
+                               partition.fill = "",
+                               partition.gap = FALSE
+                               ) {
+
+  if(is.null(group.labs[[1]])) {
+    group1.labs <- c(all = "All", normal = "Gaussian", tweedie = "Tweedie", binary = "Binary")
+    group1.labs <- factor(group1.labs, levels = group1.labs)
+  } else {
+    group1.labs <- group.labs[[1]]
+  }
+  if(is.null(group.labs[[2]])) {
+    group2.labs <- c(all = "All", low = "Moderate imbalance", high = "High imbalance")
+    group2.labs <- factor(group2.labs, levels = group2.labs)
+  } else {
+    group2.labs <- group.labs[[2]]
+  }
+
+  # comb.string <- "%.3f ± %.3f"
+  # comb.string <- "%.3f<br>(%.3f)"
+  comb.string <- measure.comb.string
+  
+  diff.vars2 <- c(list(NULL), as.list(diff.vars))
+
+
+  col.measure <- matrix(FALSE, nrow = ncol(x), ncol = length(stat.names))
+  for(i in seq_along(stat.names)) {
+    col.measure[,i] <-
+      stri_detect_fixed(names(x), stat.names[i]) &
+      (stri_detect_fixed(names(x), suffix.mean) |
+       stri_detect_fixed(names(x), suffix.se))
+  }
+  col.measure <- apply(col.measure, 1, any)
+  names.measure <- names(x)[col.measure]
+  col.idx <- names(x) %in% c(group.vars, comp.var)
+  names.idx <- names(x)[col.idx]
+  names.include <- c(names.idx, names.measure)
+
+  x.format <- copy(x[, ..names.include])
+  
+  diff.cols.all <- character(0)
+
+  for(i in seq_along(diff.vars2)) {
+   
+    if(is.null(diff.vars2[[i]])) {
+      diff.col.sep <- NULL
+    } else {
+      diff.col.sep <- diff.sep
+    }
+
+    diff.cols <- paste0(stat.names, diff.col.sep, diff.vars2[[i]])
+    diff.cols.mean <- paste0(stat.names, diff.col.sep, diff.vars2[[i]], suffix.mean)
+    diff.cols.se <- paste0(stat.names, diff.col.sep, diff.vars2[[i]], suffix.se)
+
+    for(j in seq_along(diff.cols)) {
+
+      format.env <-
+        list(
+             comp.col = comp.var,
+             diff.col = diff.cols[j],
+             diff.col.mean = diff.cols.mean[j],
+             diff.col.se = diff.cols.se[j])
+
+      if(is.null(diff.vars2[[i]])) {
+        x.format[,
+                 diff.col := sprintf(comb.string, diff.col.mean, diff.col.se),
+                 env = format.env]
+      } else {
+        x.format[,
+                 diff.col := 
+                   ifelse(comp.col != names(diff.vars2)[i],
+                          sprintf(comb.string, diff.col.mean, diff.col.se),
+                          diff.empty),
+                 env = format.env]
+      }
+    }
+    if(i > 1) {
+      gap.col <- paste0(".gap", i-1)
+      diff.cols.all <- c(diff.cols.all, gap.col, diff.cols)
+      x.format[,
+               gap := gap.val,
+               env = list(gap = gap.col)]
+    } else {
+      diff.cols.all <- c(diff.cols.all, diff.cols)
+    }
+  }
+
+  x.format <- x.format[, c(group.vars, comp.var, diff.cols.all), with = FALSE]
+
+  format_zeros <- function(x) {
+    stri_replace_all_fixed(x, "0.000", "0") |>
+    stri_replace_all_regex("^-(0\\h)", "$1")
+  }
+
+  format_minus <- function(x) {
+    stri_replace_all_regex(x, "-(\\d)", "−$1")
+  }
+
+  x.format[,
+           (diff.cols.all) := lapply(.SD, format_zeros),
+           .SDcols = diff.cols.all]
+
+  x.format[,
+           (diff.cols.all) := lapply(.SD, format_minus),
+           .SDcols = diff.cols.all]
+
+  group.env <- list(group1.col = group.vars[1],
+                    group2.col = group.vars[2],
+                    group.lab = group.name)
+
+  if(length(group.vars) == 2) {
+    group.labs <- 
+      unique(x.format[order(group1.col, group2.col),
+                      .(group1.col, group2.col),
+                      env = group.env]) |>
+      _[,
+        .(group1.col,
+          group2.col,
+          group.lab = paste0(lab.fix[1],
+                             group.combfun[[1]](group1.labs[as.character(group1.col)]), 
+                             lab.fix[2],
+                             group.combfun[[2]](group2.labs[as.character(group2.col)]),
+                             lab.fix[3])),
+          env = group.env]
+  } else {
+    group.labs <- 
+      unique(x.format[order(group1.col),
+                      .(group1.col),
+                      env = group.env]) |>
+      _[,
+        .(group1.col,
+          group.lab = paste0(lab.fix[1],
+                             group.combfun[[1]](group1.labs[as.character(group1.col)]),
+                             lab.fix[2])), 
+          env = group.env]
+  }
+  group.labs[, group.lab := factor(group.lab, levels = group.lab), env = group.env]
+
+  x.format <-
+    merge(group.labs, x.format, by = group.vars)
+  if(group.vars.out == FALSE) {
+    x.format <- x.format[, !names(x.format) %in% group.vars, with = FALSE]
+  }
+  setorderv(x.format, group.name)
+
+  if(partition) {
+    # x.part.l <- list()
+    # groups <- unique(x.format[[group.name]])
+    # for(i in seq_along(groups)) {
+    #   cols.empty <- names(x.format)
+    #   cols.empty <- cols.empty[!cols.empty %in% group.name]
+    #   group.body <- copy(x.format[group.lab == groups[i], env = group.env])
+    #   group.head <- copy(group.body[1])
+    #   group.body[, group.lab := rep(partition.fill, .N), env = group.env]
+    #   group.head[, (cols.empty) := as.list(rep(partition.fill, length(cols.empty)))]
+    #   if(partition.gap) {
+    #     group.gap <- copy(group.head)
+    #     group.gap[, group.lab := partition.fill, env = group.env]
+    #     x.part.l[[i]] <- rbind(group.gap, group.head, group.body)
+    #   } else {
+    #     x.part.l[[i]] <- rbind(group.head, group.body)
+    #   }
+    # }
+    # x.part <- rbindlist(x.part.l)
+    x.part <- partition_table(x.format,
+                              group.name = group.name,
+                              partition.fill = partition.fill,
+                              partition.gap = partition.gap)
+    return(x.part)
+  } else {
+    return(x.format)
+  }
+}
+
+partition_table <- function(x,
+                            group.name,
+                            partition.fill = "",
+                            partition.gap = FALSE) {
+    x.part.l <- list()
+    groups <- unique(x[[group.name]])
+    group.env <- list(group.lab = group.name)
+    for(i in seq_along(groups)) {
+      cols.empty <- names(x)
+      cols.empty <- cols.empty[!cols.empty %in% group.name]
+      group.body <- copy(x[group.lab == groups[i], env = group.env])
+      group.head <- copy(group.body[1])
+      group.body[, group.lab := rep(partition.fill, .N), env = group.env]
+      group.head[, (cols.empty) := as.list(rep(partition.fill, length(cols.empty)))]
+      if(partition.gap) {
+        group.gap <- copy(group.head)
+        group.gap[, group.lab := partition.fill, env = group.env]
+        x.part.l[[i]] <- rbind(group.gap, group.head, group.body)
+      } else {
+        x.part.l[[i]] <- rbind(group.head, group.body)
+      }
+    }
+    x.part <- rbindlist(x.part.l)
+    return(x.part)
+}
+
+
+format_decisions <- function(x,
+                             type.var = ".type",
+                             group.vars = c("ls.response", "ls.imbalance"),
+                             group.labs = list(NULL, NULL),
+                             group.name = ".group",
+                             group.combfun = list(identity, tolower),
+                             prop.name = ".prop",
+                             type.agg.name = ".type.agg",
+                             type.agg.sub.name = ".type.agg.sub",
+                             type.agg = list(correct = c("correct", "over", "under"),
+                                             non = "non",
+                                             sign = "sign"),
+                             type.agg.labs = c(correct = "Correct sign",
+                                               non = "Non-detection",
+                                               sign = "Sign error"),
+                             type.sub.labs = c(correct = "True effect included",
+                                               under = "Underestimation",
+                                               over = "Overestimation"
+                                               ),
+                             lab.fix = c("", " outcome, ", ""),
+                             partition = TRUE,
+                             partition.fill = "",
+                             partition.gap = FALSE) {
+
+  prop.env <- list(prop.col = prop.name)
+  type.env <- list(type.col = type.var,
+                   type.agg.col = type.agg.name,
+                   type.agg.sub.col = type.agg.sub.name)
+  group.env <- list(group1.col = group.vars[1],
+                    group2.col = group.vars[2],
+                    group.lab = group.name)
+
+  if(is.null(group.labs[[1]])) {
+    group1.labs <- c(all = "All", normal = "Gaussian", tweedie = "Tweedie", binary = "Binary")
+    group1.labs <- factor(group1.labs, levels = group1.labs)
+  } else {
+    group1.labs <- group.labs[[1]]
+  }
+  if(is.null(group.labs[[2]])) {
+    group2.labs <- c(all = "All", low = "Moderate imbalance", high = "High imbalance")
+    group2.labs <- factor(group2.labs, levels = group2.labs)
+  } else {
+    group2.labs <- group.labs[[2]]
+  }
+
+  comb.vars <- c(group.vars, type.var)
+
+  comb.l <- list()
+  for(i in seq_along(comb.vars)) {
+    comb.l[[i]] <- sort(unique(x[[comb.vars[i]]]))
+  }
+  names(comb.l) <- comb.vars
+
+  combs <- as.data.table(expand.grid(comb.l))
+
+  groups.n <-
+    merge(combs, x[, .(.n = .N), by = group.vars], all = TRUE)
+  
+  percent.string <- "%.2f"
+  
+  x.prop <-
+    x[,
+      .(prop.col = .N),
+      by = c(group.vars, type.var),
+      env = prop.env] |>
+    merge(groups.n, all = TRUE)
+
+  x.prop[is.na(prop.col),
+         prop.col := 0,
+         env = prop.env]
+
+  x.prop[,
+         prop.col := 100*prop.col/.n,
+         env = prop.env]
+
+  x.agg.l <- list()
+  for(i in seq_along(type.agg)) {
+    type.agg.i <- type.agg[[i]]
+    if(length(type.agg.i) > 1) {
+      x.agg.i <- x.prop[type.col %in% type.agg.i, env = type.env]
+      x.agg.i[, type.agg.col := type.agg.labs[i], env = type.env]
+      x.agg.i[, type.agg.sub.col := type.sub.labs[as.character(type.col)], env = type.env]
+      x.agg.i.tot <- 
+        x.agg.i[,
+                .(prop.col = sum(prop.col)),
+                by = group.vars, env = prop.env]
+      x.agg.i.tot[,
+                  `:=`(type.agg.col = type.agg.labs[i],
+                       type.agg.sub.col = ""),
+                  env = type.env]
+      x.agg.i <- rbind(x.agg.i.tot, x.agg.i, fill = TRUE)
+    } else {
+      x.agg.i <- x.prop[type.col %in% type.agg.i, env = type.env]
+      x.agg.i[, type.agg.col := type.agg.labs[i], env = type.env]
+      x.agg.i[, type.agg.sub.col := "", env = type.env]
+    }
+    x.agg.l[[i]] <- x.agg.i
+    }
+
+    x.agg <- rbindlist(x.agg.l, use.name = TRUE)
+
+    x.agg[,
+          `:=`(type.agg.col = factor(type.agg.col, levels = type.agg.labs),
+               type.agg.sub.col = factor(type.agg.sub.col, levels = c("", type.sub.labs))),
+          env = type.env]
+
+    setorderv(x.agg, c(group.vars, type.agg.name, type.agg.sub.name))
+
+    x.agg[,
+          prop.col := paste0(sprintf(percent.string, prop.col), " %"),
+          env = prop.env]
+
+
+  if(length(group.vars) == 2) {
+    group.labs <- 
+      unique(x.agg[order(group1.col, group2.col),
+                      .(group1.col, group2.col),
+                      env = group.env]) |>
+      _[,
+        .(group1.col,
+          group2.col,
+          group.lab = paste0(lab.fix[1],
+                             group.combfun[[1]](group1.labs[as.character(group1.col)]), 
+                             lab.fix[2],
+                             group.combfun[[2]](group2.labs[as.character(group2.col)]),
+                             lab.fix[3])),
+          env = group.env]
+  } else {
+    group.labs <- 
+      unique(x.agg[order(group1.col),
+                      .(group1.col),
+                      env = group.env]) |>
+      _[,
+        .(group1.col,
+          group.lab = paste0(lab.fix[1],
+                             group.combfun[[1]](group1.labs[as.character(group1.col)]),
+                             lab.fix[2])), 
+          env = group.env]
+  }
+  group.labs[, group.lab := factor(group.lab, levels = group.lab), env = group.env]
+
+  x.agg <-
+    merge(group.labs, x.agg, by = group.vars)
+
+  x.agg[type.agg.sub.col != "", .type.agg := "", env = type.env]
+  
+  cols.out <- c(group.name, type.agg.name, type.agg.sub.name, prop.name)
+
+  if(partition) {  
+    x.part <- partition_table(x.agg[, ..cols.out],
+                              group.name = group.name,
+                              partition.fill = partition.fill,
+                              partition.gap = partition.gap)
+    return(x.part)
+  } else {
+    return(x.agg[, ..cols.out])
+  }
+}
+
+
+preformat_comparisons <- function(x,
+                                  format.string = "%.3f",
+                                  format.zeros = TRUE,
+                                  format.signs = TRUE,
+                                  format.diff = TRUE,
+                                  diff.se.prefix = "(",
+                                  diff.se.postfix = ")",
+                                  diff.mean.empty = "–",
+                                  diff.se.empty = "–",
+                                  diff.vars = c(EGP = "egp"),
+                                  diff.sep = "_vs_",
+                                  comp.var = "name.short",
+                                  group.vars = c("ls.response", "ls.imbalance"),
+                                  group.labs = list(NULL, NULL),
+                                  group.combfun = list(identity, tolower),
+                                  lab.fix = c("", " outcome, ", ""),
+                                  stat.names = c("bias", "rmse", "ser"),
+                                  suffix.mean = c(".mean"),
+                                  suffix.se = c(".se")
+                                  ) {
+
+  if(is.null(group.labs[[1]])) {
+    group1.labs <- c(normal = "Gaussian", tweedie = "Tweedie", binary = "Binary")
+    group1.labs <- factor(group1.labs, levels = group1.labs)
+  } else {
+    group1.labs <- group.labs[[1]]
+  }
+  if(is.null(group.labs[[2]])) {
+    group2.labs <- c(low = "Moderate imbalance", high = "High imbalance", all = "All")
+    group2.labs <- factor(group2.labs, levels = group2.labs)
+  } else {
+    group2.labs <- group.labs[[2]]
+  }
+  
+  col.measure <- matrix(FALSE, nrow = ncol(x), ncol = length(stat.names))
+  for(i in seq_along(stat.names)) {
+    col.measure[,i] <-
+      stri_detect_fixed(names(x), stat.names[i]) &
+      (stri_detect_fixed(names(x), suffix.mean) |
+       stri_detect_fixed(names(x), suffix.se))
+  }
+  col.measure <- apply(col.measure, 1, any)
+  names.measure <- names(x)[col.measure]
+  col.idx <- names(x) %in% c(group.vars, comp.var)
+  names.idx <- names(x)[col.idx]
+  names.include <- c(names.idx, names.measure)
+
+  x.format <- copy(x[, ..names.include])
+   x.format[,
+           (names.measure) := lapply(.SD, \(x) sprintf(format.string, x)),
+           .SDcols = names.measure]
+
+  if(format.zeros) {
+    format_zeros <- function(x) {
+      as.character(x) |>
+      stri_replace_all_fixed("0.000", "0") |>
+      stri_replace_all_regex( "^-0$", "0")
+    }
+    x.format[,
+             (names.measure) := lapply(.SD, format_zeros),
+             .SDcols = names.measure]
+  }
+
+  if(format.signs) {
+    format_minus <- function(x) {
+      as.character(x) |>
+      stri_replace_all_regex("-(\\d)", "−$1")
+    }
+    x.format[,
+             (names.measure) := lapply(.SD, format_minus),
+             .SDcols = names.measure]
+  }
+
+
+  if(format.diff) {
+
+    diff.col.sep <- diff.sep
+
+    for(i in seq_along(diff.vars)) {
+     
+      diff.cols.mean <- paste0(stat.names, diff.col.sep, diff.vars[[i]], suffix.mean)
+      diff.cols.se <- paste0(stat.names, diff.col.sep, diff.vars[[i]], suffix.se)
+
+      x.format[,
+               (diff.cols.se) := lapply(.SD, \(x) paste0(diff.se.prefix, x, diff.se.postfix)),
+               .SDcols = diff.cols.se,
+               env = list(comp.col = comp.var)]
+
+      x.format[comp.col == names(diff.vars)[i],
+               (diff.cols.mean) := as.list(rep(diff.mean.empty, length(diff.cols.mean))),
+               env = list(comp.col = comp.var)]
+
+      x.format[comp.col == names(diff.vars)[i],
+               (diff.cols.se) := as.list(rep(diff.se.empty, length(diff.cols.se))),
+               env = list(comp.col = comp.var)]
+
+     }
+
+  }
+
+  group.env <- list(group1.col = group.vars[1],
+                    group2.col = group.vars[2])
+
+  if(length(group.vars == 2)) {
+    group.labs <- 
+      unique(x.format[order(group1.col, group2.col),
+                      .(group1.col, group2.col),
+                      env = group.env]) |>
+      _[,
+        .(group1.col,
+          group2.col,
+          group.lab = paste0(lab.fix[1],
+                             group.combfun[[1]](group1.labs[as.character(group1.col)]), 
+                             lab.fix[2],
+                             group.combfun[[2]](group2.labs[as.character(group2.col)]),
+                             lab.fix[3])),
+          env = group.env]
+    group.labs[, group.lab := factor(group.lab, levels = group.lab)]
+  } else {
+    group.labs <- 
+      unique(x.format[order(group1.col),
+                      .(group1.col),
+                      env = group.env]) |>
+      _[,
+        .(group1.col,
+          group.lab = paste0(lab.fix[1],
+                             group.combfun[[1]](group1.labs[as.character(group1.col)]),
+                             lab.fix[2])), 
+          env = group.env]
+    group.labs[, group.lab := factor(group.lab, levels = group.lab)]
+  }
+
+  x.format <-
+    merge(group.labs, x.format, by = group.vars)
+  x.format <- x.format[, !names(x.format) %in% group.vars, with = FALSE]
+  setorder(x.format, group.lab)
+
+  return(x.format)
 }
 
 
