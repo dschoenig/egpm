@@ -3493,6 +3493,42 @@ generate_landscape_4cov_nl_tweedie <- function(ls,
 }
 
 
+generate_landscape_4cov_nl_noeff <- function(ls,
+                                             ...) {
+
+  cov.effects <- names(ls)[names(ls) %like% "f."]
+  # cov.n <- length(cov.effects)
+
+  ls.noeff <- copy(ls)
+
+  lp.form <-
+    parse(text = paste(c(cov.effects, "res.sp", "res.rand"),
+                       collapse = " + "))
+
+  ls.noeff[, response := eval(lp.form)]
+  ls.noeff[, treatment := 0]
+
+  mar.trt <- 
+    ls.noeff[type == "treatment",
+             .(ref = mean(response),
+               trt = mean(response))]
+
+  n.poly.trt <- ls.noeff[type == "treatment", length(unique(poly))]
+
+  if(n.poly.trt > 1) {
+  mar.trt <-
+    rbind(mar.trt,
+          ls.noeff[type == "treatment",
+                .(ref = mean(response),
+                  trt = mean(response)),
+                by = poly][order(poly)],
+          fill = TRUE)
+  setcolorder(mar.trt, c("poly", "ref", "trt"))
+  }
+
+  return(list(landscape = ls.noeff,
+              marginal = mar.trt))
+}
 
 plot_landscape_4cov_nl <- function(x,
                                    type = "normal",

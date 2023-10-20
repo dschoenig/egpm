@@ -5,20 +5,20 @@ args <- commandArgs(trailingOnly = TRUE)
 source("utilities.R")
 
 ls.original <- args[1]
-ls.binary <- args[2]
+ls.tweedie <- args[2]
 task.id <- as.integer(args[3])
 task.count <- as.integer(args[4])
 overwrite <- as.logical(args[5])
 if(is.na(overwrite)) overwrite <- TRUE
 
 # ls.original <- "imbalance_high"
-# ls.binary <- "binary_imbalance_high"
-# task.id <- 1
-# task.count <- 1
+# ls.tweedie <- "noeff_imbalance_high"
+# task.id <- 407
+# task.count <- 1000
 
 paste0("Settings:\n",
        "  Original landscape: ", ls.original, "\n",
-       "  Binary landscape: ", ls.binary, "\n",
+       "  Tweedie landscape: ", ls.tweedie, "\n",
        "  Overwrite: ", as.character(overwrite)) |>
 message()
 
@@ -27,7 +27,7 @@ path.base <- "../"
 path.ls.o <- paste0(path.base, "landscapes/", ls.original, "/")
 path.ls.o.data <- paste0(path.ls.o, "data/")
 
-path.ls.b <- paste0(path.base, "landscapes/", ls.binary, "/")
+path.ls.b <- paste0(path.base, "landscapes/", ls.tweedie, "/")
 path.ls.b.data <- paste0(path.ls.b, "data/")
 if(!dir.exists(path.ls.b.data)) dir.create(path.ls.b.data, recursive = TRUE)
 
@@ -41,15 +41,15 @@ file.log <- paste0(path.ls.b, "simulate.log")
 
 par.o <- readRDS(file.par.o)
 n <- nrow(par.o)
-p.mean <- 0.5
 
-set.seed(18820125) # Virginia Woolfe
-ls.seeds <- round(runif(n, 0, p.mean) * 1e8)
+set.seed(19010511) # Rose Ausländer
+
+ls.seeds <- round(runif(n, 0, 1) * 1e8)
+
 par.b <-
   data.table(id = par.o$id,
              seed = ls.seeds,
-             ls.original = ls.original,
-             p.mean = p.mean
+             ls.original = ls.original
              )
 
 par.b[, file.name := stri_pad_left(id, ceiling(log10(n))+1, 0)]
@@ -70,12 +70,9 @@ chunk <- row.chunks$from[task.id]:row.chunks$to[task.id]
 
 chunk <- setdiff(chunk, simulated)
 
-# low <- read.table("sum_bin_low.txt")[,1]
-# chunk <- which(low > 1e-4)
-
 for(i in chunk) {
 
-  message(paste0("Generating binary landscape ", i, " / ", nrow(par.b), " …"))
+  message(paste0("Generating landscape without treatment effect ", i, " / ", nrow(par.b), " …"))
 
   ta <- Sys.time()
 
@@ -85,11 +82,10 @@ for(i in chunk) {
     as.list(par.b[id == i,]) |>
     lapply(unlist, recursive = FALSE)
   ls.par$ls <- ls.o$landscape
-  ls.par$verbose <- 2
   file.ls.b <- ls.par$file.path
   ls.b <- NULL
   while(is.null(ls.b)) {
-    try({ls.b <- do.call(generate_landscape_4cov_nl_binary, ls.par)})
+    try({ls.b <- do.call(generate_landscape_4cov_nl_noeff, ls.par)})
     if(is.null(ls.b)) message("Simulation failed. Trying again …")
   }
 
@@ -112,3 +108,4 @@ for(i in chunk) {
   system(paste0('echo "', i, '" >> ', file.log), intern = TRUE)
 
 }
+
