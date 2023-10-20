@@ -6,7 +6,7 @@ args <- commandArgs(trailingOnly = TRUE)
 ls.type <- args[1]
 resp.type <- args[2]
 
-# ls.type <- "binary_imbalance_high"
+# ls.type <- "noeff_imbalance_high"
 # resp.type <- "normal"
 
 path.base <- "../"
@@ -24,6 +24,7 @@ ids <- parameters$id
 cov.l <- list()
 optim.l <- list()
 marginal.l <- list()
+means.l <- list()
 
 for(i in ids) {
 
@@ -64,6 +65,31 @@ for(i in ids) {
                  imbalance.mean = mean(imb),
                  area.prop = ls$optim["area.prop"])
 
+    
+    means.ls <-
+      rbind(
+            ls$landscape[,
+                         .(response.mean = mean(response),
+                           response.sd = sd(response))],
+            ls$landscape[,
+                         .(response.mean = mean(response),
+                           response.sd = sd(response)),
+                         by = "type"],
+            fill = TRUE)
+    if(ls$landscape[type == "treatment", length(unique(poly))] > 1) {
+      means.ls <-
+      rbind(means.ls,
+            ls$landscape[type == "treatment",
+                         .(response.mean = mean(response),
+                           response.sd = sd(response)),
+                         by = c("type", "poly")][order(poly)],
+            fill = TRUE) 
+    } else {
+      means.ls[, poly := NA]
+    }
+    setcolorder(means.ls, c("type", "poly"))
+
+    means.l[[i]] <- means.ls
 
     if(resp.type == "normal") {
       mar.ls <-
@@ -109,11 +135,13 @@ marginal[, type := fifelse(is.na(poly), "treatment", "subarea")]
 marginal[, type := factor(type, levels = c("treatment", "subarea"))]
 setcolorder(marginal, c("id", "type", "poly"))
 setorderv(marginal, c("id", "type", "poly"))
+means <- rbindlist(means.l, idcol = "id", fill = TRUE)
 
 results <-
   list(objectives = optim,
        marginal = marginal,
-       balance = cov)
+       balance = cov,
+       means = means)
 
 
 print(results)
