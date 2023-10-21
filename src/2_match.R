@@ -2,7 +2,6 @@ args <- commandArgs(trailingOnly = TRUE)
 
 library(MatchIt)
 library(marginaleffects)
-library(glmmTMB)
 
 source("utilities.R")
 
@@ -15,11 +14,11 @@ task_count <- as.integer(args[6])
 overwrite <- as.logical(args[7])
 if(is.na(overwrite)) overwrite <- TRUE
 
-# ls.type <- "tweedie_imbalance_high"
+# ls.type <- "noeff_imbalance_high"
 # mod.type <- "match"
-# resp.type <- "tweedie"
+# resp.type <- "normal"
 # sam.frac <- 0.01
-# task_id <- 91
+# task_id <- 407
 # task_count <- 1000
 # overwrite <- TRUE
 
@@ -174,7 +173,7 @@ for(i in chunk) {
           avg_comparisons(mod.glm,
                           variables = "type",
                           by = "poly",
-			  vcov = vcov(mod.glm, freq = TRUE, sandwich = TRUE),
+                          vcov = vcov(mod.glm, freq = TRUE, sandwich = TRUE),
                           newdata = ls.fit[type == "treatment"][order(-poly)]) |>
           as.data.table() |>
           rbind(marginal, fill = TRUE)
@@ -219,14 +218,20 @@ for(i in chunk) {
                 weights = weights,
                 method = "ML")
         })
+        # try({
+        #   mod.match <-
+        #     glm(mod.form,
+        #         family = mod.fam,
+        #         data = ls.match,
+        #         weights = weights)
+        # })
         if(is.null(mod.match)) message("Model failed. Trying again …")
       }
-
 
       marginal <-
         avg_comparisons(mod.match,
                         variables = "type",
-			vcov = vcov(mod.match, freq = TRUE, sandwich = TRUE),
+                        vcov = vcov(mod.match, freq = TRUE, sandwich = TRUE),
                         wts = "weights",
                         newdata = ls.match[type == "treatment"]) |>
         as.data.table()
@@ -237,7 +242,7 @@ for(i in chunk) {
           avg_comparisons(mod.match,
                           variables = "type",
                           by = "poly",
-			  vcov = vcov(mod.match, freq = TRUE, sandwich = TRUE),
+                          vcov = vcov(mod.match, freq = TRUE, sandwich = TRUE),
                           wts = "weights",
                           newdata = ls.match[type == "treatment"][order(-poly)]) |>
           as.data.table() |>
@@ -247,6 +252,8 @@ for(i in chunk) {
       marginal <-
         marginal[order(poly, na.last = FALSE),
                  .(poly, estimate, std.error, conf.low, conf.high)]
+
+      # print(marginal)
 
       results.mod[[j]] <-
         list(matched = matched,
