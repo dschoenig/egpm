@@ -143,9 +143,9 @@ results <-
        balance = cov,
        means = means)
 
+saveRDS(results, file.results)
 
 print(results)
 
-saveRDS(results, file.results)
 
 

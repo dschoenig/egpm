@@ -9,8 +9,8 @@ ls.type <- args[1]
 mod.type <- args[2]
 som.suffix <- args[3]
 
-# ls.type <- "imbalance_high"
-# mod.type <- "egp_som25"
+ls.type <- "noeff_imbalance_high"
+mod.type <- "egp_som25"
 
 path.base <- "../"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
@@ -25,11 +25,11 @@ files.mod <-
   paste0(path.mod, list.files(path.mod)) |>
   stri_subset(regex = paste0(mod.type, "_\\d+.rds$"))
 
-ids <- as.integer(stri_match_last_regex(files.mod, "\\d+")[,1])
+# ids <- as.integer(stri_match_last_regex(files.mod, "\\d+")[,1])
 
 eval.i <- list()
 
-for(i in ids) {
+for(i in 1:length(files.mod)) {
 
   ta <- Sys.time()
 
@@ -39,26 +39,38 @@ for(i in ids) {
 
   eval.j <- list()
 
-  for(j in seq_along(mod.res$models)) {
+  mod.para <- mod.res$parameters
 
-    som <- mod.res$models[[j]]$som
+  for(j in 1:nrow(mod.para)) {
 
-    unit.var <- som$unit.classif
-    group.var <- mod.res$models[[j]]$model$model$type
-    units.diff <- unit_diff(unit.var = som$unit.classif,
-                            group.var = mod.res$models[[j]]$model$model$type)
+    message(paste0("Parameter combination ", j, "/", nrow(mod.para)), " …")
 
+    if(j > 1) {
+      som.same <-
+        mod.para[c(j-1, j),
+                 all(unlist(lapply(.SD, \(x) x[1] == x[2]))),
+                 .SDcols = c("som.topology", "som.dim", "som.epochs"),
+                 nomatch = NULL]
+    } else {
+      som.same <- FALSE
+    }
 
-    length(c(NULL, 1))
-
-    as.list(units.diff)
-
-    eval.j[[j]] <-
-      data.table(quant.error = quantization_error(som),
-                 topo.error = topological_error(som),
-                 var.expl = variance_explained(som),
-                 units.ov_frac = units.diff$ov_frac,
-                 units.js_div = units.diff$js_div)
+    if(som.same) {
+      message("Same as previous SOM …")
+      eval.j[[j]] <- eval.j[[j-1]]
+    } else {
+      message("Evaluating SOM …")
+      som <- mod.res$models[[j]]$som
+      mod <- mod.res$models[[j]]$model$model
+      units.diff <- unit_diff(unit.var = som$unit.classif,
+                              group.var = mod$type)
+      eval.j[[j]] <-
+        data.table(quant.error = quantization_error(som),
+                   topo.error = topological_error(som),
+                   var.expl = variance_explained(som),
+                   units.ov_frac = units.diff$ov_frac,
+                   units.js_div = units.diff$js_div)
+    }
 
   }
 

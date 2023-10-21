@@ -29,3 +29,34 @@ mkdir -p ../landscapes/tweedie_imbalance_low/data
 scp schoed@narval.computecanada.ca:scratch/egpm/landscapes/tweedie_imbalance_low/parameters.rds ../landscapes/tweedie_imbalance_low
 scp schoed@narval.computecanada.ca:scratch/egpm/landscapes/tweedie_imbalance_low/summary.rds ../landscapes/tweedie_imbalance_low
 # scp schoed@narval.computecanada.ca:scratch/egpm/landscapes/tweedie_imbalance_low/data/0001.rds ../landscapes/tweedie_imbalance_low/data
+
+
+mkdir -p ../landscapes/noeff_imbalance_high/data
+scp schoed@narval.computecanada.ca:scratch/egpm/landscapes/noeff_imbalance_high/parameters.rds ../landscapes/noeff_imbalance_high
+scp schoed@narval.computecanada.ca:scratch/egpm/landscapes/noeff_imbalance_high/summary.rds ../landscapes/noeff_imbalance_high
+# scp schoed@narval.computecanada.ca:scratch/egpm/landscapes/noeff_imbalance_high/data/0001.rds ../landscapes/noeff_imbalance_high/data
+
+mkdir -p ../landscapes/noeff_imbalance_low/data
+scp schoed@narval.computecanada.ca:scratch/egpm/landscapes/noeff_imbalance_low/parameters.rds ../landscapes/noeff_imbalance_low
+scp schoed@narval.computecanada.ca:scratch/egpm/landscapes/noeff_imbalance_low/summary.rds ../landscapes/noeff_imbalance_low
+# scp schoed@narval.computecanada.ca:scratch/egpm/landscapes/noeff_imbalance_low/data/0001.rds ../landscapes/noeff_imbalance_low/data
+
+mkdir -p ../landscapes/noeff_binary_imbalance_high/data
+scp schoed@narval.computecanada.ca:scratch/egpm/landscapes/noeff_binary_imbalance_high/parameters.rds ../landscapes/noeff_binary_imbalance_high
+scp schoed@narval.computecanada.ca:scratch/egpm/landscapes/noeff_binary_imbalance_high/summary.rds ../landscapes/noeff_binary_imbalance_high
+# scp schoed@narval.computecanada.ca:scratch/egpm/landscapes/noeff_binary_imbalance_high/data/0001.rds ../landscapes/noeff_binary_imbalance_high/data
+
+mkdir -p ../landscapes/noeff_binary_imbalance_low/data
+scp schoed@narval.computecanada.ca:scratch/egpm/landscapes/noeff_binary_imbalance_low/parameters.rds ../landscapes/noeff_binary_imbalance_low
+scp schoed@narval.computecanada.ca:scratch/egpm/landscapes/noeff_binary_imbalance_low/summary.rds ../landscapes/noeff_binary_imbalance_low
+# scp schoed@narval.computecanada.ca:scratch/egpm/landscapes/noeff_binary_imbalance_low/data/0001.rds ../landscapes/noeff_binary_imbalance_low/data
+
+mkdir -p ../landscapes/noeff_tweedie_imbalance_high/data
+scp schoed@narval.computecanada.ca:scratch/egpm/landscapes/noeff_tweedie_imbalance_high/parameters.rds ../landscapes/noeff_tweedie_imbalance_high
+scp schoed@narval.computecanada.ca:scratch/egpm/landscapes/noeff_tweedie_imbalance_high/summary.rds ../landscapes/noeff_tweedie_imbalance_high
+# scp schoed@narval.computecanada.ca:scratch/egpm/landscapes/noeff_tweedie_imbalance_high/data/0001.rds ../landscapes/noeff_tweedie_imbalance_high/data
+
+mkdir -p ../landscapes/noeff_tweedie_imbalance_low/data
+scp schoed@narval.computecanada.ca:scratch/egpm/landscapes/noeff_tweedie_imbalance_low/parameters.rds ../landscapes/noeff_tweedie_imbalance_low
+scp schoed@narval.computecanada.ca:scratch/egpm/landscapes/noeff_tweedie_imbalance_low/summary.rds ../landscapes/noeff_tweedie_imbalance_low
+# scp schoed@narval.computecanada.ca:scratch/egpm/landscapes/noeff_tweedie_imbalance_low/data/0001.rds ../landscapes/noeff_tweedie_imbalance_low/data
