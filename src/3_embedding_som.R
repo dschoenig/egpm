@@ -9,8 +9,8 @@ ls.type <- args[1]
 mod.type <- args[2]
 som.suffix <- args[3]
 
-ls.type <- "noeff_imbalance_high"
-mod.type <- "egp_som25"
+# ls.type <- "noeff_imbalance_high"
+# mod.type <- "egp_som25"
 
 path.base <- "../"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
