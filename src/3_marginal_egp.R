@@ -8,7 +8,7 @@ args <- commandArgs(trailingOnly = TRUE)
 ls.type <- args[1]
 mod.type <- args[2]
 
-# ls.type <- "binary_imbalance_high"
+# ls.type <- "noeff_imbalance_high"
 # mod.type <- "egp_som25"
 
 path.base <- "../"
@@ -116,6 +116,7 @@ for(i in ids.proc) {
     grp.vars <- c("group.id", mod.res$models[[j]]$egp.def$group.by.c)
 
     marginals.j[[j]] <- 
+
       mod.res$models[[j]]$marginal[,
                                    .(mean = mean(marginal),
                                      median = median(marginal),
@@ -127,9 +128,10 @@ for(i in ids.proc) {
                                      q75 = quantile(marginal, 0.75),
                                      q95 = quantile(marginal, 0.95),
                                      q97.5 = quantile(marginal, 0.975),
-                                     q99.5 = quantile(marginal, 0.995)),
-                                   by = grp.vars
-                                   ]
+                                     q99.5 = quantile(marginal, 0.995),
+                                     p.pos = sum(marginal > 0) / .N,
+                                     p.neg = sum(marginal < 0) / .N),
+                                   by = grp.vars]
 
     mod.egp <- mod.res$models[[j]]$model
 

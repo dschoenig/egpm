@@ -181,7 +181,7 @@ for(i in chunk) {
 
       marginal <-
         marginal[order(poly, na.last = FALSE),
-                 .(poly, estimate, std.error, conf.low, conf.high)]
+                 .(poly, estimate, std.error, conf.low, conf.high, p.value, s.value)]
 
       results.mod[[j]] <-
         list(marginal = marginal)
@@ -251,7 +251,7 @@ for(i in chunk) {
 
       marginal <-
         marginal[order(poly, na.last = FALSE),
-                 .(poly, estimate, std.error, conf.low, conf.high)]
+                 .(poly, estimate, std.error, conf.low, conf.high, p.value, s.value)]
 
       # print(marginal)
 

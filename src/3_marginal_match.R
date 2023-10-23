@@ -8,7 +8,7 @@ args <- commandArgs(trailingOnly = TRUE)
 ls.type <- args[1]
 mod.type <- args[2]
 
-# ls.type <- "imbalance_high"
+# ls.type <- "noeff_imbalance_high"
 # mod.type <- "match"
 
 path.base <- "../"
@@ -52,7 +52,8 @@ for(i in ids) {
              mean = estimate,
              se = std.error,
              q2.5 = conf.low,
-             q97.5 = conf.high))
+             q97.5 = conf.high,
+             p.nz = p.value))
 
     mod <- attr(mod.res$models[[j]]$marginal, "model")
 
