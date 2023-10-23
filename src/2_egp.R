@@ -19,7 +19,7 @@ task_count <- as.integer(args[12])
 overwrite <- as.logical(args[13])
 if(is.na(overwrite)) overwrite <- TRUE
 
-# ls.type <- "noeff_imbalance_high"
+# ls.type <- "imbalance_high"
 # mod.type <- "egp_som25"
 # resp.type <- "normal"
 # n.threads <- 4
@@ -215,7 +215,8 @@ for(i in chunk) {
       egp_posterior_predict(model = mod.egp,
                             data = ls.fit,
                             id.var = "cell",
-                            posterior = egp.post)
+                            posterior = egp.post,
+                            epred = FALSE)
 
     if(mod.para$geo[j]) {
       mod.geo.vars <- c("x", "y")

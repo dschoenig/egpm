@@ -5334,12 +5334,14 @@ egp_posterior_draw <- function(model,
            draw.name = ".draw",
            pred.name = "predicted",
            type = "link",
+           epred = TRUE,
            obs = NULL,
            coef = NULL,
            marginals = NULL,
            marginal.ids = NULL,
            predict.chunk = NULL,
            post.chunk = NULL,
+           fun.sim = NULL,
            progress = TRUE
            ) {
   posterior <- Matrix(posterior)
@@ -5459,6 +5461,17 @@ egp_posterior_draw <- function(model,
     setkeyv(evaluated.dt[[i]], id.var)
     setindexv(evaluated.dt[[i]], draw.name)
     setorderv(evaluated.dt[[i]], c(draw.name, id.var))
+    if(epred == FALSE & type == "response") {
+      if(is.null(fun.sim)) {
+        mod.fam <- fix.family.rd(model$family)
+        fun.sim <- mod.fam$rd
+      }
+      mod.scale <- model$sig2
+      mod.wt <- model$weights
+      evaluated.dt[[i]][,
+                        pred.col := fun.sim(mu = pred.col, wt = mod.wt, scale = mod.scale),
+                        env = list(pred.col = pred.name)]
+    }
   }
   if(length(marginals) == 1) {
     return(evaluated.dt[[1]])
@@ -5474,6 +5487,7 @@ egp_posterior_predict <- function(model,
                                   data = NULL,
                                   id.var = "id",
                                   type = "response",
+                                  epred = TRUE,
                                   ids = NULL,
                                   pred.name = NULL,
                                   predict.chunk = NULL,
@@ -5495,6 +5509,7 @@ egp_posterior_predict <- function(model,
                         id.var = id.var,
                         pred.name = pred.name,
                         type = type,
+                        epred = epred,
                         obs = ids,
                         predict.chunk = predict.chunk,
                         post.chunk = post.chunk,
