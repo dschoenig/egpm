@@ -19,9 +19,9 @@ task_count <- as.integer(args[12])
 overwrite <- as.logical(args[13])
 if(is.na(overwrite)) overwrite <- TRUE
 
-# ls.type <- "binary_imbalance_high"
+# ls.type <- "tweedie_imbalance_high"
 # mod.type <- "egp_som25"
-# resp.type <- "binary"
+# resp.type <- "tweedie"
 # n.threads <- 4
 # task_id <- 407
 # task_count <- 1000
