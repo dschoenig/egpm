@@ -19,9 +19,9 @@ task_count <- as.integer(args[12])
 overwrite <- as.logical(args[13])
 if(is.na(overwrite)) overwrite <- TRUE
 
-# ls.type <- "imbalance_high"
+# ls.type <- "binary_imbalance_high"
 # mod.type <- "egp_som25"
-# resp.type <- "normal"
+# resp.type <- "binary"
 # n.threads <- 4
 # task_id <- 407
 # task_count <- 1000
@@ -243,6 +243,7 @@ for(i in chunk) {
     egp.mar <- egp_marginal(egp.fac, egp.count)
 
     print(egp.mar[group.id == 1, mean(marginal)])
+    print(egp.mar[group.id == 1, quantile(marginal, c(0.025, 0.975))])
 
     results.mod[[j]] <-
       list(som = som.egp,

@@ -5337,6 +5337,7 @@ egp_posterior_draw <- function(model,
            epred = FALSE,
            obs = NULL,
            coef = NULL,
+           weights = NULL,
            marginals = NULL,
            marginal.ids = NULL,
            predict.chunk = NULL,
@@ -5467,9 +5468,13 @@ egp_posterior_draw <- function(model,
         fun.sim <- mod.fam$rd
       }
       mod.scale <- model$sig2
-      mod.wt <- model$weights
+      if(is.null(weights)) {
+        pred.wt <- rep(1, nrow(evaluated.dt[[i]]))
+      } else {
+        pred.wt <- weights
+      }
       evaluated.dt[[i]][,
-                        pred.col := fun.sim(mu = pred.col, wt = mod.wt, scale = mod.scale),
+                        pred.col := fun.sim(mu = pred.col, wt = pred.wt, scale = mod.scale),
                         env = list(pred.col = pred.name)]
     }
   }
