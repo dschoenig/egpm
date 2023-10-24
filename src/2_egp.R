@@ -169,9 +169,16 @@ for(i in chunk) {
     mod.same <- all(para.same, som.same)
 
     if(mod.same) {
-      message("Reusing previous GAM …")
+      message("Reusing previous GAM and predictions …")
     } else {
+
       message("Fitting GAM …")
+
+      if(j > 1) {
+        rm(mod.egp, egp.post, egp.pred)
+        gc()
+      }
+
       if(egp.approx) {
          mod.egp <- bam(response ~
                         s(x, y, bs = "gp", k = egp.k.geo,
@@ -200,7 +207,28 @@ for(i in chunk) {
                         method= "REML",
                         optimizer = "efs"
                        )
-       }
+      }
+
+
+      message("Evaluating posterior predictive distributions …")
+
+      egp.post <-
+        egp_posterior_draw(mod.egp, 1000, unconditional = TRUE, package = "mgcv")
+
+      predict.chunk <-
+        switch(resp.type,
+               normal = null,
+               binary = null,
+               tweedie = 2500)
+
+      egp.pred <-
+        egp_posterior_predict(model = mod.egp,
+                              data = ls.fit,
+                              id.var = "cell",
+                              posterior = egp.post,
+                              predict.chunk = predict.chunk,
+                              epred = FALSE)
+
     }
 
     # summary(mod.egp)
@@ -210,26 +238,6 @@ for(i in chunk) {
     # plot(mod.res)
 
     message("Evaluating marginal effect …")
-
-    egp.post <-
-      egp_posterior_draw(mod.egp, 1000, unconditional = TRUE, package = "mgcv")
-
-    predict.chunk <-
-      switch(resp.type,
-             normal = NULL,
-             binary = NULL,
-             tweedie = 2500)
-
-    system.time({
-    egp.pred <-
-      egp_posterior_predict(model = mod.egp,
-                            data = ls.fit,
-                            id.var = "cell",
-                            posterior = egp.post,
-                            predict.chunk = predict.chunk,
-                            epred = FALSE)
-    })
-
 
     if(mod.para$geo[j]) {
       mod.geo.vars <- c("x", "y")
@@ -266,7 +274,6 @@ for(i in chunk) {
            marginal = egp.mar)
 
     rm(ls.fit,
-       egp.post, egp.pred,
        egp.def,
        egp.fac, egp.count,
        egp.mar)

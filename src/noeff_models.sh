@@ -138,25 +138,29 @@ sbatch cc_3_som_noeff_binary_low_egp_som50.sh
 ## EFFECT MODELS
 
 
+sbatch cc_2_models_tweedie_high_egp_som25.sh
+sbatch cc_2_models_tweedie_low_egp_som25.sh
+
+sbatch cc_3_marginal_tweedie_high_egp_som25.sh
+sbatch cc_3_marginal_tweedie_low_egp_som25.sh
+
+sbatch cc_3_som_tweedie_high_egp_som25.sh
+sbatch cc_3_som_tweedie_low_egp_som25.sh
+
+
 
 sbatch cc_2_models_high_egp_som25.sh
 sbatch cc_2_models_low_egp_som25.sh
-sbatch cc_2_models_tweedie_high_egp_som25.sh
-sbatch cc_2_models_tweedie_low_egp_som25.sh
 sbatch cc_2_models_binary_high_egp_som25.sh
 sbatch cc_2_models_binary_low_egp_som25.sh
 
 sbatch cc_3_marginal_high_egp_som25.sh
 sbatch cc_3_marginal_low_egp_som25.sh
-sbatch cc_3_marginal_tweedie_high_egp_som25.sh
-sbatch cc_3_marginal_tweedie_low_egp_som25.sh
 sbatch cc_3_marginal_binary_high_egp_som25.sh
 sbatch cc_3_marginal_binary_low_egp_som25.sh
 
 sbatch cc_3_som_high_egp_som25.sh
 sbatch cc_3_som_low_egp_som25.sh
-sbatch cc_3_som_tweedie_high_egp_som25.sh
-sbatch cc_3_som_tweedie_low_egp_som25.sh
 sbatch cc_3_som_binary_high_egp_som25.sh
 sbatch cc_3_som_binary_low_egp_som25.sh
 
