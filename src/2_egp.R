@@ -217,8 +217,8 @@ for(i in chunk) {
 
       predict.chunk <-
         switch(resp.type,
-               normal = null,
-               binary = null,
+               normal = NULL,
+               binary = NULL,
                tweedie = 2500)
 
       egp.pred <-
