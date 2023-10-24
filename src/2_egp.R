@@ -216,7 +216,7 @@ for(i in chunk) {
                             data = ls.fit,
                             id.var = "cell",
                             posterior = egp.post,
-                            predict.chunk = 5e3,
+                            predict.chunk = 2500,
                             epred = FALSE)
 
     if(mod.para$geo[j]) {
@@ -239,8 +239,8 @@ for(i in chunk) {
                                 deg.max = NULL,
                                 n.min = 1)
 
-    egp.fac <- egp_evaluate_factual(egp.pred, egp.def, agg.size = 5e3)
-    egp.count <- egp_evaluate_counterfactual(egp.pred, egp.def, agg.size = 5e3)
+    egp.fac <- egp_evaluate_factual(egp.pred, egp.def)
+    egp.count <- egp_evaluate_counterfactual(egp.pred, egp.def)
     egp.mar <- egp_marginal(egp.fac, egp.count)
 
     print(egp.mar[group.id == 1, mean(marginal)])
