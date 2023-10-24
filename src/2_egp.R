@@ -67,6 +67,9 @@ files.res <- paste0(path.mod, mod.type, "_",
                     parameters[id %in% chunk, file.name],
                     ".rds")
 
+
+setDTthreads(n.threads)
+
 # chunk <- 5
 for(i in chunk) {
 
@@ -258,6 +261,7 @@ for(i in chunk) {
        egp.def,
        egp.fac, egp.count,
        egp.mar)
+    gc()
 
   }
 
