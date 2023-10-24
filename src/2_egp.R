@@ -214,13 +214,22 @@ for(i in chunk) {
     egp.post <-
       egp_posterior_draw(mod.egp, 1000, unconditional = TRUE, package = "mgcv")
 
+    predict.chunk <-
+      switch(resp.type,
+             normal = NULL,
+             binary = NULL,
+             tweedie = 2500)
+
+    system.time({
     egp.pred <-
       egp_posterior_predict(model = mod.egp,
                             data = ls.fit,
                             id.var = "cell",
                             posterior = egp.post,
-                            predict.chunk = 2500,
+                            predict.chunk = predict.chunk,
                             epred = FALSE)
+    })
+
 
     if(mod.para$geo[j]) {
       mod.geo.vars <- c("x", "y")

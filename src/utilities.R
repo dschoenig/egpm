@@ -3780,7 +3780,6 @@ plot_landscape_4cov_nl <- function(x,
     #          fill = "Covariate\neffects") +
     #     ls_theme
     # }
-    # browser()
     plots[["eff.main"]] <-
       eff.dt[effect %in% eff.main] |>
       ggplot(aes(x = x, y = y, fill = value)) +
@@ -5335,6 +5334,7 @@ egp_posterior_draw <- function(model,
            pred.name = "predicted",
            type = "link",
            epred = FALSE,
+           fun.sim = NULL,
            obs = NULL,
            coef = NULL,
            weights = NULL,
@@ -5342,9 +5342,18 @@ egp_posterior_draw <- function(model,
            marginal.ids = NULL,
            predict.chunk = NULL,
            post.chunk = NULL,
-           fun.sim = NULL,
            progress = TRUE
            ) {
+  mod.fam <- fix.family.rd(model$family)
+  if(is.null(fun.sim)) {
+    fun.sim <- mod.fam$rd
+  }
+  mod.scale <- model$sig2
+  if(is.null(weights)) {
+    pred.wt <- rep(1, nrow(data))
+  } else {
+    pred.wt <- weights
+  }
   posterior <- Matrix(posterior)
   data.dt <- as.data.table(copy(data))
   if(!id.var %in% names(data.dt)) {
@@ -5431,9 +5440,15 @@ egp_posterior_draw <- function(model,
           Xp[pc.rows, marginals[[j]]] %*%
           t(posterior[post.chunks$from[k]:post.chunks$to[k], marginals[[j]]])
         if(type == "response") {
-          fam <- model$family
-          m.predict.chunk[, post.chunks$from[k]:post.chunks$to[k]] <-
-           fam$linkinv(as.matrix(lp))
+          resp <- mod.fam$linkinv(as.matrix(lp))
+          if(epred == TRUE) {
+            m.predict.chunk[, post.chunks$from[k]:post.chunks$to[k]] <- resp
+          } else {
+            chunk.wt <- pred.wt[predict.chunks$from[i]:predict.chunks$to[i]]
+            postpred <-
+              apply(resp, 2, \(x) fun.sim(mu = x, wt = chunk.wt, scale = mod.scale))
+            m.predict.chunk[, post.chunks$from[k]:post.chunks$to[k]] <- postpred
+          }
         } else {
           m.predict.chunk[, post.chunks$from[k]:post.chunks$to[k]] <- lp
         }
@@ -5462,21 +5477,6 @@ egp_posterior_draw <- function(model,
     setkeyv(evaluated.dt[[i]], id.var)
     setindexv(evaluated.dt[[i]], draw.name)
     setorderv(evaluated.dt[[i]], c(draw.name, id.var))
-    if(epred == FALSE & type == "response") {
-      if(is.null(fun.sim)) {
-        mod.fam <- fix.family.rd(model$family)
-        fun.sim <- mod.fam$rd
-      }
-      mod.scale <- model$sig2
-      if(is.null(weights)) {
-        pred.wt <- rep(1, nrow(evaluated.dt[[i]]))
-      } else {
-        pred.wt <- weights
-      }
-      evaluated.dt[[i]][,
-                        pred.col := fun.sim(mu = pred.col, wt = pred.wt, scale = mod.scale),
-                        env = list(pred.col = pred.name)]
-    }
   }
   if(length(marginals) == 1) {
     return(evaluated.dt[[1]])
