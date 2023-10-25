@@ -36,9 +36,10 @@ for(i in ids) {
 
   message(paste0("Summarizing results for landscape ", i, " …"))
 
+  i.ls <- which(ids == i)
   mod.res <- NULL
   while(is.null(mod.res)) {
-    mod.res <- try(readRDS(files.mod[i]))
+    mod.res <- try(readRDS(files.mod[i.ls]))
   }
 
   marginals.j <- list()
@@ -53,14 +54,11 @@ for(i in ids) {
              se = std.error,
              q2.5 = conf.low,
              q97.5 = conf.high,
-             p.nz = p.value))
-
-    mod <- attr(mod.res$models[[j]]$marginal, "model")
+             p.null = p.value))
 
     dev.expl.j[[j]] <-
-      data.table(dev.expl = 
-                   ((mod$null.deviance - mod$deviance) /
-                    mod$null.deviance))
+      with(mod.res$models[[j]]$model,
+           data.table(dev.expl = (null.deviance - deviance) / null.deviance))
 
     # # LM version
     # data.table(dev.expl = unname(summary(mod.res$models[[j]]$model)$r.squared))

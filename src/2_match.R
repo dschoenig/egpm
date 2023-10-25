@@ -184,7 +184,8 @@ for(i in chunk) {
                  .(poly, estimate, std.error, conf.low, conf.high, p.value, s.value)]
 
       results.mod[[j]] <-
-        list(marginal = marginal)
+        list(model = mod.glm,
+             marginal = marginal)
 
       rm(mod.glm, marginal)
 
@@ -257,6 +258,7 @@ for(i in chunk) {
 
       results.mod[[j]] <-
         list(matched = matched,
+             model = mod.match,
              marginal = marginal)
 
       rm(matched,

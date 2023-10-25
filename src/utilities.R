@@ -5873,6 +5873,7 @@ egp_marginal <- function(factual,
   return(marginal)
 }
 
+
 bias <- function(x, y = 1, ...) {
   bias <- mean(x, ...) - 1
   return(bias)
@@ -5886,6 +5887,13 @@ rmse <- function(x, y = mean(x), ...) {
 ser <- function(x, y = 1, ...) {
   ser <- sum(sign(y) * x < 0)/length(x)
   return(ser)
+}
+
+
+iqr <- function(x, ...) {
+  quart <- unname(quantile(x, c(0.25, 0.75), ...))
+  iqr <- quart[2] - quart[1]
+  return(iqr)
 }
 
 
@@ -6021,6 +6029,71 @@ compare_performance <- function(estimates,
     for (i in seq_along(comparisons)) {
       comp.var <- comparisons[i]
       stat.names <- c("bias", "rmse", "ser")
+      comp.names <-   paste0(stat.names, paste0("_vs_", tolower(comp.var)))
+      est.comp.l[[i]] <-
+        melt(est.sum,
+             measure.vars = stat.names,
+             variable.name = ".stat",
+             value.name = ".value") |>
+        dcast(stat.cast,
+              value.var = ".value") |>
+        _[,
+          # lapply(.SD, \(x) abs(x) - .SD[, abs(comp.sel)]),
+          lapply(.SD, \(x) x - .SD[, comp.sel]),
+          by = c(by.landscape, ".stat"),
+          .SDcols = method.cols,
+          env = list(comp.sel = comp.var)] |>
+        melt(id.vars = c(by.landscape, ".stat"),
+             variable.name = by.method,
+             value.name = ".value") |>
+        dcast(method.cast,
+              value.var = ".value") |>
+        setnames(stat.names, comp.names)
+    }
+    
+    for(i in seq_along(est.comp.l)) {
+      est.sum <- merge(est.sum, est.comp.l[[i]])
+    }
+
+  }
+  
+  return(est.sum)
+}
+
+
+compare_senspe <- function(estimates,
+                                by.method = "name.short",
+                                by.landscape = NULL,
+                                comparisons = NULL,
+                                true.var = "detect.true",
+                                comp.sep = "_vs_") {
+
+  by.comb <- c(by.landscape, by.method)
+  method.cols <- as.character(unique(estimates[[by.method]]))
+
+  est.sum <-
+    estimates[,
+              .(sensitivity = sum(true.col)/.N),
+              by = by.comb,
+              env = list(true.col = true.var)]
+
+  stat.cast <-
+    paste(paste(c(by.landscape, ".stat"), collapse = "+"),
+          "~",
+          paste(by.method, collapse = "+")) |>
+    as.formula()
+
+  method.cast <-
+    paste(paste(c(by.landscape, by.method), collapse = "+"),
+          "~ .stat") |>
+    as.formula()
+
+  if(!is.null(comparisons)) {
+    est.comp.l <- list()
+
+    for (i in seq_along(comparisons)) {
+      comp.var <- comparisons[i]
+      stat.names <- c("sensitivity")
       comp.names <-   paste0(stat.names, paste0("_vs_", tolower(comp.var)))
       est.comp.l[[i]] <-
         melt(est.sum,
