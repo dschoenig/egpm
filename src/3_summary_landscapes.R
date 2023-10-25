@@ -70,14 +70,10 @@ for(i in ids) {
       rbind(
             ls$landscape[,
                          .(response.mean = mean(response),
-                           response.sd = sd(response),
-                           response.median = median(response),
-                           response.iqr = iqr(response))],
+                           response.sd = sd(response))],
             ls$landscape[,
                          .(response.mean = mean(response),
-                           response.sd = sd(response),
-                           response.median = median(response),
-                           response.iqr = iqr(response)),
+                           response.sd = sd(response)),
                          by = "type"],
             fill = TRUE)
     if(ls$landscape[type == "treatment", length(unique(poly))] > 1) {
@@ -85,9 +81,7 @@ for(i in ids) {
       rbind(means.ls,
             ls$landscape[type == "treatment",
                          .(response.mean = mean(response),
-                           response.sd = sd(response),
-                           response.median = median(response),
-                           response.iqr = iqr(response)),
+                           response.sd = sd(response)),
                          by = c("type", "poly")][order(poly)],
             fill = TRUE) 
     } else {
