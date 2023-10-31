@@ -206,7 +206,7 @@ for(i in chunk) {
                         select = TRUE,
                         method= "REML",
                         optimizer = "efs"
-                       )
+                        )
       }
 
 

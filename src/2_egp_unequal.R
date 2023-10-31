@@ -1,3 +1,4 @@
+
 args <- commandArgs(trailingOnly = TRUE)
 
 library(mgcv)
@@ -19,11 +20,11 @@ task_count <- as.integer(args[12])
 overwrite <- as.logical(args[13])
 if(is.na(overwrite)) overwrite <- TRUE
 
-# ls.type <- "imbalance_high"
-# mod.type <- "test"
-# resp.type <- "normal"
+# ls.type <- "tweedie_imbalance_high"
+# mod.type <- "egp_som25"
+# resp.type <- "tweedie"
 # n.threads <- 4
-# task_id <- 1
+# task_id <- 407
 # task_count <- 1000
 # sam.frac <- 0.01
 # som.dim <- 25
@@ -33,7 +34,7 @@ if(is.na(overwrite)) overwrite <- TRUE
 # egp.approx <- TRUE
 # overwrite <- TRUE
 
-egp.max.knots.som <- som.dim^2 # Will be overwritten later!
+egp.max.knots.som <- som.dim^2
 egp.max.knots.geo <- egp.k.geo*10
 
 path.base <- "../"
@@ -66,6 +67,9 @@ files.tmp <- paste0(tempdir(), "/", mod.type, "_",
 files.res <- paste0(path.mod, mod.type, "_",
                     parameters[id %in% chunk, file.name],
                     ".rds")
+
+
+setDTthreads(n.threads)
 
 # chunk <- 5
 for(i in chunk) {
@@ -107,7 +111,6 @@ for(i in chunk) {
        egp.max.knots.som,
        egp.max.knots.geo,
        egp.approx)
-
 
   results.mod <- list()
 
@@ -170,9 +173,16 @@ for(i in chunk) {
     mod.same <- all(para.same, som.same)
 
     if(mod.same) {
-      message("Reusing previous GAM …")
+      message("Reusing previous GAM and predictions …")
     } else {
+
       message("Fitting GAM …")
+
+      if(j > 1) {
+        rm(mod.egp, egp.post, egp.pred)
+        gc()
+      }
+
       if(egp.approx) {
          mod.egp <- bam(response ~
                         s(x, y, bs = "gp", k = egp.k.geo,
@@ -200,24 +210,38 @@ for(i in chunk) {
                         select = TRUE,
                         method= "REML",
                         optimizer = "efs"
-                       )
-       }
+                        )
+      }
+
+
+      message("Evaluating posterior predictive distributions …")
+
+      egp.post <-
+        egp_posterior_draw(mod.egp, 1000, unconditional = TRUE, package = "mgcv")
+
+      predict.chunk <-
+        switch(resp.type,
+               normal = NULL,
+               binary = NULL,
+               tweedie = 2500)
+
+      egp.pred <-
+        egp_posterior_predict(model = mod.egp,
+                              data = ls.fit,
+                              id.var = "cell",
+                              posterior = egp.post,
+                              predict.chunk = predict.chunk,
+                              epred = FALSE)
+
     }
 
     # summary(mod.egp)
     # AIC(mod.egp)
-
+    # library(DHARMa)
+    # mod.res <- simulateResiduals(mod.egp)
+    # plot(mod.res)
 
     message("Evaluating marginal effect …")
-
-    egp.post <-
-      egp_posterior_draw(mod.egp, 1000, unconditional = TRUE, package = "mgcv")
-
-    egp.pred <-
-      egp_posterior_predict(model = mod.egp,
-                            data = ls.fit,
-                            id.var = "cell",
-                            posterior = egp.post)
 
     if(mod.para$geo[j]) {
       mod.geo.vars <- c("x", "y")
@@ -239,11 +263,12 @@ for(i in chunk) {
                                 deg.max = NULL,
                                 n.min = 1)
 
-    egp.fac <- egp_evaluate_factual(egp.pred, egp.def)
-    egp.count <- egp_evaluate_counterfactual(egp.pred, egp.def)
+    egp.fac <- egp_evaluate_factual(egp.pred, egp.def, agg.size = 5e3)
+    egp.count <- egp_evaluate_counterfactual(egp.pred, egp.def, agg.size = 5e3)
     egp.mar <- egp_marginal(egp.fac, egp.count)
 
     print(egp.mar[group.id == 1, mean(marginal)])
+    print(egp.mar[group.id == 1, quantile(marginal, c(0.025, 0.975))])
 
     results.mod[[j]] <-
       list(som = som.egp,
@@ -253,10 +278,10 @@ for(i in chunk) {
            marginal = egp.mar)
 
     rm(ls.fit,
-       egp.post, egp.pred,
        egp.def,
        egp.fac, egp.count,
        egp.mar)
+    gc()
 
   }
 
@@ -271,7 +296,7 @@ for(i in chunk) {
          models = results.mod)
 
 
-  saveRDS(object = results.ls, file = files.tmp[i.step])
+  saveRDS(object = results.ls, file = files.tmp[i.step], compress = FALSE)
 
   rm(results.mod) 
   
