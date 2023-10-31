@@ -23,8 +23,10 @@ ids <- parameters$id
 
 cov.l <- list()
 optim.l <- list()
-marginal.l <- list()
 means.l <- list()
+marginal.l <- list()
+obs.l <- list()
+
 
 for(i in ids) {
 
@@ -65,7 +67,6 @@ for(i in ids) {
                  imbalance.mean = mean(imb),
                  area.prop = ls$optim["area.prop"])
 
-    
     means.ls <-
       rbind(
             ls$landscape[,
@@ -121,6 +122,16 @@ for(i in ids) {
       marginal.l[[i]][, diff := trt - ref]
     }
 
+    obs.l[[i]] <-
+      rbind(
+        ls$landscape[type == "treatment",
+                     .(n = .N, prop = .N/nrow(ls$landscape)),
+                     by = c("type", "poly")],
+        ls$landscape[,
+                     .(n = .N, prop = .N/nrow(ls$landscape)),
+                     by = c("type")],
+        fill = TRUE)
+
     tb <- Sys.time()
     te <- tb-ta
     print(te)
@@ -136,12 +147,16 @@ marginal[, type := factor(type, levels = c("treatment", "subarea"))]
 setcolorder(marginal, c("id", "type", "poly"))
 setorderv(marginal, c("id", "type", "poly"))
 means <- rbindlist(means.l, idcol = "id", fill = TRUE)
+setorderv(means, c("id", "type", "poly"))
+obs <- rbindlist(obs.l, idcol = "id", fill = TRUE)
+setorderv(obs, c("id", "type", "poly"))
 
 results <-
   list(objectives = optim,
        marginal = marginal,
        balance = cov,
-       means = means)
+       means = means,
+       obs = obs)
 
 saveRDS(results, file.results)
 
