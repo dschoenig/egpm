@@ -122,15 +122,24 @@ for(i in ids) {
       marginal.l[[i]][, diff := trt - ref]
     }
 
-    obs.l[[i]] <-
-      rbind(
-        ls$landscape[type == "treatment",
-                     .(n = .N, prop = .N/nrow(ls$landscape)),
-                     by = c("type", "poly")],
-        ls$landscape[,
-                     .(n = .N, prop = .N/nrow(ls$landscape)),
-                     by = c("type")],
-        fill = TRUE)
+    n.ls <- nrow(ls$landscape)
+    obs.ls <-
+      ls$landscape[type == "treatment",
+                   .(n = .N,
+                     prop = .N/n.ls)]
+    if(ls$landscape[type == "treatment", length(unique(poly))] > 1) {
+      obs.ls <-
+      rbind(obs.ls,
+            ls$landscape[type == "treatment",
+                         .(n = .N,
+                           prop = .N/n.ls),
+                         by = poly],
+            fill = TRUE) 
+    } else {
+      obs.ls[, poly := NA]
+    }
+    setcolorder(obs.ls, "poly")
+    obs.l[[i]] <- obs.ls
 
     tb <- Sys.time()
     te <- tb-ta
@@ -149,6 +158,9 @@ setorderv(marginal, c("id", "type", "poly"))
 means <- rbindlist(means.l, idcol = "id", fill = TRUE)
 setorderv(means, c("id", "type", "poly"))
 obs <- rbindlist(obs.l, idcol = "id", fill = TRUE)
+obs[, type := fifelse(is.na(poly), "treatment", "subarea")]
+obs[, type := factor(type, levels = c("treatment", "subarea"))]
+setcolorder(obs, c("id", "type", "poly"))
 setorderv(obs, c("id", "type", "poly"))
 
 results <-
