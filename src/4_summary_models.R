@@ -88,6 +88,7 @@ for(i in 1:nrow(landscapes)) {
                       mar.true = switch(landscapes$response[i],
                                         normal = diff,
                                         tweedie = diff,
+                                        beta = diff,
                                         binary = p.diff))]
 
   ls.mean.l[[i]] <-

@@ -117,7 +117,7 @@ for(i in ids) {
                            p.ratio = p.trt/p.ref)]
     }
 
-    if(resp.type == "tweedie") {
+    if(resp.type %in% c("beta", "tweedie")) {
       marginal.l[[i]] <- ls$marginal
       marginal.l[[i]][, diff := trt - ref]
     }
