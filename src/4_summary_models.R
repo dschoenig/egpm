@@ -5,16 +5,22 @@ source("utilities.R")
 
 ## Paths and parameters
 
-models <- c(
-            "egp_som25",
+# models <- c(
+#             "egp_som25",
+#             "egp_som10",
+#             "egp_som50",
+#             "egp_som25_sam005",
+#             "egp_som25_sam02",
+#             "egp_som25_unequal",
+#             "match",
+#             "match_sam005",
+#             "match_sam02")
+
+models <- c("egp_som25",
             "egp_som10",
             "egp_som50",
-            "egp_som25_sam005",
-            "egp_som25_sam02",
             "egp_som25_unequal",
-            "match",
-            "match_sam005",
-            "match_sam02")
+            "match")
 
 response.types <-
   c("normal", "tweedie", "binary")
@@ -24,13 +30,18 @@ imbalance.types <- c("high", "low")
 
 
 landscapes <-
-  CJ(response = response.types, 
+  CJ(trt.effect = c(FALSE, TRUE),
+     response = response.types, 
      imbalance = imbalance.types,
      sorted = FALSE)
-landscapes[,
+landscapes[trt.effect == TRUE,
            name := fifelse(response == "normal",
                            paste0("imbalance_", imbalance),
                            paste0(response, "_imbalance_", imbalance))]
+landscapes[trt.effect == FALSE,
+           name := fifelse(response == "normal",
+                           paste0("noeff_", "imbalance_", imbalance),
+                           paste0("noeff_", response, "_imbalance_", imbalance))]
 
 
 path.base <- "../"
@@ -44,15 +55,33 @@ file.estimates.rds <- paste0(path.comp, "estimates.rds")
 ## Get landscape info
 
 ls.mar.l <- list()
+ls.mean.l <- list()
+ls.obs.l <- list()
 
 for(i in 1:nrow(landscapes)) {
 
   ls.file <- paste0(path.landscapes, landscapes$name[i], "/summary.rds")
   ls.sum <- readRDS(ls.file)
 
+  # ls.obs <- ls.sum$obs
+
+  # ls.obs <- ls.obs[type == "treatment"]
+  # ls.obs[, poly.max := max(poly, na.rm = TRUE), by = id]
+  # ls.obs <- copy(ls.obs[is.na(poly) | (!is.na(poly) & poly.max > 1)])
+
+  # ls.obs[, type := fifelse(is.na(poly), "treatment", "subarea")]
+  # ls.obs[, type := factor(type, levels = c("treatment", "subarea"))]
+  # setcolorder(ls.obs, c("id", "type", "poly"))
+  # setorderv(ls.obs, c("id", "type", "poly"))
+
+  # ls.sum$obs <- ls.obs
+
+  # saveRDS(ls.sum, ls.file)
+
   ls.mar.l[[i]] <-
     ls.sum$marginal[,
-                    .(ls.name = landscapes$name[i],
+                    .(trt.effect = landscapes$trt.effect[i],
+                      ls.name = landscapes$name[i],
                       ls.id = id,
                       area.type = type,
                       subarea.id = poly,
@@ -61,14 +90,39 @@ for(i in 1:nrow(landscapes)) {
                                         tweedie = diff,
                                         binary = p.diff))]
 
+  ls.mean.l[[i]] <-
+    ls.sum$mean[is.na(type) & is.na(poly),
+                .(trt.effect = landscapes$trt.effect[i],
+                  ls.name = landscapes$name[i],
+                  ls.id = id,
+                  response.mean,
+                  response.sd)]
+
+  ls.obs.l[[i]] <-
+    ls.sum$obs[,
+               .(trt.effect = landscapes$trt.effect[i],
+                 ls.name = landscapes$name[i],
+                 ls.id = id,
+                 area.type = type,
+                 subarea.id = poly,
+                 treatment.n = n,
+                 treatment.prop = prop)]
+
+  # print(nrow(ls.sum$marginal) == nrow(ls.sum$obs))
+
 }
 
 ls.mar <-
   merge(rbindlist(ls.mar.l),
-        landscapes[,
-                   .(ls.name = name,
+        rbindlist(ls.obs.l), all = TRUE) |>
+  merge(rbindlist(ls.mean.l), by = c("trt.effect", "ls.name", "ls.id")) |>
+  merge(landscapes[,
+                   .(trt.effect,
+                     ls.name = name,
                      ls.response = response,
-                     ls.imbalance = imbalance)])
+                     ls.imbalance = imbalance)],
+        by = c("trt.effect", "ls.name")
+        )
 
 
 ## Get model info
@@ -98,7 +152,8 @@ for(i in 1:nrow(landscapes)) {
     setnames(res.est, c("landscape"), c("ls.id"))
 
     res.est[,
-            `:=`(ls.name = landscapes$name[i],
+            `:=`(trt.effect = landscapes$trt.effect[i],
+                 ls.name = landscapes$name[i],
                  mod.name = mod.sel[j])]
 
     mod.mar.j[[j]] <- res.est
@@ -166,7 +221,11 @@ estimates <-
         by = c("method", "match.distance", "match.replace", "match.cutpoints"),
         all.x = TRUE)
 
-estimates[, mar.std := mar.est / mar.true]
+mar.cols <- names(estimates)
+mar.cols[mar.cols %like% "mar."]
+
+estimates[trt.effect == TRUE, mar.std := mar.est / mar.true]
+estimates[trt.effect == FALSE, mar.std := mar.est / response.sd]
 
 
 estimates[,
@@ -205,132 +264,38 @@ ls.type.lev <-
 estimates[,
           ls.type := factor(paste0(ls.response, "_", ls.imbalance),
                                 levels = ls.type.lev)]
-estimates[,
+
+estimates[trt.effect == TRUE,
           ls.uid :=
             as.integer((as.integer(ls.type)-1) * 1000) +
             as.integer(as.character(ls.id))]
 
-setorder(estimates, ls.response, ls.imbalance, ls.id, name.short)
+estimates[trt.effect == FALSE,
+          ls.uid :=
+            as.integer((length(unique(ls.type))) * 1000) +
+            as.integer((as.integer(ls.type)-1) * 1000) +
+            as.integer(as.character(ls.id))]
+
+setorder(estimates, -trt.effect, ls.response, ls.imbalance, ls.id, name.short)
 
 est.names <- names(estimates)
 
-ls.cols <- c("ls.uid", "ls.type", "ls.name", "ls.response", "ls.imbalance", "ls.id",
-             "area.type", "subarea.id", "sam.frac")
+ls.cols <- c("trt.effect",
+             "ls.uid", "ls.type", "ls.name",
+             "ls.response", "ls.imbalance", "ls.id",
+             "area.type", "subarea.id", "sam.frac",
+             "response.mean", "response.sd",
+             "treatment.n", "treatment.prop")
 mod.cols <- c("name.short", "method", "mod.name", "mod.id")
 egp.cols <- sort(est.names[est.names %like% "egp."])
 match.cols <- est.names[est.names %like% "match."]
 mar.cols <- est.names[est.names %like% "mar."]
 setcolorder(estimates, c(ls.cols, mod.cols, egp.cols, match.cols, mar.cols))
 
+setnames(estimates, c("p.pos", "p.neg"), c("prob.pos", "prob.neg"))
+
 fwrite(estimates, file.estimates.csv, yaml = TRUE, na = "NA")
 saveRDS(estimates, file.estimates.rds)
 
+estimates[area.type == "treatment", .N, by = ls.name]
 
-# egp.comp <-
-#   CJ(ls.response = c("normal", "tweedie", "binary"),
-#      ls.imbalance = c("high", "low"),
-#      area.type = "treatment",
-#      mod.name = c("egp_som25"),
-#      sorted = FALSE)
-
-# estimates[egp.comp,
-#           on = names(egp.comp),
-#           nomatch = NULL
-#           ][ls.response == "binary" & ls.imbalance == "high",
-#             .(
-#               bias.std = mean(mar.std-1),
-#               cv = sd(mar.std),
-#               ser = sum(sign(mar.est) != sign(mar.true)) / .N,
-#               rmse = rmse(mar.std, 1)),
-#               by = .(
-#                      # ls.response, ls.imbalance,
-#                      mod.name,
-#                      egp.som.topology, egp.cf.nb, egp.geo.w)
-#               ]
-
-# sub.dt <-
-#   CJ(ls.response = c("normal", "tweedie", "binary"),
-#      ls.imbalance = c("high", "low"),
-#      area.type = c("treatment", "subarea"),
-#      mod.name = c("egp_som25", "match"),
-#      egp.som.topology = c(NA, "rectangular"),
-#      egp.cf.nb = c(NA, "sequential"),
-#      egp.geo.w = c(NA, TRUE),
-#      match.mod.cov = c(NA, "interact"),
-#      match.trt.int = c(NA, FALSE),
-#      sorted = FALSE)
-
-# estimates[sub.dt,
-#           on = names(sub.dt),
-#           nomatch = NULL
-#           ][
-#             # ls.imbalance == "low",
-#             # ls.response == "tweedie" & ls.imbalance == "low",
-#             ,
-#             .(bias = mean(mar.std-1),
-#               cv = sd(mar.std)/mean(mar.std),
-#               ser = sum(sign(mar.est) != sign(mar.true)) / .N,
-#               rmse = rmse(mar.std, 1)),
-#               by = .(mod.name, mod.id,
-#                      mod.type
-#                      , match.distance, match.cutpoints, match.mod.cov, match.trt.int, match.replace
-#                      )][order(rmse)]
-
-
-# estimates.sub <-
-#   estimates[sub.dt,
-#             on = names(sub.dt),
-#             nomatch = NULL]
-
-# lab.mod.method <- c(egp = "EGP", glm = "GLM", cem = "CEM", nearest = "NN")
-# lab.cutpoints <- c(fd = "FD", sc = "SC", st = "ST")
-# lab.distance <- c(mahalanobis = "MA", glm = "PS")
-# lab.replace <- c("FALSE" = "NR", "TRUE" = "RE")
-# lab.levels <- c("EGP", "GLM", 
-#                 "CEM-FD", "CEM-SC", "CEM-ST",
-#                 "NN-MA-NR", "NN-MA-RE", "NN-PS-NR", "NN-PS-RE")
-# estimates.sub[, method.char := as.character(method)]
-# estimates.sub[,
-#               mod.label := fcase(method.char %in% c("egp", "glm"),
-#                                  paste(lab.mod.method[method.char],
-#                                        sep = "-"),
-#                                  method.char == "cem",
-#                                  paste(lab.mod.method[method.char],
-#                                        lab.cutpoints[as.character(match.cutpoints)],
-#                                        sep = "-"),
-#                                  method.char == "nearest",
-#                                  paste(lab.mod.method[method.char],
-#                                        lab.distance[as.character(match.distance)],
-#                                        lab.replace[as.character(match.replace)],
-#                                        sep = "-"))]
-# estimates.sub[, mod.label := factor(mod.label, levels = lab.levels)]
-
-
-
-# estimates.sub[area.type == "treatment"] |>
-# ggplot() +
-#   stat_slabinterval(aes(x = mar.std, y = mod.label, fill = mod.label),
-#                     # slab_linewidth = 0.5,
-#                     p_limits = c(0.001, 0.999),
-#                     point_interval = "mean_qi") +
-#   geom_vline(xintercept = 0, colour = 2) +
-#   geom_vline(xintercept = 1, linetype = "dashed", colour = 1) +
-#   scale_y_discrete(limits = rev) +
-#   scale_x_continuous(limits = c(-0.5, 2.5)) +
-#   theme_ggdist()
-#   # theme_ggdist() +
-#   # facet_grid(rows = vars(ls.imbalance), cols = vars(ls.response))
-
-
-# estimates.sub[mod.label %in% c("EGP", "NN-MA-RE")] |>
-# ggplot() +
-#   stat_slabinterval(aes(x = mar.std, y = area.type, fill = mod.label),
-#                     p_limits = c(0.001, 0.999),
-#                     point_interval = "mean_qi") +
-#   geom_vline(xintercept = 0, colour = 2) +
-#   geom_vline(xintercept = 1, linetype = "dashed", colour = 1) +
-#   scale_y_discrete(limits = rev) +
-#   coord_cartesian(xlim = c(-1, 2)) +
-#   facet_wrap(vars(mod.label)) +
-#   # facet_grid(rows = vars(ls.response), cols = vars(ls.imbalance)) +
-#   theme_ggdist()

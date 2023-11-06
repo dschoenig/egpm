@@ -8,8 +8,8 @@ args <- commandArgs(trailingOnly = TRUE)
 ls.type <- args[1]
 mod.type <- args[2]
 
-# ls.type <- "noeff_imbalance_high"
-# mod.type <- "egp_som25"
+# ls.type <- "imbalance_high"
+# mod.type <- "egp_som25_unequal"
 
 path.base <- "../"
 path.ls <- paste0(path.base, "landscapes/", ls.type, "/")
@@ -191,8 +191,14 @@ for(i in ids.proc) {
 
 }
 
+# int.out <- readRDS(file.results.inter)
+# params.i <- int.out$params
+# marginals.i <- int.out$marginals
+# terms.i <- int.out$terms
+# dev.expl.i <- int.out$dev.expl
+
 params <- rbindlist(params.i)
-setcolorder(params.i[[i]], c("landscape", "mod.id"))
+setcolorder(params, c("landscape", "mod.id"))
 marginals <- rbindlist(marginals.i, idcol = "landscape")
 setcolorder(marginals, c("landscape", "mod.id"))
 terms <- rbindlist(terms.i, idcol = "landscape")

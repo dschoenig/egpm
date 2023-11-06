@@ -16,9 +16,9 @@ estimates <- readRDS(file.estimates)
 
 n.boot <- 1e4
 # n.boot <- 1e1
-chunk.size <- 250
+chunk.size <- 125
 handlers(global = TRUE)
-options(future.globals.maxSize= 1024^3)
+options(future.globals.maxSize= 3*1024^3)
 
 
 
@@ -54,7 +54,7 @@ estimates.sub[,
                       mod.name == "egp_som25_unequal" & egp.som.topology == "rectangular",
                       "unequal")]
 
-estimates.sub <- estimates.sub[!is.na(name.egp)]
+estimates.sub <- estimates.sub[!is.na(name.egp) & trt.effect == TRUE]
 estimates.sub[,
               name.egp :=
                 factor(name.egp,
@@ -63,40 +63,40 @@ estimates.sub[,
 
 set.seed(main.seed+1)
 egp.sompar.global <-
-  compare_boot(copy(estimates.sub),
-               by.method = "name.egp",
-               comparisons = "default",
-               pe.type = "data",
-               n.boot = n.boot,
-               chunk.size = chunk.size)
+  compare_performance_boot(copy(estimates.sub),
+                           by.method = "name.egp",
+                           comparisons = "default",
+                           pe.type = "data",
+                           n.boot = n.boot,
+                           chunk.size = chunk.size)
 
 
 set.seed(main.seed+2)
 egp.sompar.resp <-
-  compare_boot(estimates.sub,
-               by.method = "name.egp",
-               comparisons = "default",
-               by.landscape = "ls.response",
-               n.boot = n.boot,
-               chunk.size = chunk.size)
+  compare_performance_boot(estimates.sub,
+                           by.method = "name.egp",
+                           comparisons = "default",
+                           by.landscape = "ls.response",
+                           n.boot = n.boot,
+                           chunk.size = chunk.size)
 
 set.seed(main.seed+3)
 egp.sompar.imb <-
-  compare_boot(estimates.sub,
-               by.method = "name.egp",
-               comparisons = "default",
-               by.landscape = "ls.imbalance",
-               n.boot = n.boot,
-               chunk.size = chunk.size)
+  compare_performance_boot(estimates.sub,
+                           by.method = "name.egp",
+                           comparisons = "default",
+                           by.landscape = "ls.imbalance",
+                           n.boot = n.boot,
+                           chunk.size = chunk.size)
 
 set.seed(main.seed+4)
 egp.sompar.resp.imb <-
-  compare_boot(estimates.sub,
-               by.method = "name.egp",
-               comparisons = "default",
-               by.landscape = c("ls.response", "ls.imbalance"),
-               n.boot = n.boot,
-               chunk.size = chunk.size)
+  compare_performance_boot(estimates.sub,
+                           by.method = "name.egp",
+                           comparisons = "default",
+                           by.landscape = c("ls.response", "ls.imbalance"),
+                           n.boot = n.boot,
+                           chunk.size = chunk.size)
 
 
 ls.response.lev <- c("all", levels(estimates.sub$ls.response))
@@ -127,98 +127,98 @@ saveRDS(egp.sompar, file.egp.sompar.boot)
 
 ## Different sample sizes
 
-sub.dt <-
-  CJ(sam.frac = c(0.01, 0.005, 0.02),
-     ls.response = c("normal", "tweedie", "binary"),
-     ls.imbalance = c("low", "high"),
-     area.type = "treatment",
-     egp.som.topology = c("rectangular"),
-     egp.som.dim = c(25),
-     egp.som.unequal = FALSE,
-     egp.cf.nb = c(NA, "sequential"),
-     egp.geo.w = c(NA, TRUE),
-     match.mod.cov = NA,
-     match.trt.int = NA,
-     sorted = FALSE)
+# sub.dt <-
+#   CJ(sam.frac = c(0.01, 0.005, 0.02),
+#      ls.response = c("normal", "tweedie", "binary"),
+#      ls.imbalance = c("low", "high"),
+#      area.type = "treatment",
+#      egp.som.topology = c("rectangular"),
+#      egp.som.dim = c(25),
+#      egp.som.unequal = FALSE,
+#      egp.cf.nb = c(NA, "sequential"),
+#      egp.geo.w = c(NA, TRUE),
+#      match.mod.cov = NA,
+#      match.trt.int = NA,
+#      sorted = FALSE)
 
-estimates.sub <- subset_estimates(estimates, sub.dt)
-
-
-estimates.sub[,
-              name.egp := 
-                fcase(sam.frac == 0.01,
-                      "default",
-                      sam.frac == 0.005,
-                      "sam_005",
-                      sam.frac == 0.02,
-                      "sam_02")]
-
-estimates.sub <- estimates.sub[!is.na(name.egp)]
-estimates.sub[,
-              name.egp :=
-                factor(name.egp,
-                       levels = c("default", "sam_005", "sam_02"))]
+# estimates.sub <- subset_estimates(estimates, sub.dt)
 
 
-set.seed(main.seed+1)
-egp.sam.global <-
-  compare_boot(copy(estimates.sub),
-               by.method = "name.egp",
-               comparisons = "default",
-               pe.type = "data",
-               n.boot = n.boot,
-               chunk.size = chunk.size)
+# estimates.sub[,
+#               name.egp := 
+#                 fcase(sam.frac == 0.01,
+#                       "default",
+#                       sam.frac == 0.005,
+#                       "sam_005",
+#                       sam.frac == 0.02,
+#                       "sam_02")]
+
+# estimates.sub <- estimates.sub[!is.na(name.egp)]
+# estimates.sub[,
+#               name.egp :=
+#                 factor(name.egp,
+#                        levels = c("default", "sam_005", "sam_02"))]
 
 
-set.seed(main.seed+2)
-egp.sam.resp <-
-  compare_boot(estimates.sub,
-               by.method = "name.egp",
-               comparisons = "default",
-               by.landscape = "ls.response",
-               n.boot = n.boot,
-               chunk.size = chunk.size)
-
-set.seed(main.seed+3)
-egp.sam.imb <-
-  compare_boot(estimates.sub,
-               by.method = "name.egp",
-               comparisons = "default",
-               by.landscape = "ls.imbalance",
-               n.boot = n.boot,
-               chunk.size = chunk.size)
-
-set.seed(main.seed+4)
-egp.sam.resp.imb <-
-  compare_boot(estimates.sub,
-               by.method = "name.egp",
-               comparisons = "default",
-               by.landscape = c("ls.response", "ls.imbalance"),
-               n.boot = n.boot,
-               chunk.size = chunk.size)
+# set.seed(main.seed+1)
+# egp.sam.global <-
+#   compare_performance_boot(copy(estimates.sub),
+#                by.method = "name.egp",
+#                comparisons = "default",
+#                pe.type = "data",
+#                n.boot = n.boot,
+#                chunk.size = chunk.size)
 
 
-ls.response.lev <- c("all", levels(estimates.sub$ls.response))
-ls.imbalance.lev <- c("all", levels(estimates.sub$ls.imbalance))
+# set.seed(main.seed+2)
+# egp.sam.resp <-
+#   compare_performance_boot(estimates.sub,
+#                by.method = "name.egp",
+#                comparisons = "default",
+#                by.landscape = "ls.response",
+#                n.boot = n.boot,
+#                chunk.size = chunk.size)
 
-egp.sam.global[, 
-                 `:=`(ls.response = factor(rep("all", .N), levels = ls.response.lev),
-                      ls.imbalance = factor(rep("all", .N), levels = ls.imbalance.lev))]
-egp.sam.resp[, 
-               `:=`(ls.response = factor(ls.response, levels = ls.response.lev),
-                    ls.imbalance = factor(rep("all", .N), levels = ls.imbalance.lev))]
-egp.sam.imb[, 
-              `:=`(ls.response = factor(rep("all", .N), levels = ls.response.lev),
-                   ls.imbalance = factor(ls.imbalance, levels = ls.imbalance.lev))]
-egp.sam.resp.imb[, 
-                   `:=`(ls.response = factor(ls.response, levels = ls.response.lev),
-                        ls.imbalance = factor(ls.imbalance, levels = ls.imbalance.lev))]
+# set.seed(main.seed+3)
+# egp.sam.imb <-
+#   compare_performance_boot(estimates.sub,
+#                by.method = "name.egp",
+#                comparisons = "default",
+#                by.landscape = "ls.imbalance",
+#                n.boot = n.boot,
+#                chunk.size = chunk.size)
 
-egp.sam <-
-  do.call(rbind, list(egp.sam.global, egp.sam.resp, egp.sam.imb, egp.sam.resp.imb))
+# set.seed(main.seed+4)
+# egp.sam.resp.imb <-
+#   compare_performance_boot(estimates.sub,
+#                by.method = "name.egp",
+#                comparisons = "default",
+#                by.landscape = c("ls.response", "ls.imbalance"),
+#                n.boot = n.boot,
+#                chunk.size = chunk.size)
 
-setcolorder(egp.sam, c("ls.response", "ls.imbalance", "name.egp"))
-setorder(egp.sam, ls.response, ls.imbalance, name.egp)
 
-saveRDS(egp.sam, file.egp.sam.boot)
+# ls.response.lev <- c("all", levels(estimates.sub$ls.response))
+# ls.imbalance.lev <- c("all", levels(estimates.sub$ls.imbalance))
+
+# egp.sam.global[, 
+#                  `:=`(ls.response = factor(rep("all", .N), levels = ls.response.lev),
+#                       ls.imbalance = factor(rep("all", .N), levels = ls.imbalance.lev))]
+# egp.sam.resp[, 
+#                `:=`(ls.response = factor(ls.response, levels = ls.response.lev),
+#                     ls.imbalance = factor(rep("all", .N), levels = ls.imbalance.lev))]
+# egp.sam.imb[, 
+#               `:=`(ls.response = factor(rep("all", .N), levels = ls.response.lev),
+#                    ls.imbalance = factor(ls.imbalance, levels = ls.imbalance.lev))]
+# egp.sam.resp.imb[, 
+#                    `:=`(ls.response = factor(ls.response, levels = ls.response.lev),
+#                         ls.imbalance = factor(ls.imbalance, levels = ls.imbalance.lev))]
+
+# egp.sam <-
+#   do.call(rbind, list(egp.sam.global, egp.sam.resp, egp.sam.imb, egp.sam.resp.imb))
+
+# setcolorder(egp.sam, c("ls.response", "ls.imbalance", "name.egp"))
+# setorder(egp.sam, ls.response, ls.imbalance, name.egp)
+
+# saveRDS(egp.sam, file.egp.sam.boot)
 

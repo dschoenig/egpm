@@ -10,9 +10,11 @@ path.comp <- paste0(path.results, "comparison/")
 path.fig <- paste0(path.results, "figures/")
 file.estimates <- paste0(path.comp, "estimates.rds")
 file.egp.match.boot <- paste0(path.comp, "egp.match.boot.rds")
+# file.noeff.egp.match.boot <- paste0(path.comp, "noeff.egp.match.boot.rds")
 
 estimates <- readRDS(file.estimates)
 egp.match.boot <- readRDS(file.egp.match.boot)
+# noeff.egp.match.boot <- readRDS(file.noeff.egp.match.boot)
 
 
 # PLOT SETUP ########################################################
@@ -26,8 +28,10 @@ plot_theme <-
               base_size = base.size) +
   theme(
         plot.title = element_text(hjust = 0,
-                                  face = "bold",
-                                  margin = margin(l = 0, b = base.size/3, t = base.size/3)),
+                                  # face = "bold",
+                                  face = "plain",
+                                  size = rel(1.25),
+                                  margin = margin(l = 0, b = base.size, t = base.size/3)),
         plot.tag = element_text(face = "bold"),
         axis.line.x = element_line(color = "black",
                                    linewidth = rel(0.5)),
@@ -63,6 +67,35 @@ plot_theme <-
         strip.background = element_rect(fill = "gray93", colour = NA)
         # strip.background = element_rect(fill = NA, colour = NA)
   )
+
+
+# Function to plot distributions
+
+plot_ls_dist <- function(x, plot.theme, method.cols, est.lim = c(-0.5, 2.5)) {
+  ggplot(x) +
+    stat_halfeye(aes(y = name.short, x = mar.std, fill = method.lab,
+                     fill_ramp = after_stat(cut_cdf_qi(cdf, c(0.5, 0.95, 1)))),
+                 point_interval = "mean_qi",
+                 # normalize = "panels",
+                 scale = 0.9,
+                 interval_size_range = c(0.35, 0.9),
+                 fatten_point = 1.35,
+                 p_limits = c(0.001, 0.999),
+                 n = 501,
+                 .width = c(0.5, 0.95)) +
+                 # ) +
+    geom_vline(xintercept = 1, linetype = "dotted", linewidth = 0.5) +
+    geom_vline(xintercept = 0, linetype = "solid", colour = 2, linewidth = 0.5) +
+    scale_fill_manual(values = method.cols,
+                          drop = FALSE) +
+    scale_fill_ramp_discrete(from = "white", range = c(0.9, 0.40)) +
+    guides(linetype = "none", fill = "none", fill_ramp = "none") +
+    scale_y_discrete(limits = rev) +
+    coord_cartesian(xlim = est.lim) +
+    labs(x = "Estimated treatment effect (standardized)",
+         y = NULL) +
+    plot.theme
+}
 
 
 # Function to plot comparisons
@@ -225,7 +258,7 @@ names(method.cols.light) <- method.labs
 # Prepare data for distribution comparison
 
 sub.dt <-
-  CJ(
+  CJ(trt.effect = TRUE,
      ls.response = c("normal", "tweedie", "binary"),
      # ls.response = c("binary"),
      ls.imbalance = c("low", "high"),
@@ -267,61 +300,33 @@ egp.match.l[name.short == "EGP", method.lab := method.labs[2]]
 egp.match.l[name.short == "GLM", method.lab := method.labs[1]]
 egp.match.l[, method.lab := factor(method.lab, levels = method.labs)]
 
+eff.title <- waiver()
+# eff.title <- "Treatment effect present"
 
 # PLOT DISTRIBUTIONS ################################################
 
 file.dist <- paste0(path.fig, "comp.egp_match.dist.all.png")
-png(file.dist, width = 5, height = 4, unit = "in", res = 600)
-ggplot(estimates.sub.p) +
-  stat_halfeye(aes(y = name.short, x = mar.std, fill = method.lab),
-               point_interval = "mean_qi",
-               # normalize = "panels",
-               scale = 0.9,
-               interval_size_range = c(0.35, 0.9),
-               fatten_point = 1.35,
-               p_limits = c(0.001, 0.999),
-               n = 501,
-               .width = c(0.5, 0.95)) +
-  geom_vline(xintercept = 1, linetype = "dotted", linewidth = 0.5) +
-  geom_vline(xintercept = 0, linetype = "solid", colour = 2, linewidth = 0.5) +
-  scale_fill_manual(values = method.cols.light,
-                        drop = FALSE) +
-  guides(linetype = "none", fill = "none") +
-  scale_y_discrete(limits = rev) +
-  coord_cartesian(xlim = c(-0.5, 2.5)) +
-  labs(x = "Estimated average treatment effect (ATT)",
-       y = NULL) +
-  facet_wrap(vars(ls.imbalance.lab), nrow = 1) +
-  plot_theme
+png(file.dist, width = 3, height = 4, unit = "in", res = 600)
+plot_ls_dist(estimates.sub.p, plot_theme, method.cols) +
+  labs(title = eff.title)
 dev.off()
 
+file.dist <- paste0(path.fig, "comp.egp_match.dist.imb.png")
+png(file.dist, width = 5, height = 4, unit = "in", res = 600)
+plot_ls_dist(estimates.sub.p, plot_theme, method.cols) +
+  facet_grid(cols = vars(ls.imbalance.lab)) +
+  labs(title = eff.title)
+dev.off()
 
 file.dist <- paste0(path.fig, "comp.egp_match.dist.ls.png")
 png(file.dist, width = 7, height = 7, unit = "in", res = 600)
-ggplot(estimates.sub.p) +
-  stat_halfeye(aes(y = name.short, x = mar.std, fill = method.lab),
-               point_interval = "mean_qi",
-               # normalize = "panels",
-               scale = 0.9,
-               interval_size_range = c(0.35, 0.9),
-               fatten_point = 1.35,
-               p_limits = c(0.001, 0.999),
-               n = 501,
-               .width = c(0.5, 0.95)) +
-  geom_vline(xintercept = 1, linetype = "dotted", linewidth = 0.5) +
-  geom_vline(xintercept = 0, linetype = "solid", colour = 2, linewidth = 0.5) +
-  scale_fill_manual(values = method.cols.light,
-                        drop = FALSE) +
-  guides(linetype = "none", fill = "none") +
-  scale_y_discrete(limits = rev) +
-  coord_cartesian(xlim = c(-0.5, 2.5)) +
-  labs(x = "Estimated average treatment effect (ATT)",
-       y = NULL) +
+plot_ls_dist(estimates.sub.p, plot_theme, method.cols) +
   facet_grid(rows = vars(ls.imbalance.lab),
              cols = vars(ls.response.lab),
              scales = "free_x") +
-  plot_theme
+  labs(title = eff.title)
 dev.off()
+
 
 
 
@@ -333,26 +338,45 @@ egp.match.all <-
               is.na(.comp)]
 
 egp.match.all[ls.imbalance == "all",
-              ls.imbalance.lab := "Moderate or high imbalance (N=6000)"]
+              ls.imbalance.lab := "Moderate or high imbalance"]
 
-paste0(path.fig, "comp.egp_match.sum.all_all.png") |>
+paste0(path.fig, "comp.egp_match.sum.all.png") |>
 png(width = 7, height = 3, unit = "in", res = 600)
 egp.match.all |>
-plot_ls_comp(plot.theme = plot_theme, method.cols = method.cols) |>
+plot_ls_comp(plot.theme = plot_theme, method.cols = method.cols) +
+  labs(title = eff.title) |>
+print()
+dev.off()
+
+
+egp.match.imb <-
+  egp.match.l[ls.response == "all" &
+              ls.imbalance != "all" &
+              is.na(.comp)]
+
+
+paste0(path.fig, "comp.egp_match.sum.imb.png") |>
+png(width = 7, height = 5, unit = "in", res = 600)
+egp.match.imb |>
+plot_ls_comp(plot.theme = plot_theme, method.cols = method.cols) +
+  labs(title = eff.title) |>
 print()
 dev.off()
 
 
 ls.sum <- levels(egp.match.l$ls.response)
+ls.sum <- ls.sum[!ls.sum %in% "all"]
 
 for(i in seq_along(ls.sum)) {
   file.ls.sum <- paste0(path.fig, "comp.egp_match.sum.", ls.sum[i], ".png")
   png(file.ls.sum, width = 7, height = 5, unit = "in", res = 600)
-  egp.match.l[ls.response == ls.sum[i] &
-              ls.imbalance != "all" &
-              is.na(.comp)] |>
-  plot_ls_comp(plot.theme = plot_theme, method.cols = method.cols) |>
-  print()
+  p <-
+    egp.match.l[ls.response == ls.sum[i] &
+                ls.imbalance != "all" &
+                is.na(.comp)] |>
+    plot_ls_comp(plot.theme = plot_theme, method.cols = method.cols) +
+      labs(title = eff.title)
+  print(p)
   dev.off()
 }
 

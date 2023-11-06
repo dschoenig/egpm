@@ -24,8 +24,6 @@ sub.dt <-
      egp.som.topology = c(NA, "rectangular"),
      egp.cf.nb = c(NA, "sequential"),
      egp.geo.w = c(NA, TRUE),
-     match.mod.cov = factor(c(NA, "interact")),
-     match.trt.int = c(NA, FALSE),
      sorted = FALSE)
 
 

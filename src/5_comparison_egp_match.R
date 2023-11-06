@@ -16,7 +16,8 @@ estimates <- readRDS(file.estimates)
 ## Entire treatment area
 
 sub.dt <-
-  CJ(sam.frac = c(0.01),
+  CJ(trt.effect = TRUE,
+     sam.frac = c(0.01),
      ls.response = c("normal", "tweedie", "binary"),
      ls.imbalance = c("low", "high"),
      area.type = "treatment",
@@ -30,37 +31,39 @@ sub.dt <-
 
 estimates.sub <- subset_estimates(estimates, sub.dt)
 
+
 n.boot <- 1e4
-chunk.size <- 250
+chunk.size <- 125
 handlers(global = TRUE)
 options(future.globals.maxSize= 1024^3)
 
+
 set.seed(main.seed+1)
 egp.match.global <-
-  compare_boot(estimates.sub,
-               n.boot = n.boot,
-               chunk.size = chunk.size)
+  compare_performance_boot(estimates.sub,
+                           n.boot = n.boot,
+                           chunk.size = chunk.size)
 
 set.seed(main.seed+2)
 egp.match.resp <-
-  compare_boot(estimates.sub,
-               by.landscape = "ls.response",
-               n.boot = n.boot,
-               chunk.size = chunk.size)
+  compare_performance_boot(estimates.sub,
+                           by.landscape = "ls.response",
+                           n.boot = n.boot,
+                           chunk.size = chunk.size)
 
 set.seed(main.seed+3)
 egp.match.imb <-
-  compare_boot(estimates.sub,
-               by.landscape = "ls.imbalance",
-               n.boot = n.boot,
-               chunk.size = chunk.size)
+  compare_performance_boot(estimates.sub,
+                           by.landscape = "ls.imbalance",
+                           n.boot = n.boot,
+                           chunk.size = chunk.size)
 
 set.seed(main.seed+4)
 egp.match.resp.imb <-
-  compare_boot(estimates.sub,
-               by.landscape = c("ls.response", "ls.imbalance"),
-               n.boot = n.boot,
-               chunk.size = chunk.size)
+  compare_performance_boot(estimates.sub,
+                           by.landscape = c("ls.response", "ls.imbalance"),
+                           n.boot = n.boot,
+                           chunk.size = chunk.size)
 
 
 ls.response.lev <- c("all", levels(estimates.sub$ls.response))
