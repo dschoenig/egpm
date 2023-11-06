@@ -14,9 +14,9 @@ task_count <- as.integer(args[6])
 overwrite <- as.logical(args[7])
 if(is.na(overwrite)) overwrite <- TRUE
 
-# ls.type <- "noeff_imbalance_high"
+# ls.type <- "beta_imbalance_high"
 # mod.type <- "match"
-# resp.type <- "normal"
+# resp.type <- "beta"
 # sam.frac <- 0.01
 # task_id <- 407
 # task_count <- 1000
@@ -109,6 +109,7 @@ for(i in chunk) {
     switch(resp.type,
            normal = gaussian(link = "identity"),
            binary = binomial(link = "logit"),
+           beta = betar(link = "logit", eps = .Machine$double.eps * 1e4),
            tweedie = tw(link = "log"))
 
   results.mod <- list()
@@ -149,15 +150,28 @@ for(i in chunk) {
     if(mod.para$type[j] == "glm") {
 
       mod.glm <- NULL
-      while(is.null(mod.glm)) {
-        try({
-          mod.glm <-
-            gam(mod.form,
-                family = mod.fam,
-                data = ls.fit,
-                method = "ML")
-        })
-        if(is.null(mod.glm)) message("Model failed. Trying again …")
+      if(resp.type != "beta") {
+        while(is.null(mod.glm)) {
+          try({
+            mod.glm <-
+              gam(mod.form,
+                  family = mod.fam,
+                  data = ls.fit,
+                  method = "ML")
+          })
+          if(is.null(mod.glm)) message("Model failed. Trying again …")
+        }
+      } else {
+        while(is.null(mod.glm)) {
+          try({
+            mod.glm <-
+              gam(mod.form,
+                  family = mod.fam,
+                  data = ls.fit,
+                  method = "REML")
+          })
+          if(is.null(mod.glm)) message("Model failed. Trying again …")
+        }
       }
 
       marginal <-
@@ -210,23 +224,34 @@ for(i in chunk) {
       ls.match <- match.data(matched)
 
       mod.match <- NULL
-      while(is.null(mod.match)) {
-        try({
-          mod.match <-
-            gam(mod.form,
-                family = mod.fam,
-                data = ls.match,
-                weights = weights,
-                method = "ML")
-        })
-        # try({
-        #   mod.match <-
-        #     glm(mod.form,
-        #         family = mod.fam,
-        #         data = ls.match,
-        #         weights = weights)
-        # })
-        if(is.null(mod.match)) message("Model failed. Trying again …")
+      if(resp.type != "beta") {
+        while(is.null(mod.match)) {
+          try({
+            mod.match <-
+              gam(mod.form,
+                  family = mod.fam,
+                  data = ls.match,
+                  weights = weights,
+                  method = "ML")
+          })
+          if(is.null(mod.match)) message("Model failed. Trying again …")
+        }
+      } else {
+        while(is.null(mod.match)) {
+          try({
+            mod.match <-
+              gam(mod.form,
+                  family = mod.fam,
+                  data = ls.match,
+                  weights = weights,
+                  method = "REML")
+            # mod.match.b <-
+            #   betareg(mod.form,
+            #           data = ls.match,
+            #           weights = weights)
+          })
+          if(is.null(mod.match)) message("Model failed. Trying again …")
+        }
       }
 
       marginal <-
