@@ -19,9 +19,9 @@ task_count <- as.integer(args[12])
 overwrite <- as.logical(args[13])
 if(is.na(overwrite)) overwrite <- TRUE
 
-# ls.type <- "tweedie_imbalance_high"
+# ls.type <- "beta_imbalance_high"
 # mod.type <- "egp_som25"
-# resp.type <- "tweedie"
+# resp.type <- "beta"
 # n.threads <- 4
 # task_id <- 407
 # task_count <- 1000
@@ -153,6 +153,7 @@ for(i in chunk) {
       switch(resp.type,
              normal = gaussian(link = "identity"),
              binary = binomial(link = "logit"),
+             beta = betar(link = "logit", eps = .Machine$double.eps * 1e4),
              tweedie = tw(link = "log"))
 
     if(j > 1) {
@@ -180,33 +181,67 @@ for(i in chunk) {
       }
 
       if(egp.approx) {
-         mod.egp <- bam(response ~
-                        s(x, y, bs = "gp", k = egp.k.geo,
-                          xt = list(max.knots = egp.max.knots.geo)) +
-                        s(x, y, by = type, bs = "gp", k = egp.k.geo,
-                          xt = list(max.knots = egp.max.knots.geo)) +
-                        s(som.x, som.y, bs = "gp", k = egp.k.som,
-                          xt = list(max.knots = egp.max.knots.som)),
-                        family = mod.fam,
-                        data = ls.fit,
-                        select = TRUE,
-                        discrete = TRUE,
-                        nthreads = n.threads
-                        )
-       } else {
-         mod.egp <- gam(response ~
-                        s(x, y, bs = "gp", k = egp.k.geo,
-                          xt = list(max.knots = egp.max.knots.geo)) +
-                        s(x, y, by = type, bs = "gp", k = egp.k.geo,
-                          xt = list(max.knots = egp.max.knots.geo)) +
-                        s(som.x, som.y, bs = "gp", k = egp.k.som,
-                          xt = list(max.knots = egp.max.knots.som)),
-                        family = mod.fam,
-                        data = ls.fit,
-                        select = TRUE,
-                        method= "REML",
-                        optimizer = "efs"
-                        )
+
+        if(resp.type != "beta") {
+          mod.egp <- bam(response ~
+                         s(x, y, bs = "gp", k = egp.k.geo,
+                           xt = list(max.knots = egp.max.knots.geo)) +
+                         s(x, y, by = type, bs = "gp", k = egp.k.geo,
+                           xt = list(max.knots = egp.max.knots.geo)) +
+                         s(som.x, som.y, bs = "gp", k = egp.k.som,
+                           xt = list(max.knots = egp.max.knots.som)),
+                         family = mod.fam,
+                         data = ls.fit,
+                         select = TRUE,
+                         discrete = TRUE,
+                         nthreads = n.threads
+          )
+        } else {
+          # Small model for better initial smoothing parameter guess
+          small.sam <- sample(ls.fit$cell, 1e3)
+          mod.egp.small <- gam(response ~
+                               s(x, y, bs = "gp", k = round(egp.k.geo/10),
+                                 xt = list(max.knots = round(egp.max.knots.geo/10))) +
+                               s(x, y, by = type, bs = "gp", k = round(egp.k.geo/10),
+                                 xt = list(max.knots = round(egp.max.knots.geo/10))) +
+                               s(som.x, som.y, bs = "gp", k = round(egp.k.som/10),
+                                 xt = list(max.knots = round(egp.max.knots.som/10))),
+                               family = mod.fam,
+                               optimizer = "efs",
+                               method = "REML",
+                               data = ls.fit[cell %in% small.sam],
+                               select = TRUE
+                               )
+          mod.egp <- bam(response ~
+                         s(x, y, bs = "gp", k = egp.k.geo,
+                           xt = list(max.knots = egp.max.knots.geo)) +
+                         s(x, y, by = type, bs = "gp", k = egp.k.geo,
+                           xt = list(max.knots = egp.max.knots.geo)) +
+                         s(som.x, som.y, bs = "gp", k = egp.k.som,
+                           xt = list(max.knots = egp.max.knots.som)),
+                         family = mod.fam,
+                         data = ls.fit,
+                         sp = mod.egp.small$sp,
+                         select = TRUE,
+                         discrete = TRUE,
+                         nthreads = n.threads
+                         )
+        }
+
+      } else {
+        mod.egp <- gam(response ~
+                       s(x, y, bs = "gp", k = egp.k.geo,
+                         xt = list(max.knots = egp.max.knots.geo)) +
+                       s(x, y, by = type, bs = "gp", k = egp.k.geo,
+                         xt = list(max.knots = egp.max.knots.geo)) +
+                       s(som.x, som.y, bs = "gp", k = egp.k.som,
+                         xt = list(max.knots = egp.max.knots.som)),
+                       family = mod.fam,
+                       data = ls.fit,
+                       select = TRUE,
+                       method= "REML",
+                       optimizer = "efs"
+        )
       }
 
 
@@ -219,6 +254,7 @@ for(i in chunk) {
         switch(resp.type,
                normal = NULL,
                binary = NULL,
+               beta = NULL,
                tweedie = 2500)
 
       egp.pred <-

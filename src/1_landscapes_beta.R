@@ -13,8 +13,8 @@ if(is.na(overwrite)) overwrite <- TRUE
 
 # ls.original <- "imbalance_high"
 # ls.beta <- "beta_imbalance_high"
-# task.id <- 1
-# task.count <- 1
+# task.id <- 407
+# task.count <- 1000
 
 paste0("Settings:\n",
        "  Original landscape: ", ls.original, "\n",
