@@ -116,7 +116,6 @@ for(i in ids.proc) {
     grp.vars <- c("group.id", mod.res$models[[j]]$egp.def$group.by.c)
 
     marginals.j[[j]] <- 
-
       mod.res$models[[j]]$marginal[,
                                    .(mean = mean(marginal),
                                      median = median(marginal),
