@@ -47,6 +47,8 @@ estimates.sub[,
                       "default",
                       mod.name == "egp_som25" & egp.som.topology == "hexagonal",
                       "hex",
+                      # mod.name == "egp_som25_unequal" & egp.som.topology == "hexagonal",
+                      # "hex_uneq",
                       mod.name == "egp_som10" & egp.som.topology == "rectangular",
                       "dim_10",
                       mod.name == "egp_som50" & egp.som.topology == "rectangular",
@@ -59,6 +61,7 @@ estimates.sub[,
               name.egp :=
                 factor(name.egp,
                        levels = c("default", "hex", "unequal", "dim_10", "dim_50"))]
+                       # levels = c("default", "hex", "unequal", "hex_uneq", "dim_10", "dim_50"))]
 
 
 set.seed(main.seed+1)
