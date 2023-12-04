@@ -309,6 +309,26 @@ d_cohen <- function(x, y, na.rm = FALSE) {
   return(d)
 }
 
+
+d_cohen_w <- function(x, y, wx, wy, na.rm = FALSE) {
+  if(na.rm) {
+    x <- na.omit(x)
+    y <- na.omit(y)
+  }
+  wx <- wx/sum(wx)
+  wy <- wy/sum(wy)
+  mu_x <- weighted.mean(x, wx)
+  mu_y <- weighted.mean(y, wy)
+  s2_x <- sum(wx * (x - mu_x)^2)
+  s2_y <- sum(wy * (y - mu_y)^2)
+  n_x <- length(x)
+  n_y <- length(y)
+  s <- sqrt((((n_x - 1) * s2_x) + ((n_x - 1) * s2_x)) / (n_x + n_y - 2))
+  d <- (mu_x - mu_y) / s
+  return(d)
+}
+
+
 var_ratio <- function(x, y, na.rm = FALSE) {
   if(na.rm) {
     x <- na.omit(x)
@@ -317,23 +337,56 @@ var_ratio <- function(x, y, na.rm = FALSE) {
   var(x) / var(y)
 }
 
+
+var_ratio_w <- function(x, y, wx, wy, na.rm = FALSE) {
+  if(na.rm) {
+    x <- na.omit(x)
+    y <- na.omit(y)
+  }
+  wx <- wx/sum(wx)
+  wy <- wy/sum(wy)
+  mu_x <- weighted.mean(x, wx)
+  mu_y <- weighted.mean(y, wy)
+  s2_x <- sum(wx * (x - mu_x)^2)
+  s2_y <- sum(wy * (y - mu_y)^2)
+  s2_x / s2_y
+}
+
+
 ks_stat <- function(x, y, na.rm = FALSE) {
   if(na.rm) {
     x <- na.omit(x)
     y <- na.omit(y)
   }
-  x <- x[!is.na(x)]
-  y <- y[!is.na(y)]
-  n <- length(x)
-  y <- y[!is.na(y)]
-  n.x <- as.double(n)
+  n.x <- length(x)
   n.y <- length(y)
-  w <- c(x, y)
-  z <- cumsum(ifelse(order(w) <= n.x, 1/n.x, -1/n.y))
-  z <- z[c(which(diff(sort(w)) != 0), n.x + n.y)] #exclude ties
-  ks <- max(abs(z))
+  v <- c(x, y)
+  w <- c(rep(1/n.x, length(x)), rep(-1/n.y, length(y)))
+  ind <- order(v)
+  z <- abs(cumsum(w[ind]))
+  z <- z[diff(v[ind]) != 0]
+  ks <- ifelse(length(z) > 0, max(z), 0)
   return(ks)
 }
+
+ks_stat_w <- function(x, y, wx, wy, na.rm = FALSE) {
+  if(na.rm) {
+    x <- na.omit(x)
+    y <- na.omit(y)
+  }
+  n.x <- length(x)
+  n.y <- length(y)
+  wx <- wx / sum(wx)
+  wy <- -wy / sum(wy)
+  v <- c(x, y)
+  w <- c(wx, wy)
+  ind <- order(v)
+  z <- abs(cumsum(w[ind]))
+  z <- z[diff(v[ind]) != 0]
+  ks <- ifelse(length(z) > 0, max(z), 0)
+  return(ks)
+}
+
 
 get_breaks <- function(x, breaks = "FD", ...) {
   x.range <- range(x)
@@ -367,6 +420,14 @@ to_pdist <- function(x, ...) {
 }
 
 
+to_pdist_w <- function(x, wx, ...) {
+  wx <- wx / sum(wx)
+  p <- density(x, weights = wx, warnWbw = FALSE, ...)$y
+  p <- p/sum(p)
+  return(p)
+}
+
+
 to_pmass <- function(x, breaks = "FD", ...) {
   # p.range <- range(x)
   # if(is.character(breaks)) {
@@ -391,6 +452,16 @@ to_pmass <- function(x, breaks = "FD", ...) {
   return(x.dt[is.na(x), x := 0][order(h), x])
 }
 
+
+to_pmass_w <- function(x, wx, breaks = "FD", ...) {
+  x.dt <- data.table(x, h = assign_breaks(x, breaks = breaks), w = wx / sum(wx))
+  x.dt <- x.dt[, .(x = sum(w)), h]
+  if(nrow(x.dt) < length(breaks)) {
+    i.br <- 1:length(breaks)
+    x.dt <- rbind(x.dt, data.table(h = i.br[!(i.br %in% x.dt$h)], x = 0))
+  }
+  return(x.dt[is.na(x), x := 0][order(h), x])
+}
 
 
 # kl_div <- function(x, y, base = 2, symmetric = FALSE, to.pdist = FALSE, p.range = NULL, p.n = 512, p.bw = "SJ-dpi") {
@@ -428,7 +499,8 @@ kl_div <- function(
                    dens.bw = "SJ") {
   if(type == "density") {
     if(is.null(dens.range)) {
-      p.range <- range(c(range(x), range(y)))
+      p.iqr <- max(c(IQR(x), IQR(y)))
+      p.range <- range(c(range(x), range(y))) + (0.1 * c(-p.iqr, p.iqr))
     }
     if(is.null(dens.n)) {
       dens.n <- 512
@@ -451,14 +523,64 @@ kl_div <- function(
   if(symmetric) {
     d <-
       0.5 *
-      (kl_dist(x, y, base = base, symmetric == FALSE, type = "raw") /
-       kl_dist(y, x, base = base, symmetric == FALSE, type = "raw"))
+      (kl_div(x, y, base = base, symmetric == FALSE, type = "raw") /
+       kl_div(y, x, base = base, symmetric == FALSE, type = "raw"))
   } else {
     d <- sum(x * log(x / y, base = base))
   }
   return(d)
 }
 
+
+kl_div_w <- function(
+                     x,
+                     y,
+                     wx,
+                     wy,
+                     base = 2,
+                     symmetric = FALSE,
+                     type = "raw",
+                     disc.breaks = "FD",
+                     dens.range = NULL,
+                     dens.n = 512,
+                     dens.bw = "SJ") {
+  wx <- wx / sum(wx)
+  wy <- wy / sum(wy)
+  if(type == "density") {
+    if(is.null(dens.range)) {
+      p.iqr <- max(c(IQR(x), IQR(y)))
+      p.range <- range(c(range(x), range(y))) + (0.1 * c(-p.iqr, p.iqr))
+    }
+    if(is.null(dens.n)) {
+      dens.n <- 512
+    }
+    x <- to_pdist_w(x, wx, bw = dens.bw, from = p.range[1], to = p.range[2], n = dens.n)
+    y <- to_pdist_w(y, wy, bw = dens.bw, from = p.range[1], to = p.range[2], n = dens.n)
+  }
+  if(type == "discrete") {
+    disc.breaks <- get_breaks(c(x, y), disc.breaks = disc.breaks)
+    x <- to_pmass_w(x, wx, breaks = disc.breaks)
+    y <- to_pmass_w(y, wy, breaks = disc.breaks)
+  }
+  if(type == "raw") {
+    x <- x * wx
+    y <- y * wy
+  }
+  x[x == 0] <- .Machine$double.eps
+  y[y == 0] <- .Machine$double.eps
+  if(length(x) != length(y)) {
+    stop("Wrong length.")
+  }
+  if(symmetric) {
+    d <-
+      0.5 *
+      (kl_div(x, y, base = base, symmetric == FALSE, type = "raw") /
+       kl_div(y, x, base = base, symmetric == FALSE, type = "raw"))
+  } else {
+    d <- sum(x * log(x / y, base = base))
+  }
+  return(d)
+}
 
 # js_div <- function(x, y, base = 2, to.pdist = FALSE, p.range = NULL, p.n = 512, p.bw = "SJ") {
 #   if(type == "density") {
@@ -514,7 +636,8 @@ js_div <- function(x,
   }
   if(type == "density") {
     if(is.null(dens.range)) {
-      p.range <- range(c(range(x), range(y)))
+      p.iqr <- max(c(IQR(x), IQR(y)))
+      p.range <- range(c(range(x), range(y))) + (0.1 * c(-p.iqr, p.iqr))
     }
     if(is.null(dens.n)) {
       dens.n <- 512
@@ -536,6 +659,56 @@ js_div <- function(x,
      kl_div(y, z, base = base, symmetric = FALSE, type = "raw"))
   return(d)
 }
+
+
+js_div_w <- function(x,
+                     y,
+                     wx,
+                     wy,
+                     base = 2,
+                     type = "raw",
+                     disc.breaks = "FD",
+                     dens.range = NULL,
+                     dens.n = 512,
+                     dens.bw = "SJ",
+                     na.rm = FALSE) {
+  wx <- wx / sum(wx)
+  wy <- wy / sum(wy)
+  if(na.rm) {
+    x <- na.omit(x)
+    y <- na.omit(y)
+  }
+  if(type == "density") {
+    if(is.null(dens.range)) {
+      p.iqr <- max(c(IQR(x), IQR(y)))
+      p.range <- range(c(range(x), range(y))) + (0.1 * c(-p.iqr, p.iqr))
+    }
+    if(is.null(dens.n)) {
+      dens.n <- 512
+    }
+    x <- to_pdist_w(x, wx, bw = dens.bw, from = p.range[1], to = p.range[2], n = dens.n)
+    y <- to_pdist_w(y, wy, bw = dens.bw, from = p.range[1], to = p.range[2], n = dens.n)
+  }
+  if(type == "discrete") {
+    disc.breaks <- get_breaks(c(x, y), breaks = disc.breaks)
+    x <- to_pmass_w(x, wx, breaks = disc.breaks)
+    y <- to_pmass_w(y, wy, breaks = disc.breaks)
+  }
+  if(type == "raw") {
+    x <- x * wx
+    y <- y * wy
+  }
+  x[x == 0] <- .Machine$double.eps
+  y[y == 0] <- .Machine$double.eps
+  z <- 0.5 * (x + y)
+  d <-
+    0.5 *
+    (kl_div(x, z, base = base, symmetric = FALSE, type = "raw") +
+     kl_div(y, z, base = base, symmetric = FALSE, type = "raw"))
+  return(d)
+}
+
+
 
 
 generate_empty <- function(x.dim,
@@ -5334,33 +5507,197 @@ egp_define_counterfactual <-
 }
 
 
+get_weights <- function(cf.def,
+                        group = NULL) {
+
+  id.var <- cf.def$id.var
+  group.var <- cf.def$group.var
+  assign.var <- cf.def$assign.var
+  assign.cat <- cf.def$assign.cat
+  id.names <- paste(id.var, assign.cat, sep = ".")
+
+  env.w <-
+    list(id.col = id.var,
+         group.col = group.var,
+         assign.col = assign.var,
+         fac.col = id.names[2],
+         cf.col = id.names[1])
 
 
-get_influence <- function(x) {
-  counts <-
-    merge(
-          x$units[,
-                  .(.w = 1/unlist(lapply(id.col, length)),
-                  id.col = unlist(id.col)),
-                  by = c(x$unit.var, x$compare.by),
-                  env = list(id.col = x$id.var)] ,
-          x$assignment[,
-                       .(cf.col = unlist(cf.col)),
-                       by = eval(x$compare.by),
-                       env = list(cf.col = x$unit.var)
-                       ][,
-                         .(.n = .N),
-                         by = c(x$unit.var, x$compare.by)],
-          all.x = TRUE)
-  counts[is.na(.n), .n := 0]
-  counts[, .influence := .n * .w]
-  influence <-
-    counts[,
-           c(x$compare.by, x$unit.var, x$id.var, ".influence"),
-           with = FALSE] |>
-      setorderv(c(x$compare.by, ".influence", x$id.var),
-                order = c(rep(1, length(x$compare.by)), -1, 1))
-  return(influence)
+  idx.f <-
+    cf.def$groups[,
+                  .(id.col = unlist(fac.col)),
+                  by = group.col, env = env.w]
+  idx.f[, .w := 1/.N, by = group.col, env = env.w]
+  idx.cf <-
+    cf.def$groups[,
+                  .(id.col = unlist(cf.col),
+                    .w = unlist(.w)),
+                  by = group.col, env = env.w]
+
+  w <-
+    merge(cf.def$data,
+          rbind(idx.f, idx.cf),
+          by = id.var,
+          all = TRUE)
+  setorderv(w, c(group.var, id.var), na.last = TRUE)
+  setcolorder(w, c(group.var, id.var))
+
+  w[is.na(.w), .w := 0]
+
+  if(is.null(group)) {
+    return(copy(w))
+  } else {
+    return(copy(w[group.col %in% group, env = env.w]))
+  }
+}
+
+
+egp_imbalance <- function(data,
+                          variables,
+                          cf.def,
+                          group = 1,
+                          type = "both",
+                          measure = c("d_cohen",
+                                      "var_ratio",
+                                      "ks_stat",
+                                      "js_div"),
+                          js.type = "density",
+                          js.dens.n = 512,
+                          js.dens.bw = "SJ",
+                          js.disc.breaks = "FD"
+                          ){
+
+  id.var <- cf.def$id.var
+  group.var <- cf.def$group.var
+  assign.var <- cf.def$assign.var
+  assign.cat <- cf.def$assign.cat
+  id.names <- paste(id.var, assign.cat, sep = ".")
+
+  env.w <-
+    list(id.col = id.var,
+         group.col = group.var,
+         assign.col = assign.var,
+         fac.col = id.names[2],
+         cf.col = id.names[1])
+
+
+
+  data <- data[, c(id.var, variables), with = FALSE]
+
+  measure.eff.l <- list()
+  measure.raw.l <- list()
+
+  if(type %in% c("effective", "both")) {
+
+    cf.w <-
+      get_weights(cf.def, group) |>
+      _[, c(group.var, id.var, assign.var, ".w"), with = FALSE]
+    
+    data.eff <-
+      merge(cf.w,
+            data,
+            by = id.var,
+            all = FALSE) |>
+     melt(measure.vars = variables,
+          variable.name = ".variable",
+          value.name = ".value")
+
+    data.eff <- data.eff[!is.na(group.col), env = env.w]
+
+    measure.fun.eff <-
+      list("d_cohen" = d_cohen_w,
+           "var_ratio" = var_ratio_w,
+           "ks_stat" = ks_stat_w,
+           "js_div" = \(x, y, wx, wy) js_div_w(x, y, wx, wy,
+                                               type = js.type,
+                                               disc.breaks = js.disc.breaks,
+                                               dens.n = js.dens.n,
+                                               dens.bw = js.dens.bw))
+
+    m.i <- which(names(measure.fun.eff) %in% measure)
+    for(i in m.i) {
+      measure.eff.l[[i]] <-
+        data.eff[,
+                 .(.measure = names(measure.fun.eff[i]),
+                   .type = "effective",
+                   .imbalance = measure.fun.eff[[i]](x = .value[assign.col == assign.cat[1]],
+                                                     y = .value[assign.col == assign.cat[2]],
+                                                     wx = .w[assign.col == assign.cat[1]],
+                                                     wy = .w[assign.col == assign.cat[2]])),
+                by = c(group.var, ".variable"),
+                env = env.w]
+    }
+    measure.names <- names(measure.fun.eff)
+  }
+
+
+
+  if(type %in% c("raw", "both")) {
+
+    data.raw.f <-
+      merge(cf.w[assign.col == assign.cat[2],
+                 .(group.col, id.col, assign.col),
+                 env = env.w],
+            data,
+            all = FALSE)
+
+    data.raw.cf <- 
+      merge(cf.def$data[assign.col == assign.cat[1],
+                        .(id.col, assign.col),
+                        env = env.w],
+            data,
+            all.y = FALSE)
+
+    data.raw <-
+      rbind(data.raw.f,
+            merge(CJ(cell = data.raw.cf$cell,
+                     group.id = unique(data.raw.f$group.id)),
+                  data.raw.cf)) |>
+     melt(measure.vars = variables,
+          variable.name = ".variable",
+          value.name = ".value")
+
+    rm(data.raw.f, data.raw.cf)
+
+    measure.fun.raw <-
+      list("d_cohen" = d_cohen,
+           "var_ratio" = var_ratio,
+           "ks_stat" = ks_stat,
+           "js_div" = \(x, y) js_div(x, y,
+                                     type = js.type,
+                                     disc.breaks = js.disc.breaks,
+                                     dens.n = js.dens.n,
+                                     dens.bw = js.dens.bw))
+
+    m.i <- which(names(measure.fun.raw) %in% measure)
+    for(i in m.i) {
+      measure.raw.l[[i]] <-
+        data.raw[,
+               .(.measure = names(measure.fun.raw[i]),
+                 .type = "raw",
+                 .imbalance = measure.fun.raw[[i]](x = .value[assign.col == assign.cat[1]],
+                                                   y = .value[assign.col == assign.cat[2]])),
+              by = c(group.var, ".variable"),
+              env = env.w]
+    }
+    measure.names <- names(measure.fun.raw)
+  }
+
+  cast.form <-
+    as.formula(paste0(group.var, " + .variable + .measure ~ .type"))
+
+  measures <-
+    rbindlist(c(measure.raw.l, measure.eff.l)) |>
+    dcast(cast.form, value.var = ".imbalance")
+
+  measures[,
+           `:=`(.variable = factor(.variable, levels = variables),
+                .measure = factor(.measure, levels = measure.names))]
+  setorderv(measures, c(group.var, ".variable", ".measure"))
+
+  return(copy(measures))
+
 }
 
 
@@ -7679,7 +8016,6 @@ format_decisions2 <- function(x,
     return(x.agg[, ..cols.out])
   }
 }
-
 
 
 
