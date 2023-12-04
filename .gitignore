@@ -3,6 +3,7 @@ log/
 models/
 results/
 results_old/
+results_beta/
 tests/
 src/scratch.R
 session*.vim
