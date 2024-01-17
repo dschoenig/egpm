@@ -27,6 +27,8 @@ library(doFuture)
 library(foreach)
 library(progressr)
 
+source("utilities_egp.R")
+
 cloglog <- function(mu) {
   log(-log(1 - mu))
 }
@@ -5551,7 +5553,73 @@ get_weights <- function(cf.def,
     return(copy(w[group.col %in% group, env = env.w]))
   }
 }
+imbalance_raw <- function(data,
+                          variables,
+                          id.trt,
+                          id.ref,
+                          measure = c("d_cohen",
+                                      "var_ratio",
+                                      "ks_stat",
+                                      "js_div"),
+                          js.type = "density",
+                          js.dens.n = 512,
+                          js.dens.bw = "SJ",
+                          js.disc.breaks = "FD") {
 
+  data <- as.data.table(data)[, variables, with = FALSE]
+  data[, (variables) := lapply(.SD, as.numeric), .SDcols = variables]
+
+  measure.raw.l <- list()
+
+  data.raw.f <- data[id.trt,]
+  data.raw.f[, .type := "trt"]
+  data.raw.cf <- data[id.ref,]
+  data.raw.cf[, .type := "ref"]
+
+  data.raw <-
+    rbind(data.raw.f, data.raw.cf) |>
+  melt(measure.vars = variables,
+       variable.name = ".variable",
+       value.name = ".value")
+
+  rm(data.raw.f, data.raw.cf)
+
+  data.raw[, .type := factor(.type, levels = c("ref", "trt"))]
+
+  measure.fun.raw <-
+    list("d_cohen" = d_cohen,
+         "var_ratio" = var_ratio,
+         "ks_stat" = ks_stat,
+         "js_div" = \(x, y) js_div(x, y,
+                                   type = js.type,
+                                   disc.breaks = js.disc.breaks,
+                                   dens.n = js.dens.n,
+                                   dens.bw = js.dens.bw))
+
+  m.i <- which(names(measure.fun.raw) %in% measure)
+  for(i in m.i) {
+    measure.raw.l[[i]] <-
+      data.raw[,
+               .(.measure = names(measure.fun.raw[i]),
+                 .type = "raw",
+                 .imbalance = measure.fun.raw[[i]](x = .value[.type == "trt"],
+                                                   y = .value[.type == "ref"])),
+               by = c(".variable")]
+  }
+  measure.names <- names(measure.fun.raw)
+
+  measures <-
+    rbindlist(measure.raw.l) |>
+    dcast(.variable + .measure ~ .type, value.var = ".imbalance")
+
+  measures[,
+           `:=`(.variable = factor(.variable, levels = variables),
+                .measure = factor(.measure, levels = measure.names))]
+  setorderv(measures, c(".variable", ".measure"))
+
+  return(copy(measures))
+
+}
 
 egp_imbalance <- function(data,
                           variables,
@@ -5584,6 +5652,7 @@ egp_imbalance <- function(data,
 
 
   data <- data[, c(id.var, variables), with = FALSE]
+  data[, (variables) := lapply(.SD, as.numeric), .SDcols = variables]
 
   measure.eff.l <- list()
   measure.raw.l <- list()
