@@ -14,9 +14,9 @@ task_count <- as.integer(args[6])
 overwrite <- as.logical(args[7])
 if(is.na(overwrite)) overwrite <- TRUE
 
-# ls.type <- "beta_imbalance_high"
+# ls.type <- "tweedie_imbalance_high"
 # mod.type <- "match"
-# resp.type <- "beta"
+# resp.type <- "tweedie"
 # sam.frac <- 0.01
 # task_id <- 407
 # task_count <- 1000
@@ -302,6 +302,7 @@ for(i in chunk) {
   
   results.ls <-
     list(parameters = mod.para,
+         sample = ls.sam,
          models = results.mod)
 
 
