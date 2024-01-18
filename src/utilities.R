@@ -27,7 +27,6 @@ library(doFuture)
 library(foreach)
 library(progressr)
 
-source("utilities_egp.R")
 
 cloglog <- function(mu) {
   log(-log(1 - mu))
@@ -8253,5 +8252,6 @@ read.rds <- function(x, ...) {
 
 
 
+source("utilities_egp.R")
 
 
