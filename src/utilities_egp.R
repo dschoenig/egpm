@@ -3,6 +3,7 @@ library(mgcv)
 library(mvnfast)
 library(kohonen)
 library(Matrix)
+library(sf)
 library(spdep) # For poly2nb et al
 library(lwgeom) # For minimum bounding circle
 
