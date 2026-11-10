@@ -1,9 +1,8 @@
 # Rerun after fixing the SOM neighbourhood function in egp_som().
-# Scripts within a block can run in parallel. Start a block only after the
-# previous one has finished.
+# Submit each block with rerun_block_<N>.sh once the previous block has left the queue.
+# Blocks stay under the per-user limit of 1000 queued jobs (each array task counts).
 
-# Block 1: needs only the existing Gaussian landscapes
-# (imbalance_* and noeff_imbalance_*).
+# Block 1 (980 jobs): Tweedie/binary landscapes, first Gaussian models.
 cc_1_landscapes_low_tweedie.sh
 cc_1_landscapes_high_tweedie.sh
 cc_1_landscapes_low_binary.sh
@@ -19,13 +18,16 @@ cc_2_models_low_egp_som25_unequal.sh
 cc_2_models_high_egp_som25.sh
 cc_2_models_high_egp_som10.sh
 cc_2_models_high_egp_som50.sh
+
+# Block 2 (815 jobs): remaining Gaussian models, Tweedie low models,
+# landscape summaries, marginals for the Gaussian models of block 1.
 cc_2_models_high_egp_som25_unequal.sh
 cc_2_models_noeff_low_egp_som25.sh
 cc_2_models_noeff_high_egp_som25.sh
-
-# Block 2: Tweedie/binary landscapes from block 1, Gaussian models from block 1.
-# Before starting, delete the Gaussian .inter.rds files:
-# results/{imbalance,noeff_imbalance}_{low,high}/egp_som*.inter.rds
+cc_2_models_tweedie_low_egp_som25.sh
+cc_2_models_tweedie_low_egp_som10.sh
+cc_2_models_tweedie_low_egp_som50.sh
+cc_2_models_tweedie_low_egp_som25_unequal.sh
 cc_3_summary_tweedie_low.sh
 cc_3_summary_tweedie_high.sh
 cc_3_summary_binary_low.sh
@@ -34,26 +36,6 @@ cc_3_summary_noeff_tweedie_low.sh
 cc_3_summary_noeff_tweedie_high.sh
 cc_3_summary_noeff_binary_low.sh
 cc_3_summary_noeff_binary_high.sh
-cc_2_models_tweedie_low_egp_som25.sh
-cc_2_models_tweedie_low_egp_som10.sh
-cc_2_models_tweedie_low_egp_som50.sh
-cc_2_models_tweedie_low_egp_som25_unequal.sh
-cc_2_models_tweedie_high_egp_som25.sh
-cc_2_models_tweedie_high_egp_som10.sh
-cc_2_models_tweedie_high_egp_som50.sh
-cc_2_models_tweedie_high_egp_som25_unequal.sh
-cc_2_models_binary_low_egp_som25.sh
-cc_2_models_binary_low_egp_som10.sh
-cc_2_models_binary_low_egp_som50.sh
-cc_2_models_binary_low_egp_som25_unequal.sh
-cc_2_models_binary_high_egp_som25.sh
-cc_2_models_binary_high_egp_som10.sh
-cc_2_models_binary_high_egp_som50.sh
-cc_2_models_binary_high_egp_som25_unequal.sh
-cc_2_models_noeff_tweedie_low_egp_som25.sh
-cc_2_models_noeff_tweedie_high_egp_som25.sh
-cc_2_models_noeff_binary_low_egp_som25.sh
-cc_2_models_noeff_binary_high_egp_som25.sh
 cc_3_marginal_low_egp_som25.sh
 cc_3_marginal_low_egp_som10.sh
 cc_3_marginal_low_egp_som50.sh
@@ -61,30 +43,52 @@ cc_3_marginal_low_egp_som25_unequal.sh
 cc_3_marginal_high_egp_som25.sh
 cc_3_marginal_high_egp_som10.sh
 cc_3_marginal_high_egp_som50.sh
+
+# Block 3 (707 jobs): Tweedie high and no-effect Tweedie models,
+# marginals for the models of block 2.
+cc_2_models_tweedie_high_egp_som25.sh
+cc_2_models_tweedie_high_egp_som10.sh
+cc_2_models_tweedie_high_egp_som50.sh
+cc_2_models_tweedie_high_egp_som25_unequal.sh
+cc_2_models_noeff_tweedie_low_egp_som25.sh
+cc_2_models_noeff_tweedie_high_egp_som25.sh
 cc_3_marginal_high_egp_som25_unequal.sh
 cc_3_marginal_noeff_low_egp_som25.sh
 cc_3_marginal_noeff_high_egp_som25.sh
-
-# Block 3: Tweedie/binary models from block 2.
-# Before starting, delete the Tweedie/binary .inter.rds files:
-# results/{,noeff_}{tweedie,binary}_imbalance_{low,high}/egp_som*.inter.rds
 cc_3_marginal_tweedie_low_egp_som25.sh
 cc_3_marginal_tweedie_low_egp_som10.sh
 cc_3_marginal_tweedie_low_egp_som50.sh
 cc_3_marginal_tweedie_low_egp_som25_unequal.sh
+
+# Block 4 (706 jobs): binary low and no-effect binary models,
+# marginals for the models of block 3.
+cc_2_models_binary_low_egp_som25.sh
+cc_2_models_binary_low_egp_som10.sh
+cc_2_models_binary_low_egp_som50.sh
+cc_2_models_binary_low_egp_som25_unequal.sh
+cc_2_models_noeff_binary_low_egp_som25.sh
+cc_2_models_noeff_binary_high_egp_som25.sh
 cc_3_marginal_tweedie_high_egp_som25.sh
 cc_3_marginal_tweedie_high_egp_som10.sh
 cc_3_marginal_tweedie_high_egp_som50.sh
 cc_3_marginal_tweedie_high_egp_som25_unequal.sh
+cc_3_marginal_noeff_tweedie_low_egp_som25.sh
+cc_3_marginal_noeff_tweedie_high_egp_som25.sh
+
+# Block 5 (506 jobs): binary high models, marginals for the models of block 4.
+cc_2_models_binary_high_egp_som25.sh
+cc_2_models_binary_high_egp_som10.sh
+cc_2_models_binary_high_egp_som50.sh
+cc_2_models_binary_high_egp_som25_unequal.sh
 cc_3_marginal_binary_low_egp_som25.sh
 cc_3_marginal_binary_low_egp_som10.sh
 cc_3_marginal_binary_low_egp_som50.sh
 cc_3_marginal_binary_low_egp_som25_unequal.sh
+cc_3_marginal_noeff_binary_low_egp_som25.sh
+cc_3_marginal_noeff_binary_high_egp_som25.sh
+
+# Block 6 (4 jobs): marginals for the binary high models of block 5.
 cc_3_marginal_binary_high_egp_som25.sh
 cc_3_marginal_binary_high_egp_som10.sh
 cc_3_marginal_binary_high_egp_som50.sh
 cc_3_marginal_binary_high_egp_som25_unequal.sh
-cc_3_marginal_noeff_tweedie_low_egp_som25.sh
-cc_3_marginal_noeff_tweedie_high_egp_som25.sh
-cc_3_marginal_noeff_binary_low_egp_som25.sh
-cc_3_marginal_noeff_binary_high_egp_som25.sh
