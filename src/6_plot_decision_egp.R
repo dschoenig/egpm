@@ -28,6 +28,7 @@ noeff.egp.dec.imb <- readRDS(file.noeff.egp.dec.imb)
 noeff.egp.dec.ls <- readRDS(file.noeff.egp.dec.ls)
 
 
+
 # PLOT SETUP ########################################################
 
 
@@ -57,7 +58,7 @@ plot_theme <-
         legend.position = "right",
         legend.justification = "center",
         legend.key.width = unit(base.size, "pt"),
-        legend.key.height = unit(1.75 * base.size, "pt"),
+        legend.key.height = unit(2 * base.size, "pt"),
         legend.spacing.y = unit(0.25 * base.size, "pt"),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
@@ -99,7 +100,7 @@ type.labs <- factor(type.labs, levels = type.labs)
 type.cols <-
   # c("#4daf4a", "#984ea3", "#377eb8", "#737373", "#e41a1c")
   c("#41ab5d", "#807dba", "#4292c6", "#727272", "#ef3b2c")
-names(type.cols) <- type.labs
+names(type.cols) <- as.character(type.labs)
 noeff.type.labs <- 
   c("correct" =  "Correct,\nnon-detection",
     "minor" = "False effect,\nsmall error",
@@ -108,7 +109,7 @@ noeff.type.labs <-
 noeff.type.labs <- factor(noeff.type.labs, levels = noeff.type.labs)
 noeff.type.cols <-
   c("#41ab5d", scico(5, palette = "hawai")[3:1])
-names(noeff.type.cols) <- noeff.type.labs
+names(noeff.type.cols) <- as.character(noeff.type.labs)
 
 plot_dec <- function(x,
                      type = "effect",
@@ -120,14 +121,14 @@ plot_dec <- function(x,
   if(type == "effect") {
     p.dec <-
       ggplot(x) +
-      geom_raster(aes(x = .est, y = .rank, fill = type.lab)) +
+      geom_raster(aes(x = .est, y = .rank, fill = type.lab), show.legend = TRUE) +
       geom_vline(xintercept = 1, linetype = "dotted", linewidth = 0.3) +
       geom_vline(xintercept = 0, linetype = "dashed", colour = 1, linewidth = 0.3)
   }
   if(type == "noeffect") {
     p.dec <-
       ggplot(x) +
-      geom_raster(aes(x = .est, y = .rank, fill = type.lab)) +
+      geom_raster(aes(x = .est, y = .rank, fill = type.lab), show.legend = TRUE) +
       geom_vline(xintercept = 0, linetype = "dotted", colour = 1, linewidth = 0.3) +
       geom_vline(xintercept = c(-0.5, 0.5), linetype = "dashed", linewidth = 0.3)
   }
@@ -145,37 +146,36 @@ plot_dec <- function(x,
   return(p.dec)
 }
 
-
 egp.dec.all <-
   lapply(egp.dec.all,
          \(x) {
-           x[, type.lab := type.labs[as.character(.type)]]})
+           x[, type.lab := factor(type.labs[as.character(.type)], levels = as.character(type.labs))]})
 egp.dec.imb <-
   lapply(egp.dec.imb,
          \(x) {
            x[, ls.imbalance.lab := ls.imbalance.labs[as.character(ls.imbalance)]]
-           x[, type.lab := type.labs[as.character(.type)]]})
+           x[, type.lab := factor(type.labs[as.character(.type)], levels = as.character(type.labs))]})
 egp.dec.ls <-
   lapply(egp.dec.ls,
          \(x) {
            x[, ls.imbalance.lab := ls.imbalance.labs[as.character(ls.imbalance)]]
            x[, ls.response.lab := ls.response.labs[as.character(ls.response)]]
-           x[, type.lab := type.labs[as.character(.type)]]})
+           x[, type.lab := factor(type.labs[as.character(.type)], levels = as.character(type.labs))]})
 noeff.egp.dec.all <-
   lapply(noeff.egp.dec.all,
          \(x) {
-           x[, type.lab := noeff.type.labs[as.character(.type)]]})
+           x[, type.lab := factor(noeff.type.labs[as.character(.type)], levels = as.character(noeff.type.labs))]})
 noeff.egp.dec.imb <-
   lapply(noeff.egp.dec.imb,
          \(x) {
            x[, ls.imbalance.lab := ls.imbalance.labs[as.character(ls.imbalance)]]
-           x[, type.lab := noeff.type.labs[as.character(.type)]]})
+           x[, type.lab := factor(noeff.type.labs[as.character(.type)], levels = as.character(noeff.type.labs))]})
 noeff.egp.dec.ls <-
   lapply(noeff.egp.dec.ls,
          \(x) {
            x[, ls.imbalance.lab := ls.imbalance.labs[as.character(ls.imbalance)]]
            x[, ls.response.lab := ls.response.labs[as.character(ls.response)]]
-           x[, type.lab := noeff.type.labs[as.character(.type)]]})
+           x[, type.lab := factor(noeff.type.labs[as.character(.type)], levels = as.character(noeff.type.labs))]})
 
 
 file.dec.all <- paste0(path.fig, "dec.egp.all.png")
@@ -220,6 +220,7 @@ dev.off()
 
 file.dec.ls <- paste0(path.fig, "dec.egp.ls.png")
 png(file.dec.ls, width = 7, height = 8.5, unit = "in", res = 600)
+
 p.dec.ls.eff <-
   egp.dec.ls$rast[!is.na(.type)] |>
   plot_dec(plot.theme = plot_theme,
@@ -237,9 +238,11 @@ p.dec.ls.noeff <-
            tag = "(B)") +
   facet_grid(cols = vars(ls.response.lab),
              rows = vars(ls.imbalance.lab))
-p.dec.ls.eff / p.dec.ls.noeff &
+
+(p.dec.ls.eff / p.dec.ls.noeff) &
   theme(legend.position = "bottom",
-        legend.key.height = unit(base.size, "pt"),
-        legend.text = element_text(margin = margin(0, base.size, 0, 0,)))
+        legend.key.height = unit(base.size/2, "pt"),
+        legend.text = element_text(margin = margin(0, base.size, 0, base.size/2)))
+
 dev.off()
 

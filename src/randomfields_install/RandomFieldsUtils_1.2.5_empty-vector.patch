@@ -1,0 +1,19 @@
+diff -ru a/RandomFieldsUtils/src/kleinkram.cc b/RandomFieldsUtils/src/kleinkram.cc
+--- a/RandomFieldsUtils/src/kleinkram.cc	2022-04-17 23:42:37.000000000 -0400
++++ b/RandomFieldsUtils/src/kleinkram.cc	2026-11-09 13:58:08.647051794 -0500
+@@ -777,6 +777,7 @@
+     RFERROR1("'%.50s' cannot be transformed to double.\n", name);
+   }
+   Long n = length(el);
++  if (n == 0) return; // R >= 4.x: INTEGER()/REAL() of an empty vector is the sentinel 0x1
+   for (Long j=0, i=0; i<maxn; i++) {
+     vec[i] = Real(el, name, j);
+     if (++j >= n) j=0;
+@@ -829,6 +830,7 @@
+     RFERROR1("'%.50s' cannot be transformed to integer.\n",name);
+   }
+   Long n = length(el);
++  if (n == 0) return; // R >= 4.x: INTEGER()/REAL() of an empty vector is the sentinel 0x1
+   for (Long j=0, i=0; i<maxn; i++) {
+     vec[i] = Integer(el, name, j);
+     if (++j >= n) j=0;

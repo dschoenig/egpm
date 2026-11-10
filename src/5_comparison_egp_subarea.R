@@ -37,46 +37,46 @@ estimates.sub <- merge(estimates.sub, subareas, by = c("ls.uid", "subarea.id"))
 n.boot <- 1e4
 chunk.size <- 250
 handlers(global = TRUE)
-options(future.globals.maxSize= 2*1024^3)
+options(future.globals.maxSize= 3*1024^3)
 
 set.seed(main.seed+1)
 egp.subarea.global <-
-  compare_boot(estimates.sub,
-               by.method = "name.short",
-               comparisons = NULL,
-               ls.id = "subarea.uid",
-               n.boot = n.boot,
-               chunk.size = chunk.size)
+  compare_performance_boot(estimates.sub,
+                           by.method = "name.short",
+                           comparisons = NULL,
+                           ls.id = "subarea.uid",
+                           n.boot = n.boot,
+                           chunk.size = chunk.size)
 
 set.seed(main.seed+2)
 egp.subarea.resp <-
-  compare_boot(estimates.sub,
-               by.method = "name.short",
-               comparisons = NULL,
-               ls.id = "subarea.uid",
-               by.landscape = "ls.response",
-               n.boot = n.boot,
-               chunk.size = chunk.size)
+  compare_performance_boot(estimates.sub,
+                           by.method = "name.short",
+                           comparisons = NULL,
+                           ls.id = "subarea.uid",
+                           by.landscape = "ls.response",
+                           n.boot = n.boot,
+                           chunk.size = chunk.size)
 
 set.seed(main.seed+3)
 egp.subarea.imb <-
-  compare_boot(estimates.sub,
-               by.method = "name.short",
-               comparisons = NULL,
-               ls.id = "subarea.uid",
-               by.landscape = "ls.imbalance",
-               n.boot = n.boot,
-               chunk.size = chunk.size)
+  compare_performance_boot(estimates.sub,
+                           by.method = "name.short",
+                           comparisons = NULL,
+                           ls.id = "subarea.uid",
+                           by.landscape = "ls.imbalance",
+                           n.boot = n.boot,
+                           chunk.size = chunk.size)
 
 set.seed(main.seed+4)
 egp.subarea.resp.imb <-
-  compare_boot(estimates.sub,
-               by.method = "name.short",
-               comparisons = NULL,
-               ls.id = "subarea.uid",
-               by.landscape = c("ls.response", "ls.imbalance"),
-               n.boot = n.boot,
-               chunk.size = chunk.size)
+  compare_performance_boot(estimates.sub,
+                           by.method = "name.short",
+                           comparisons = NULL,
+                           ls.id = "subarea.uid",
+                           by.landscape = c("ls.response", "ls.imbalance"),
+                           n.boot = n.boot,
+                           chunk.size = chunk.size)
 
 
 ls.response.lev <- c("all", levels(estimates.sub$ls.response))

@@ -161,7 +161,25 @@ egp_som <- function(data,
                     epochs = 1000,
                     init = som_init_pc,
                     mode = "pbatch",
-                    parallel = 1) {
+                    parallel = 1,
+                    seed = 1) {
+
+  # kohonen breaks ties between best matching units at random, so the fit
+  # depends on the RNG state. Seed locally and restore the caller's RNG state.
+  if(!is.null(seed)) {
+    if(exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+      rng.old <- get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+      on.exit(assign(".Random.seed", rng.old, envir = .GlobalEnv), add = TRUE)
+    } else {
+      on.exit(rm(".Random.seed", envir = .GlobalEnv), add = TRUE)
+    }
+    set.seed(seed)
+    # With the bubble kernel, ties are frequent and are drawn inside parallel
+    # threads, so the seed only makes the fit reproducible with one thread.
+    if(nb.fun == "bubble" & parallel > 1) {
+      warning("SOM fit with `nb.fun = \"bubble\"` and `parallel > 1` is not reproducible despite `seed`.")
+    }
+  }
 
   if(is.null(x.dim) & is.null(n)) {
     stop("Must provide either `x.dim` or `n`.")
@@ -202,9 +220,12 @@ egp_som <- function(data,
     }
   }
 
+  n.units <- x.dim * y.dim
+
   som.grid <- somgrid(xdim = x.dim,
-                      ydim = y.dim, 
-                      topo = topo)
+                      ydim = y.dim,
+                      topo = topo,
+                      neighbourhood.fct = nb.fun)
 
   if(topo == "hexagonal") {
     grid.poly <- grid_hex_poly(centroids = som.grid$pts)
@@ -261,6 +282,7 @@ egp_som <- function(data,
                                        dist = x)) |>
     rbindlist(idcol = "id.from")
 
+  som.fit$n.units <- n.units
   som.fit$grid.poly <- grid.poly
   som.fit$grid.nb <- grid.nb
   som.fit$init <- init
@@ -542,11 +564,11 @@ get_nb <- function(x) {x$grid.nb}
           dist.ord[nc >= n.min,
                    .(n.min.u = min(nc)),
                    by = id.from]) |>
-    DT(nc <= n.min.u,
-       .(neighbourhood = list(id.to),
-         n = unique(n.min.u),
-         degree = max(deg)),
-       by = id.from)
+    _[nc <= n.min.u,
+      .(neighbourhood = list(id.to),
+        n = unique(n.min.u),
+        degree = max(deg)),
+      by = id.from]
 
   return(as.list(nb.dt[, -"id.from"]))
 }
@@ -626,6 +648,7 @@ egp_define_counterfactual <-
            progress = TRUE) {
 
   data.dt <- as.data.table(data)
+  rm(data)
 
   if(!id.var %in% names(data.dt)) {
     data.dt[, id.col := 1:.N, env = list(id.col = id.var)]
@@ -639,7 +662,7 @@ egp_define_counterfactual <-
     group.by <- list(group.by)
   }
 
-  vars.sel <- c(id.var, compare.by, group.by.c, som.var, geo.vars)
+  vars.sel <- unique(c(id.var, compare.by, group.by.c, som.var, geo.vars))
 
   data.dt <- data.dt[, ..vars.sel]
 
@@ -659,6 +682,10 @@ egp_define_counterfactual <-
               env = list(id.col = id.var)]
   }
 
+  if(length(intersect(fac.ids, cf.ids)) > 0) {
+    stop("Some observations are assigned to both the factual and counterfactual.")
+  }
+
   # Reference SOM units
 
   data.dt <-
@@ -669,6 +696,8 @@ egp_define_counterfactual <-
   setkeyv(data.dt, id.var)
 
   bmu.ref <- data.dt[.(cf.ids), on = id.var]
+
+  if(progress) message("Assigning counterfactual observations …")
 
   if(is.null(compare.by)) {
 
@@ -682,12 +711,6 @@ egp_define_counterfactual <-
 
 
     if(nb.strategy == "sequential") {
-
-      dist = som$unit.dist
-      n = n.bmu
-      n.min = n.min
-      deg.max = deg.max
-
       nbh <-
         .nb_sequential(dist = som$unit.dist,
                        n = n.bmu,
@@ -711,9 +734,9 @@ egp_define_counterfactual <-
                 env = list(id.col = id.var,
                            cf.col = unit.name,
                            som.col = som.var)]
-    cf.bmu.dt[,
-              .n := as.integer(lapply(cf.col, length)),
-              env = list(cf.col = unit.name)]
+    # cf.bmu.dt[,
+    #           .n := as.integer(lapply(cf.col, length)),
+    #           env = list(cf.col = unit.name)]
 
     cf.ids.dt <-
       data.dt[.(cf.ids),
@@ -747,6 +770,13 @@ egp_define_counterfactual <-
  
     nbh.l <- list()
     cf.ids.l <- list()
+
+    if(progress) {
+      prog <- txtProgressBar(min = 0,
+                             max = nrow(comp),
+                             char = "=", width = NA, title = "Progress", style = 3)
+    }
+
     for(i in 1:nrow(comp)) {
       
       n.ref <- comp.bmu.cf[comp[i, compare.by, with = FALSE],
@@ -759,6 +789,13 @@ egp_define_counterfactual <-
       n.bmu[n.ref[, som.col, env = list(som.col = som.var)]] <- n.ref$.n
       n.bmu[is.na(n.bmu)] <- 0
 
+      if(nb.strategy == "sequential") {
+        nbh.l[[i]] <-
+          .nb_sequential(dist = som$unit.dist,
+                         n = n.bmu,
+                         n.min = n.min,
+                         deg.max = deg.max)$neighbourhood
+      }
       if(nb.strategy == "expand") {
         nbh.l[[i]] <-
           .nb_expand(A = som$grid.nb,
@@ -766,13 +803,7 @@ egp_define_counterfactual <-
                      n.min = n.min,
                      deg.max = deg.max)$neighbourhood
       }
-      if(nb.strategy == "expand") {
-        nbh.l[[i]] <-
-          .nb_sequential(dist = som$unit.dist,
-                         n = n.bmu,
-                         n.min = n.min,
-                         deg.max = deg.max)$neighbourhood
-      }
+
       
       cf.ids.l[[i]] <-
         data.dt[.(cf.ids),
@@ -786,6 +817,15 @@ egp_define_counterfactual <-
                                som.col = som.var,
                                cf.col = unit.name)]
 
+      if(progress) {
+        setTxtProgressBar(prog, i)
+      }
+
+    } # End loop over comparison groups
+
+
+    if(progress) {
+      close(prog)
     }
 
     comp[, `:=`(.nbh = nbh.l)]
@@ -817,19 +857,20 @@ egp_define_counterfactual <-
                                 .(cf.col),
                                 on = c(compare.by, som.var),
                                 env = list(cf.col = unit.name)])
- 
+
     cf.ids.dt <- 
       rbindlist(cf.ids.l, idcol = ".cfgrp") |>
       merge(comp[, -c(".n", ".nbh")], by = ".cfgrp") |>
       setcolorder(c(compare.by, unit.name, id.var)) |>
-      DT(, -".cfgrp")
+      _[, -".cfgrp"]
+
+
 
   }
 
   cf.ids.dt[,
             .n := unlist(lapply(id.col, length)),
             env = list(id.col = id.var)]
-
 
   data.cf <- data.dt[.(cf.ids), on = id.var ]
   data.cf[,
@@ -845,6 +886,8 @@ egp_define_counterfactual <-
   setorderv(data.ret, id.var)
 
   # Groups
+
+  if(progress) message("Assigning groups …")
 
   id.names <- paste(id.var, assign.cat, sep = ".")
   geo.names.cf <- paste(geo.vars, assign.cat[1], sep = ".")
@@ -867,7 +910,7 @@ egp_define_counterfactual <-
 
   groups.long <-
     groups[,
-           .(id.fac = as.integer(unlist(cell.factual))),
+           .(id.fac = as.integer(unlist(id.fac))),
            by = group.name,
            env = list(id.fac = id.names[2])]
   groups.long[, .n.fac := .N, by = group.name]
@@ -881,18 +924,15 @@ egp_define_counterfactual <-
   units.fac <-
     cf.bmu.dt[,
                .(cf.col = as.integer(unlist(cf.col))),
-               by = id.var,
+               by = c(compare.by, id.var),
                env = list(cf.col = unit.name)
-               ][,
-                 .(id.fac = id.col,
-                   cf.col),
-                 env = list(id.fac = id.names[2],
-                            id.col = id.var,
-                            cf.col = unit.name)] |>
-    merge(SJ(cf.ids.dt[,
-                       .(cf.col, .n),
-                       env = list(cf.col = unit.name)]),
-          by = unit.name,
+               ]
+  setnames(units.fac, id.var, id.names[2])
+  sel.cf.ids <- c(compare.by, unit.name, ".n")
+  units.fac <-
+    units.fac |>
+    merge(SJ(cf.ids.dt[, ..sel.cf.ids]),
+          by = c(compare.by, unit.name),
           sort = FALSE,
           all.x = TRUE,
           all.y = FALSE) |>
@@ -909,17 +949,15 @@ egp_define_counterfactual <-
           by = id.names[2]) |>
     na.omit(".n")
 
-
   # REMOVE later
-  if(!all(data.fac$cell %in% units.fac$cell.factual)) warning("Not all treatment observations are considered.")
+  if(!all(data.fac[[id.var]] %in% units.fac[[id.names[2]]])) warning("Not all treatment observations are taken into account.")
 
   units.cf <-
     cf.ids.dt[,
                .(id.cf = as.integer(unlist(id.col))),
-               by = cf.col,
+               by = c(compare.by, unit.name),
                env = list(id.cf = id.names[1],
-                          id.col = id.var,
-                          cf.col = unit.name)
+                          id.col = id.var)
                ] |>
     merge(data.cf[,
                   .(id.cf = id.col,
@@ -933,6 +971,10 @@ egp_define_counterfactual <-
                              geo.y = geo.vars[2])],
           by = id.names[1])
 
+  rm(data.fac, data.cf)
+  gc()
+
+  if(progress) message("Calculating weights …")
 
   if(is.null(agg.size)) agg.size <- sum(units.fac$.n)
 
@@ -955,11 +997,15 @@ egp_define_counterfactual <-
       }
       pts.bb <- st_bbox(st_minimum_bounding_circle(pts))
       geo.range <- pts.bb[["xmax"]] - pts.bb[["xmin"]]
+      rm(pts.bb)
     }
   } else {
     geo.kernel = "nodist"
     geo.range <- 1
   }
+
+  rm(data.dt)
+  gc()
 
   dist.fun <- function(x) sqrt(rowSums((x[, 1:2] - x[, 3:4])^2))
 
@@ -974,8 +1020,6 @@ egp_define_counterfactual <-
                           (1 + sqrt5 * x + sqrt5/3 * x^2) * exp(-sqrt5 * x)},
           )
 
-
-  if(length(agg.ids) <= 1) progress <- FALSE
 
   if(progress) {
     prog <- txtProgressBar(min = 0,
@@ -992,7 +1036,7 @@ egp_define_counterfactual <-
       dist.obs <-
         units.cf[SJ(units.fac[J(agg.ids[i]),
                     on = ".agg.id"]),
-                 on = unit.name,
+                 on = c(compare.by, unit.name),
                  allow.cartesian = TRUE
                  ][,
                    .(fac.id,
@@ -1001,8 +1045,7 @@ egp_define_counterfactual <-
                    .SDcols = c(geo.names.fac, geo.names.cf),
                    env = list(fac.id = id.names[2],
                               cf.id = id.names[1])]
-    dist.obs[,
-             .geosim := geo.fun(.dist)]
+      dist.obs[, .geosim := geo.fun(.dist)]
 
     } else {
 
@@ -1023,7 +1066,7 @@ egp_define_counterfactual <-
 
     dist.obs[,
              .w := .geosim / sum(.geosim),
-             by = cell.factual]
+             by = c(id.names[2])]
     setkeyv(dist.obs, id.names[2])
 
     weights <- groups.long[dist.obs, on = id.names[2], allow.cartesian = TRUE]
@@ -1039,14 +1082,22 @@ egp_define_counterfactual <-
 
   }
 
+  rm(dist.obs)
+
   if(progress) {
     close(prog)
   }
 
   weights.cf <-
     rbindlist(weights.cf.l) |>
-    DT(, .(.w = sum(.w)),
-       by = c(group.name, id.names[1]))
+    _[, .(.w = sum(.w)),
+       by = c(group.name, id.names[1])]
+
+  rm(weights.cf.l)
+  gc()
+
+  
+  if(progress) message("Processing weights for each group …")
 
   weights.cf[, .w := .w/sum(.w), by = group.name]
 
@@ -1059,12 +1110,15 @@ egp_define_counterfactual <-
                ][order(group.col),
                  env = list(group.col = group.name)]
 
+  rm(weights.cf)
+  gc()
+
   groups.comb <- merge(groups, groups.cf)
   setcolorder(groups.comb, c(group.name, group.by.c, id.names[2], id.names[1], ".w")) 
 
   counterfactual <- list(data = data.ret,
                          groups = groups.comb,
-                         assignment = cf.bmu.dt[, -".n"],
+                         assignment = cf.bmu.dt,
                          units = cf.ids.dt[, -".n"],
                          compare.by = compare.by,
                          group.by = group.by,
@@ -1129,6 +1183,8 @@ get_weights <- function(cf.def,
     return(copy(w[group.col %in% group, env = env.w]))
   }
 }
+
+
 
 imbalance <- function(data,
                       variables,
@@ -1206,7 +1262,7 @@ imbalance <- function(data,
 
   if(type %in% c("raw", "both")) {
     measure.fun.raw <-
-      list("d_cohen" = d_cohen,
+      list("d_cohen" = smd_raw,
            "var_ratio" = var_ratio,
            "ks_stat" = ks_stat,
            "js_div" = \(x, y) js_div(x, y,
@@ -1280,7 +1336,7 @@ imbalance_raw <- function(data,
   data.raw[, .type := factor(.type, levels = c("ref", "trt"))]
 
   measure.fun.raw <-
-    list("d_cohen" = d_cohen,
+    list("d_cohen" = smd_raw,
          "var_ratio" = var_ratio,
          "ks_stat" = ks_stat,
          "js_div" = \(x, y) js_div(x, y,
@@ -1344,8 +1400,6 @@ egp_imbalance <- function(data,
          fac.col = id.names[2],
          cf.col = id.names[1])
 
-
-
   data <- data[, c(id.var, variables), with = FALSE]
   data[, (variables) := lapply(.SD, as.numeric), .SDcols = variables]
 
@@ -1398,7 +1452,6 @@ egp_imbalance <- function(data,
 
 
   if(type %in% c("raw", "both")) {
-
     data.raw.f <-
       merge(cf.w[assign.col == assign.cat[2],
                  .(group.col, id.col, assign.col),
@@ -1413,19 +1466,24 @@ egp_imbalance <- function(data,
             data,
             all.y = FALSE)
 
+
+    cf.groups <-
+      CJ(.id = data.raw.cf[[id.var]],
+         .group.id = unique(data.raw.f$group.id))
+    setnames(cf.groups, c(".id", ".group.id"), c(id.var, group.var))
+
     data.raw <-
       rbind(data.raw.f,
-            merge(CJ(cell = data.raw.cf$cell,
-                     group.id = unique(data.raw.f$group.id)),
+            merge(cf.groups,
                   data.raw.cf)) |>
-     melt(measure.vars = variables,
-          variable.name = ".variable",
-          value.name = ".value")
+      melt(measure.vars = variables,
+           variable.name = ".variable",
+           value.name = ".value")
 
     rm(data.raw.f, data.raw.cf)
 
     measure.fun.raw <-
-      list("d_cohen" = d_cohen,
+      list("d_cohen" = smd_raw,
            "var_ratio" = var_ratio,
            "ks_stat" = ks_stat,
            "js_div" = \(x, y) js_div(x, y,
@@ -1447,6 +1505,7 @@ egp_imbalance <- function(data,
     }
     measure.names <- names(measure.fun.raw)
   }
+
 
   cast.form <-
     as.formula(paste0(group.var, " + .variable + .measure ~ .type"))
@@ -1555,7 +1614,7 @@ egp_posterior_draw <- function(model,
     pred.wt <- weights
   }
   posterior <- Matrix(posterior)
-  data.dt <- as.data.table(copy(data))
+  data.dt <- copy(as.data.table(data))
   if(!id.var %in% names(data.dt)) {
     data.dt[, id.col := 1:.N, env = list(id.col = id.var)]
   }
@@ -1753,9 +1812,7 @@ egp_posterior_predict <- function(model,
   setindexv(predictions.dt, draw.var)
   if(is.numeric(parallel)) {
     dt.threads.old <- getDTthreads()
-    arrow.threads.old <- cpu_count()
     setDTthreads(parallel)
-    set_cpu_count(parallel)
   }
   if(is.null(draw.ids)) {
     draw.ids <- predictions.dt[, unique(draw.col), env = list(draw.col = draw.var)]
@@ -1910,7 +1967,7 @@ egp_summarize_units <- function(predictions,
 
   unit.sum <-
     merge(units[, -id.var, with = FALSE], unit.sum, all.x = FALSE) |>
-    DT(, -".uid", with = FALSE)
+    _[, -".uid", with = FALSE]
   setindexv(unit.sum, ".draw")
   setorderv(unit.sum, c(compare.by, unit.var, ".draw"))
   return(unit.sum)
@@ -1947,20 +2004,20 @@ egp_evaluate_factual <- function(predictions,
 
   factual <-
     .aggregate_variables(predictions.dt,
-               agg.fun = mean,
-               ids = cf.def$groups[.(group.eval),
-                                   id.col,
-                                   on = group.var,
-                                   env = list(id.col = id.fac)],
-               pred.var = pred.var,
-               draw.var = ".draw",
-               id.var = id.var,
-               agg.name = name,
-               group.name = group.var,
-               draw.chunk = draw.chunk,
-               agg.size = agg.size,
-               parallel = parallel,
-               progress = progress)
+                         agg.fun = mean,
+                         ids = cf.def$groups[.(group.eval),
+                                             id.col,
+                                             on = group.var,
+                                             env = list(id.col = id.fac)],
+                         pred.var = pred.var,
+                         draw.var = ".draw",
+                         id.var = id.var,
+                         agg.name = name,
+                         group.name = group.var,
+                         draw.chunk = draw.chunk,
+                         agg.size = agg.size,
+                         parallel = parallel,
+                         progress = progress)
 
   factual[,
           group.col := group.eval[group.col],
@@ -2089,21 +2146,39 @@ d_cohen <- function(x, y, na.rm = FALSE) {
 }
 
 
+# Standardization for the imbalance measures below: the unweighted SD of `x`, the
+# factual or treated group. Raw and weighted differences thus share one scale.
+# Falls back to the pooled SD if `x` has no variation, and to 1 (leaving the
+# difference unstandardized) if neither group has any.
+smd_scale <- function(x, y) {
+  tol <- sqrt(.Machine$double.eps)
+  s <- sd(x)
+  if(is.na(s) || s < tol) {
+    s <- sqrt((sum((x-mean(x))^2) + sum((y-mean(y))^2)) /
+              (length(x) + length(y) - 2))
+  }
+  if(is.finite(s) && s < tol) s <- 1
+  return(s)
+}
+
+
+# Raw imbalance. `d_cohen` above keeps the pooled SD for its other callers.
+smd_raw <- function(x, y, na.rm = FALSE) {
+  if(na.rm) {
+    x <- na.omit(x)
+    y <- na.omit(y)
+  }
+  d <- (mean(x) - mean(y)) / smd_scale(x, y)
+  return(d)
+}
+
+
 d_cohen_w <- function(x, y, wx, wy, na.rm = FALSE) {
   if(na.rm) {
     x <- na.omit(x)
     y <- na.omit(y)
   }
-  wx <- wx/sum(wx)
-  wy <- wy/sum(wy)
-  mu_x <- weighted.mean(x, wx)
-  mu_y <- weighted.mean(y, wy)
-  s2_x <- sum(wx * (x - mu_x)^2)
-  s2_y <- sum(wy * (y - mu_y)^2)
-  n_x <- length(x)
-  n_y <- length(y)
-  s <- sqrt((((n_x - 1) * s2_x) + ((n_x - 1) * s2_x)) / (n_x + n_y - 2))
-  d <- (mu_x - mu_y) / s
+  d <- (weighted.mean(x, wx) - weighted.mean(y, wy)) / smd_scale(x, y)
   return(d)
 }
 
@@ -2411,22 +2486,19 @@ js_div_w <- function(x,
   return(d)
 }
 
+matern12 <-  function(x) {exp(-x)}
+matern32 <-  function(x) {
+  sqrt3 <- sqrt(3)
+  (1 + sqrt3 * x) * exp(-sqrt3 * x)}
+matern52 <- function(x) {
+  sqrt5 <- sqrt(5)
+  (1 + sqrt5 * x + sqrt5/3 * x^2) * exp(-sqrt5 * x)}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+eval_distfun <- function(fun, range, n = 100, x.max = 2*range) {
+  x <- seq(0, 2*range, length.out = n)
+  y <- fun(x/range)
+  return(data.frame(x = x, y = y))
+}
 
 
 bias <- function(x, y = 1, ...) {

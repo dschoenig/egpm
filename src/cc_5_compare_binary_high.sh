@@ -7,6 +7,6 @@
 #SBATCH --mail-type=ALL
 #SBATCH --job-name=brm_binary_high
 
-module load StdEnv/2023 gcc/12.3 gdal/3.7.2 geos/3.12.0 python/3.11.5 udunits/2.2.28 r/4.3.1
+module load StdEnv/2026 gcc/15.3.0 gdal/3.13.3 geos/3.14.1 proj/9.9.0 udunits/2.2.28 python/3.15.2 r/4.6.1
 
 Rscript 5_compare_brm.R binary_high

@@ -1,4 +1,3 @@
-# module load StdEnv/2023 gcc/12.3 gdal/3.7.2 geos/3.12.0 python/3.11.5 udunits/2.2.28 r/4.2.2
 # module load StdEnv/2023 gcc/12.3 gdal/3.7.2 geos/3.12.0 python/3.11.5 udunits/2.2.28 r/4.3.1
 
 c(
@@ -26,7 +25,8 @@ c(
   "MatchIt",
   "marginaleffects",
   "sandwich",
-  "tweedie") |>
+  "tweedie",
+  "devtools") |>
 install.packages()
 
 install.packages(c("rstan", "brms"),
@@ -41,3 +41,8 @@ data.table::update_dev_pkg()
 
 devtools::install_github("cran/RandomFieldsUtils")
 devtools::install_github("cran/RandomFields")
+
+# On R 4.6 the archived CRAN sources fail to compile, and RFsimulate() segfaults
+# without a patch. Use this instead, run from the project root (tested with
+# R 4.6.1 and gcc 13.3):
+# system2("bash", "src/randomfields_install/install.sh")

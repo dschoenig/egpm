@@ -3777,17 +3777,21 @@ plot_landscape_4cov_nl <- function(x,
                                    title.type = "Area type",
                                    legend.type = "Area type",
                                    title.cov = "Covariates",
-                                   legend.cov = "Covariate\nvalue",
+                                  #  legend.cov = "Covariate\nvalue",
+                                   legend.cov = "Covariate value",
                                    title.resp = "Response",
                                    legend.resp = "Response",
                                    title.trt = "Treatment effect",
-                                   legend.trt = "Treatment\neffect",
+                                  #  legend.trt = "Treatment\neffect",
+                                   legend.trt = "Treatment effect",
                                    title.resid = "Residual variation",
-                                   legend.resid = "Residual\nvariation",
+                                  #  legend.resid = "Residual\nvariation",
+                                   legend.resid = "Residual variation",
                                    title.eff.main = "Covariate effects (main)",
-                                   legend.eff.main = "Covariate\neffect",
+                                  #  legend.eff.main = "Covariate\neffect",
+                                   legend.eff.main = "Covariate effect\n(main)",
                                    title.eff.int = "Covariate effects (interactions)",
-                                   legend.eff.int = "Covariate\neffect",
+                                   legend.eff.int = "Covariate effect\n(interaction)",
                                    limits.common = TRUE,
                                    base.size = 10,
                                    base.family = "IBMPlexSansCondensed",
@@ -4567,132 +4571,6 @@ unit_diff <- function(unit.var,
   }
   return(result)
 }
-
-
-egp_som <- function(data,
-                    x.dim = NULL,
-                    y.dim = x.dim,
-                    n = NULL,
-                    vars = NULL,
-                    scale = TRUE,
-                    dim.equal = TRUE,
-                    topo = "hexagonal",
-                    nb.fun = "gaussian",
-                    dist.fun = "sumofsquares",
-                    radius = max(x.dim, y.dim),
-                    epochs = 1000,
-                    init = som_init_pc,
-                    mode = "pbatch",
-                    parallel = 1) {
-
-  if(is.null(x.dim) & is.null(n)) {
-    stop("Must provide either `x.dim` or `n`.")
-  }
-
-  if(inherits(data, "matrix")) {
-    if(!is.null(vars)) {
-      x <- data[,vars]
-    }
-  } else {
-    if(is.null(vars)) {
-      x <- as.matrix(as.data.frame(data))
-    } else {
-      x <- as.matrix(as.data.frame(data)[,vars])
-    }
-  }
-
-  x <- na.omit(x)
-
-  if(scale) {
-    x.scaled <- scale(x, center = TRUE, scale = TRUE)
-  } else {
-    x.scaled <- x
-  }
-
-  scale.att <- list(mean = apply(x, 2, mean, na.rm = TRUE),
-                    sd = apply(x, 2, sd, na.rm = TRUE))
-
-  if(is.null(x.dim)) {
-    if(dim.equal) {
-      x.dim <- round(sqrt(n))
-      y.dim <- x.dim
-    } else {
-      pc <- prcomp(x = x.scaled, center = FALSE, scale = FALSE, rank. = 2)
-      er <- pc$sdev[1]^2 / pc$sdev[2]^2
-      x.dim <- round(sqrt(er * n))
-      y.dim <- round(n/x.dim)
-    }
-  }
-
-  som.grid <- somgrid(xdim = x.dim,
-                      ydim = y.dim, 
-                      topo = topo)
-
-  if(topo == "hexagonal") {
-    grid.poly <- grid_hex_poly(centroids = som.grid$pts)
-  } else {
-    grid.poly <- grid_rect_poly(centroids = som.grid$pts)
-  }
-
-  grid.nb <-
-    poly2nb(grid.poly, queen = FALSE) |>
-    nb2listw(style = "B") |> 
-    listw2mat() |>
-    Matrix()
-
-  if(epochs * nrow(x.scaled) < 1e6)
-    warning("Number of epochs may be too small for the number of observations.")
-
-  if(is.function(init)) {
-    init <- init(som.grid, x.scaled)
-  }
- 
-  som.fit <- som(x.scaled,
-                 grid = som.grid, 
-                 rlen = epochs,
-                 radius = radius,
-                 init = init,
-                 dist.fcts = dist.fun,
-                 mode = "pbatch", 
-                 cores = parallel,
-                 normalizeDataLayers = FALSE)
-  
-  if(dist.fun == "sumofsquares") {
-    dist.mat <-
-      dist(som.fit$codes[[1]], method = "euclidean") |>
-      as.matrix()
-    dimnames(dist.mat) <- list(NULL, NULL)
-    dist.mat <- dist.mat^2
-  }
-
-  if(dist.fun %in% c("euclidean", "manhattan")) {
-    dist.mat <-
-      dist(som.fit$codes[[1]], method = dist.fun) |>
-      as.matrix()
-    dimnames(dist.mat) <- list(NULL, NULL)
-  }
-
-  if(dist.fun == "tanimoto") {
-    dist.mat <-
-      t(apply(codes, 1, \(x) colSums(t(codes) != x) / length(x)))
-    dimnames(dist.mat) <- list(NULL, NULL)
-  }
-
-  som.fit$unit.dist <-
-    apply(dist.mat, 1, \(x) data.table(id.to = 1:length(x),
-                                       dist = x)) |>
-    rbindlist(idcol = "id.from")
-
-  som.fit$grid.poly <- grid.poly
-  som.fit$grid.nb <- grid.nb
-  som.fit$init <- init
-  som.fit$scale <- scale.att
-
-  class(som.fit) <- c(class(som.fit), "egp_som")
-
-  return(som.fit)
-}
-
 
 
 grid_hex_poly <- function(centroids = NULL,
@@ -6588,7 +6466,7 @@ compare_performance_boot <- function(estimates,
                                      by.method = "name.short",
                                      by.landscape = NULL,
                                      ls.id = "ls.uid",
-                                     comparisons = c("EGP", "GLM"),
+                                     comparisons = c("EGPA", "GLM"),
                                      comp.sep = "_vs_",
                                      value.var = "mar.std",
                                      true.val = 1,
@@ -6834,7 +6712,7 @@ compare_senspe_boot <- function(estimates.true,
                                 by.method = "name.short",
                                 by.landscape = NULL,
                                 ls.id = "ls.uid",
-                                comparisons = c("EGP", "GLM"),
+                                comparisons = c("EGPA", "GLM"),
                                 comp.sep = "_vs_",
                                 true.var = "detect.true",
                                 false.var = "detect.false",
@@ -7082,7 +6960,7 @@ compare_permutation <- function(estimates,
                                 by.method = "name.short",
                                 by.landscape = NULL,
                                 ls.id = "ls.uid",
-                                comparisons = c("EGP", "GLM"),
+                                comparisons = c("EGPA", "GLM"),
                                 value.var = "mar.std",
                                 true.val = 1,
                                 n.mc = 1e4,
@@ -7346,7 +7224,7 @@ classify_estimates <- function(x,
 # format_comparisons_old <- function(x,
 #                                measure.comb.string = "%.3f (%.3f)",
 #                                comp.var = "name.short",
-#                                diff.vars = c(EGP = "egp", GLM = "glm"),
+#                                diff.vars = c(EGPA = "egp", GLM = "glm"),
 #                                diff.sep = "_vs_",
 #                                diff.empty = "–",
 #                                gap.val = "",
@@ -7500,7 +7378,7 @@ classify_estimates <- function(x,
 format_comparisons <- function(x,
                                measure.comb.string = "%.3f (%.3f)",
                                comp.var = "name.short",
-                               diff.vars = c(EGP = "egp", GLM = "glm"),
+                               diff.vars = c(EGPA = "egpa", GLM = "glm"),
                                diff.sep = "_vs_",
                                diff.empty = "",
                                gap.val = "",
@@ -8096,7 +7974,7 @@ preformat_comparisons <- function(x,
                                   diff.se.postfix = ")",
                                   diff.mean.empty = "–",
                                   diff.se.empty = "–",
-                                  diff.vars = c(EGP = "egp"),
+                                  diff.vars = c(EGPA = "egp"),
                                   diff.sep = "_vs_",
                                   comp.var = "name.short",
                                   group.vars = c("ls.response", "ls.imbalance"),

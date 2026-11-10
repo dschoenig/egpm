@@ -1,0 +1,17 @@
+# Compiler settings for building the archived RandomFields packages on R 4.6.
+# Used by install.sh through R_MAKEVARS_USER.
+
+# Old printf-style macros fail R's -Werror=format-security.
+CXXFLAGS = -g -O2 -fpic -Wno-format-security -Wno-error=format-security
+CFLAGS = -g -O2 -fpic -Wno-format-security -Wno-error=format-security
+
+# The sources predate C++20 and C23, which R now uses by default.
+CXX = g++ -std=gnu++14
+CXX11 = g++
+CXX14 = g++
+CXX17 = g++
+CXX20 = g++
+CC = gcc -std=gnu17
+
+# R 4.6 headers no longer define PI.
+CPPFLAGS = -DPI=3.141592653589793238462643383280

@@ -193,7 +193,7 @@ setnames(mod.mar,
 names.short <-
   list(
        data.table(method = "egp",
-                  name.short = "EGP"),
+                  name.short = "EGPA"),
        data.table(method = "glm",
                   name.short = "GLM"),
        data.table(method = rep("cem", 3),
@@ -207,7 +207,7 @@ names.short <-
   rbindlist(fill = TRUE)
 names.short[,
             name.short := factor(name.short,
-                                 levels = c("EGP", "GLM",
+                                 levels = c("EGPA", "GLM",
                                             "CEM-ST", "CEM-SC", "CEM-FD",
                                             "NN-PS-NR", "NN-PS-RE",
                                             "NN-MA-NR", "NN-MA-RE"))]

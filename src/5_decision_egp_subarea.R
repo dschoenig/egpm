@@ -36,6 +36,8 @@ subareas <- unique(estimates.sub[order(ls.uid, subarea.id), .(ls.uid, subarea.id
 subareas[, subarea.uid := 1:.N]
 estimates.sub <- merge(estimates.sub, subareas, by = c("ls.uid", "subarea.id"))
 
+
+source("utilities.R")
 egp_subarea.dec_95.all <-
   classify_estimates(estimates.sub,
                      ls.id = "subarea.uid",

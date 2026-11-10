@@ -35,7 +35,6 @@ sub.dt <-
      sorted = FALSE)
 
 estimates.sub <- subset_estimates(estimates, sub.dt)
-estimates.sub <- estimates.sub[treatment.prop >= 0.01]
 
 # estimates.sub[order(mar.std), .(ls.response, ls.imbalance, mar.std, mar.est, subarea.id)]
 

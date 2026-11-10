@@ -1,0 +1,617 @@
+---
+title: Comparison classic EGP with new EGP
+---
+
+
+# Setup
+
+```{r}
+
+library(data.table)
+library(mgcv)
+library(ggplot2)
+library(ggdist)
+library(colorspace)
+source("utilities.R")
+
+```
+
+```{r}
+
+base.size <- 7
+base.family <- "IBMPlexSansCondensed"
+post_theme <-
+  theme_light(
+              base_family = base.family,
+              base_size = base.size
+              ) +
+  theme(
+        axis.line.x = element_line(
+                                   color = "black",
+                                   linewidth = rel(0.5)
+                                   ),
+        axis.line.y = element_line(
+                                   color = "black",
+                                   linewidth = rel(0.5)
+                                   ),
+        axis.title.x = element_text(
+                                    size = rel(1),
+                                    lineheight = rel(1.15),
+                                    margin = margin(t = base.size / 2)
+                                    ),
+        axis.title.y = element_text(
+                                    size = rel(1),
+                                    margin = margin(r = 0.75 * base.size),
+                                    lineheight = rel(1.15)
+                                    ),
+        axis.text.x = element_text(
+                                   color = "black",
+                                   size = rel(1.1),
+                                   margin = margin(t = base.size / 2)
+                                   ),
+        axis.text.y = element_text(
+                                   color = "black",
+                                   size = rel(1),
+                                   lineheight = rel(1.15),
+                                   margin = margin(r = base.size / 2)
+                                   ),
+        axis.ticks = element_line(colour = "grey30"),
+        legend.title = element_text(
+                                    size = rel(1),
+                                    margin = margin(b = base.size / 3)
+                                    ),
+        legend.position = "right",
+        legend.justification = "center",
+        # legend.key.size = unit(base.size*1.5, "pt"),
+        legend.text = element_text(size = rel(1), margin = margin(
+                                                                  l = base.size / 3,
+                                                                  t = base.size / 2,
+                                                                  b = base.size / 2
+                                                                  )),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        # panel.spacing.x = unit(base.size*2, "pt"),
+        panel.spacing.y = unit(base.size, "pt"),
+        plot.margin = margin(3, 3, 3, 3),
+        plot.title.position = "plot",
+        plot.title = element_text(
+                                  hjust = 0,
+                                  # face = "bold",
+                                  face = "plain",
+                                  size = rel(1.5),
+                                  margin = margin(l = 0, b = base.size * 2, t = base.size / 3)
+                                  ),
+        plot.subtitle = element_text(
+                                     size = rel(1.35),
+                                     margin = margin(b = 14)
+                                     ),
+        plot.tag = element_text(size = unit(10, "pt"),
+                                family = "IBMPlexSansCondensed",
+                                face = "bold",
+                                margin = margin(0,
+                                                base.size/2,
+                                                base.size,
+                                                0)),
+        strip.text = element_text(
+                                  size = rel(1),
+                                  lineheight = rel(1.15),
+                                  hjust = 0.5,
+                                  vjust = 0.5,
+                                  color = "black",
+                                  margin = margin(
+                                                  0.75 * base.size,
+                                                  0.75 * base.size,
+                                                  0.75 * base.size,
+                                                  0.75 * base.size
+                                  )
+                                  ),
+        strip.background = element_rect(fill = "gray93", colour = NA)
+        # strip.background = element_rect(fill = NA, colour = NA)
+  )
+
+
+  map_theme <-
+    theme_minimal(
+                  base_family = base.family,
+                  base_size = base.size) +
+    theme(
+          axis.title.x = element_text(
+                                      size = rel(1),
+                                      lineheight = rel(1.15),
+                                      margin = margin(t = base.size / 2)
+                                      ),
+          axis.title.y = element_text(
+                                      size = rel(1),
+                                      margin = margin(r = 0.75 * base.size),
+                                      lineheight = rel(1.15)
+                                      ),
+          axis.text = element_text(
+                                   color = "black",
+                                   size = rel(0.7)
+                                   ),
+          panel.background = element_rect(fill = "grey99", colour = NA),
+          panel.grid = element_line(colour = "grey75"),
+          legend.position = "right",
+          legend.justification = "center",
+          legend.title = element_text(
+                                      size = rel(0.75), hjust = 0,
+                                      margin = margin(t = 3, b = 7),
+                                      lineheight = rel(1)
+                                      ),
+          legend.text = element_text(size = rel(0.65)),
+          legend.spacing.y = unit(2, "pt"),
+          legend.key.size = unit(10, "pt"),
+          plot.margin = margin(3, 3, 3, 3),
+          plot.title.position = "plot",
+          plot.title = element_text(
+                                    hjust = 0,
+                                    # face = "bold",
+                                    face = "plain",
+                                    size = rel(1.5),
+                                    margin = margin(l = 0, b = base.size * 2, t = base.size / 3)
+                                    ),
+          plot.subtitle = element_text(
+                                       size = rel(1.35),
+                                       margin = margin(b = 14)
+                                       ),
+          plot.tag = element_text(size = unit(10, "pt"),
+                                  family = "IBMPlexSansCondensed",
+                                  face = "bold",
+                                  margin = margin(0,
+                                                  base.size/2,
+                                                  base.size,
+                                                  0)),
+          strip.text = element_text(
+                                    size = rel(1),
+                                    lineheight = rel(1.15),
+                                    hjust = 0.5,
+                                    vjust = 0.5,
+                                    color = "black",
+                                    margin = margin(
+                                                    0.75 * base.size,
+                                                    0.75 * base.size,
+                                                    0.75 * base.size,
+                                                    0.75 * base.size
+                                                    )))
+
+  map_guide_fill <-
+    guides(fill = guide_colorbar(
+                                 theme = theme(
+                                               legend.ticks = element_line(
+                                                                           colour = "grey5",
+                                                                           linewidth = 0.2
+                                                                           ),
+                                               legend.frame = element_rect(
+                                                                           colour = "grey5",
+                                                                           linewidth = 0.2
+                                                                           ),
+                                               legend.text = element_text(hjust = 1),
+                                               legend.text.position = "right",
+                                               legend.key.width = unit(7.5, "pt"),
+                                               legend.key.height = unit(45, "pt"),
+                                               legend.ticks.length = unit(2, "pt")
+                                               ),
+                                 draw.ulim = TRUE,
+                                 draw.llim = TRUE,
+                                 order = 1))
+
+col.est <- c("#e41a1c", "#377eb8", "#984ea3")
+names(col.est) <- c("factual", "counterfactual", "marginal")
+
+```
+
+# Preparation
+
+```{r}
+
+ls.id <- "0407"
+ls.type <- "imbalance_high"
+file.ls <- paste0("../landscapes/", ls.type, "/data/", ls.id, ".rds")
+ls <- readRDS(file.ls)
+set.seed(1234)
+ls.fit <- ls$landscape[sample(1:.N, 1e4), ]
+```
+
+
+```{r}
+ggplot(ls$landscape) +
+  geom_raster(aes(x = x, y = y, fill = response)) +
+  scale_fill_viridis_c() +
+  map_guide_fill +
+  map_theme
+```
+
+
+```{r}
+
+som.egp <-
+  egp_som(ls.fit,
+          topo = "rectangular",
+          x.dim = 25,
+          y.dim = 25,
+          epochs = 1000,
+          vars = c("z1", "z2", "z3", "z4"),
+          parallel = 4)
+
+ls.fit[,
+       c("som.unit", "som.x", "som.y") :=
+         get_bmu(som.egp, coord = TRUE, list = TRUE)]
+
+ls.fit[, type := factor(type, levels = levels(type), ordered = TRUE)]
+
+```
+
+
+# Classic EGP
+
+
+```{r}
+
+egp.k.geo <- 250
+egp.max.knots.geo <- egp.k.geo * 10
+egp.k.som <- 250
+egp.max.knots.som <- 25^2
+
+mod.egp <- bam(response ~
+               s(x, y, bs = "gp", k = egp.k.geo,
+                 xt = list(max.knots = egp.max.knots.geo)) +
+               s(x, y, by = type, bs = "gp", k = egp.k.geo,
+                 xt = list(max.knots = egp.max.knots.geo)) +
+               s(som.x, som.y, bs = "gp", k = egp.k.som,
+                 xt = list(max.knots = egp.max.knots.som)),
+               family = gaussian,
+               data = ls.fit,
+               select = TRUE,
+               discrete = TRUE,
+               nthreads = c(2,1))
+
+
+egp.post <-
+  egp_posterior_draw(mod.egp, 1000, unconditional = TRUE, package = "mgcv")
+
+
+egp.pred <-
+  egp_posterior_predict(model = mod.egp,
+                        data = ls.fit,
+                        id.var = "cell",
+                        posterior = egp.post,
+                        epred = FALSE)
+
+
+egp.def <-
+  egp_define_counterfactual(data = ls.fit,
+                            som = som.egp,
+                            fac.ids = ls.fit[type == "treatment", cell],
+                            cf.ids = ls.fit[type == "reference", cell],
+                            nb.strategy = "sequential",
+                            group.by = list(NULL, "poly"),
+                            som.var = "som.unit",
+                            geo.vars = c("x", "y"),
+                            geo.kernel = "matern32",
+                            id.var = "cell",
+                            deg.max = NULL,
+                            n.min = 1)
+
+
+egp.fac <- egp_evaluate_factual(egp.pred, egp.def, agg.size = 5e3)
+egp.count <- egp_evaluate_counterfactual(egp.pred, egp.def, agg.size = 5e3)
+egp.mar <- egp_marginal(egp.fac, egp.count)
+```
+
+
+
+
+```{r}
+
+egp.mar.l <-
+  melt(egp.mar,
+       id.vars = c("group.id", "poly", ".draw"),
+       variable.name = "cat",
+       value.name = "estimate")
+
+mar.true <-
+  rbind(
+    ls$landscape[type == "treatment",
+                 .(marginal.true = mean(treatment))],
+    ls$landscape[type == "treatment",
+                 .(marginal.true = mean(treatment)),
+                 by = "poly"
+                 ][order(poly)],
+    fill = TRUE)
+
+egp.mar.l[cat != "marginal"] |>
+  ggplot() +
+  stat_pointinterval(aes(x = cat,
+                         y = estimate,
+                         colour = cat),
+                     scale = 0.8,
+                     point_interval = "median_qi",
+                     slab_alpha = 0.5,
+                     interval_size_range = c(0.5, 1), 
+                     #  fatten_point = 1.5,
+                     #  shape = 21,
+                     .width = c(0.5, 0.95)) +
+  scale_colour_manual(values = col.est) +
+  scale_y_continuous(labels = scales::label_number(big_mark = " "),
+                     limits = c(0, NA)) +
+  facet_wrap(vars(poly)) +
+  post_theme +
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        plot.margin = margin(3, 14, 3, 3))
+
+
+egp.mar.l[cat == "marginal"] |>
+  ggplot() +
+  stat_slab(aes(x = cat,
+                y = estimate),
+            n = 1001,
+            fill = "grey82"
+            ) +
+  stat_pointinterval(aes(x = cat,
+                         y = estimate,
+                         colour = cat),
+                     scale = 0.8,
+                     point_interval = "median_qi",
+                     slab_alpha = 0.5,
+                     interval_size_range = c(0.5, 1), 
+                     #  fatten_point = 1.5,
+                     #  shape = 21,
+                     .width = c(0.5, 0.95)) +
+  geom_hline(yintercept = 0, linewidth = 0.3, colour = "grey15", linetype = "dashed") +
+  geom_hline(data = mar.true,
+             aes(yintercept = marginal.true),
+             linewidth = 0.3, colour = "grey15") +
+  scale_colour_manual(values = col.est) +
+  scale_y_continuous(labels = scales::label_number(big_mark = " ",
+                                                   style_positive = "plus")) +
+  facet_wrap(vars(poly)) +
+  post_theme +
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        plot.margin = margin(3, 14, 3, 3))
+
+```
+
+# New EGP
+
+
+```{r}
+
+egp.k.geo <- 250
+egp.max.knots.geo <- egp.k.geo * 10
+egp.k.som <- 250
+egp.max.knots.som <- 25^2
+
+ls.fit[, type.uo := factor(type, ordered = FALSE)]
+
+mod.egp2 <- bam(response ~
+               s(x, y, bs = "gp", k = egp.k.geo,
+                 xt = list(max.knots = egp.max.knots.geo)) +
+               s(som.x, som.y, bs = "gp", k = egp.k.som,
+                 xt = list(max.knots = egp.max.knots.som)) +
+               s(som.x, som.y, by = type, bs = "gp", k = egp.k.geo,
+                 xt = list(max.knots = egp.max.knots.geo)),
+               family = gaussian,
+               data = ls.fit,
+               select = TRUE,
+               discrete = TRUE,
+               nthreads = c(2,1))
+
+egp2.post <-
+  egp_posterior_draw(mod.egp2, 1000, unconditional = TRUE, package = "mgcv")
+
+colnames(egp2.post)
+
+
+ls.u <-
+  unique(ls.fit[type == "treatment" , .(cell, x, y, som.x, som.y)])
+
+ls.pred <-
+  merge(ls.u,
+        CJ(cell = ls.u$cell,
+           type = unique(ls.fit$type)))
+ls.pred[, type.uo := factor(type, ordered = TRUE)]
+ls.pred[, pred.id := 1:.N]
+
+
+egp2.pred <-
+  egp_posterior_predict(model = mod.egp2,
+                        data = ls.pred,
+                        id.var = "pred.id",
+                        posterior = egp2.post,
+                        epred = FALSE) |>
+  merge(ls.pred)
+
+egp2.comp <- 
+  dcast(egp2.pred,
+        cell + .draw ~ type, value.var = "response") |>
+  merge(ls.fit[, .(cell, poly)], by = "cell")
+
+egp2.mar <-
+list(
+  egp2.comp[,
+            lapply(.SD, mean),
+            .SDcols = c("treatment", "reference"),
+            by = ".draw"],
+  egp2.comp[order(poly),
+            lapply(.SD, mean),
+            .SDcols = c("treatment", "reference"),
+            by = .(poly, .draw)]) |>
+rbindlist(fill = TRUE)
+egp2.mar[is.na(poly), group.id := 1]
+egp2.mar[!is.na(poly), group.id := poly+1]
+
+setnames(egp2.mar,
+  c("treatment", "reference"),
+  c("factual", "counterfactual"))
+
+setcolorder(egp2.mar, c("group.id", "poly", ".draw"))
+
+egp2.mar[, marginal := factual - counterfactual]
+
+
+egp2.mar[, mean(marginal), by = "group.id"]
+egp.mar[, mean(marginal), by = "group.id"]
+
+egp2.mar[, sd(marginal), by = "group.id"]
+egp.mar[, sd(marginal), by = "group.id"]
+
+```
+
+
+
+```{r}
+
+library(brms)
+
+brm()
+
+check_ls <- function(lhat, lk) {
+  lhat + 0.01 >= lk
+}
+
+calc_pars <- function(lk){
+  ck <- max(4.1*lk, 1.2)
+  mk <- round(3.42 * (ck/lk))
+  list(lk = lk, ck = ck, mk = mk)
+}
+
+pars.geo <- calc_pars(0.5)
+pars.geo <- calc_pars(0.06)
+
+
+pars.som <- calc_pars(0.5)
+pars.som <- calc_pars(0.11)
+
+set.seed(1234)
+ls.fit2 <- ls.fit[sample(1:.N, 1e3)]
+
+mod.brm <-
+  brm(response ~ 
+        gp(x, y, k = pars.geo$mk, cov = "matern32", c = pars.geo$ck) +
+        gp(som.x, som.y, k = pars.som$mk, cov = "matern32", c = pars.som$ck),
+      data = ls.fit2,
+      family = gaussian,
+      cores = 4,
+      chains = 4,
+      iter = 2000,
+      warmup = 1000
+      )
+
+summary(mod.brm)
+
+nei.cor <- function(h,n) { ## construct nei structure
+  nei <- list(md=1:n,d=1:n)
+  nei$ma <- cumsum(c((h+1):(2*h+1),rep(2*h+1,n-2*h-2),(2*h+1):(h+1)))
+  a0 <- rep(0,0); if (h>0) for (i in 1:h) a0 <- c(a0,1:(h+i))
+  a1 <- n-a0[length(a0):1]+1
+  nei$a <- c(a0,1:(2*h+1)+rep(0:(n-2*h-1),each=2*h+1),a1)
+  nei
+}
+
+neic <- nei.cor(4, 20)
+
+neic
+
+
+lhat + 0.01 >= lk
+
+```
+
+
+
+```{r}
+
+library(RANN)
+
+coord <- as.matrix(ls.fit[, .(x, y)])
+
+nei <-
+  nn2(coord, coord, k = 11, radius = 100, searchtype = "radius")
+
+
+exidx <- function(x) {
+  x[x != 0 & x != x[1]]
+}
+
+nei.l <- apply(nei$nn.idx, 1, exidx, simplify = FALSE)
+
+nei <-
+  list(d = 1:nrow(ls.fit),
+       md = 1:nrow(ls.fit),
+       a = unlist(nei.l),
+       ma = cumsum(unlist(lapply(nei.l, length))),
+       )
+# nei$sample <- sample(nei$ma, 1000)
+# nei$sample <- sample(1:length(nei$ma), 100)
+
+nei$ma
+
+
+egp.k.geo <- 250
+egp.max.knots.geo <- egp.k.geo * 10
+egp.k.som <- 250
+egp.max.knots.som <- 25^2
+
+
+mod.egp2 <- gam(response ~
+               s(x, y, bs = "gp", k = egp.k.geo,
+                 xt = list(max.knots = egp.max.knots.geo)) +
+               s(x, y, by = type, bs = "gp", k = egp.k.geo,
+                 xt = list(max.knots = egp.max.knots.geo)) +
+               s(som.x, som.y, bs = "gp", k = egp.k.som,
+                 xt = list(max.knots = egp.max.knots.som)),
+               family = gaussian,
+               data = ls.fit,
+               method = "NCV",
+               nei = nei,
+               # discrete = TRUE,
+               control = gam.control(trace = TRUE),
+               nthreads = c(2,1))
+
+egp2.post <-
+  egp_posterior_draw(mod.egp2, 1000, unconditional = TRUE, package = "mgcv")
+
+
+egp2.pred <-
+  egp_posterior_predict(model = mod.egp2,
+                        data = ls.fit,
+                        id.var = "cell",
+                        posterior = egp2.post,
+                        epred = FALSE)
+
+
+egp2.def <-
+  egp_define_counterfactual(data = ls.fit,
+                            som = som.egp,
+                            fac.ids = ls.fit[type == "treatment", cell],
+                            cf.ids = ls.fit[type == "reference", cell],
+                            nb.strategy = "sequential",
+                            group.by = list(NULL, "poly"),
+                            som.var = "som.unit",
+                            geo.vars = c("x", "y"),
+                            geo.kernel = "matern32",
+                            id.var = "cell",
+                            deg.max = NULL,
+                            n.min = 1)
+
+
+egp2.fac <- egp_evaluate_factual(egp2.pred, egp2.def, agg.size = 5e3)
+egp2.count <- egp_evaluate_counterfactual(egp2.pred, egp2.def, agg.size = 5e3)
+egp2.mar <- egp_marginal(egp2.fac, egp2.count)
+
+
+egp2.mar[, mean(marginal), by = "poly"]
+egp.mar[, mean(marginal), by = "poly"]
+
+
+egp2.mar[, sd(marginal), by = "poly"]
+egp.mar[, sd(marginal), by = "poly"]
+
+
+```
+

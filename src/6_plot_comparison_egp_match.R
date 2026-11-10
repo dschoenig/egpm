@@ -111,8 +111,8 @@ plot_ls_comp <- function(x, plot.theme, method.cols) {
           ymax = Inf),
          # ymax = 1 + length(unique(x$name.short))),
          by = c("ls.imbalance.lab", ".stat.lab")],
-      x[name.short == "EGP",
-        .(type = "EGP",
+      x[name.short == "EGPA",
+        .(type = "EGPA",
           xint = mean,
           ymin = -Inf,
           ymax = 0.5 + length(unique(x$name.short))),
@@ -216,12 +216,12 @@ plot_ls_comp <- function(x, plot.theme, method.cols) {
     scale_y_discrete(limits = rev, expand = expansion(add = c(0.5, 1.75))) +
     scale_x_continuous(expand = expansion(mult = 0.1)) +
     scale_linetype_manual(values = c("Theoretical maximum" = "dotted",
-                                     "EGP" = "solid",
+                                     "EGPA" = "solid",
                                      "GLM" = "dashed"),
                           drop = FALSE) +
     scale_colour_manual(values = c(method.cols,
                                    GLM = unname(method.cols[1]),
-                                   EGP = unname(method.cols[2])),
+                                   EGPA = unname(method.cols[2])),
                           drop = FALSE) +
     guides(linetype = "none", colour = "none") +
     labs(colour = NULL, x = "Performance", y = NULL) +
@@ -240,7 +240,7 @@ ls.imbalance.labs <- factor(ls.imbalance.labs, levels = ls.imbalance.labs)
 ls.response.labs <- c(normal = "Gaussian", tweedie = "Tweedie", binary = "Binary")
 ls.response.labs <- factor(ls.response.labs, levels = ls.response.labs)
 method.labs = c("Generalized linear model",
-                "Embedded gaussian process",
+                "Embedded gaussian process attribution",
                 "Coarsened exact matching",
                 "Nearest neighbour matching")
 method.cols <- c("grey50", "#984ea3", "#377eb8", "#4daf4a")
@@ -278,7 +278,7 @@ estimates.sub.p[, ls.response.lab := ls.response.labs[as.character(ls.response)]
 estimates.sub.p[, name.short := relevel(name.short, "GLM")]
 estimates.sub.p[name.short %like% "NN-", method.lab := method.labs[4]]
 estimates.sub.p[name.short %like% "CEM-", method.lab := method.labs[3]]
-estimates.sub.p[name.short == "EGP", method.lab := method.labs[2]]
+estimates.sub.p[name.short == "EGPA", method.lab := method.labs[2]]
 estimates.sub.p[name.short == "GLM", method.lab := method.labs[1]]
 estimates.sub.p[, method.lab := factor(method.lab, levels = method.labs)]
 
@@ -290,13 +290,9 @@ egp.match.l[, .stat.lab := stat.labs[.stat]]
 egp.match.l[, ls.imbalance.lab := ls.imbalance.labs[as.character(ls.imbalance)]]
 egp.match.l[, name.short := relevel(name.short, "GLM")]
 
-method.labs = c("Generalized linear model",
-                "Embedded gaussian process",
-                "Coarsened exact matching",
-                "Nearest neighbour matching")
 egp.match.l[name.short %like% "NN-", method.lab := method.labs[4]]
 egp.match.l[name.short %like% "CEM-", method.lab := method.labs[3]]
-egp.match.l[name.short == "EGP", method.lab := method.labs[2]]
+egp.match.l[name.short == "EGPA", method.lab := method.labs[2]]
 egp.match.l[name.short == "GLM", method.lab := method.labs[1]]
 egp.match.l[, method.lab := factor(method.lab, levels = method.labs)]
 
