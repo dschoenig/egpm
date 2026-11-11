@@ -2,6 +2,8 @@ library(data.table)
 library(mgcv)
 library(kohonen)
 library(ggdist)
+library(colorspace)
+library(patchwork)
 
 source("utilities_fcne.R")
 source("utilities.R")

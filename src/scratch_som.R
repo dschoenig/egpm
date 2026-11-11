@@ -7,10 +7,10 @@
 # library(igraph)
 # library(data.table)
 # library(mvnfast)
-# library(colorspace)
+library(colorspace)
 # library(stringi)
 # library(ggplot2)
-# library(patchwork)
+library(patchwork)
 # library(kohonen)
 # library(MatchIt)
 

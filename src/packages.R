@@ -1,48 +1,64 @@
-# module load StdEnv/2023 gcc/12.3 gdal/3.7.2 geos/3.12.0 python/3.11.5 udunits/2.2.28 r/4.3.1
+# module load StdEnv/2026 gcc/15.3.0 gdal/3.13.3 geos/3.14.1 proj/9.9.0 udunits/2.2.28 python/3.15.2 r/4.6.1
 
-c(
-  "mgcv",
-  # "brms",
-  # "rstan",
-  # "RandomFields",
-  # "RandomFieldsUtils",
-  "sf",
-  "stars",
-  "lwgeom",
-  "spdep",
-  "igraph",
-  "data.table",
-  "mvnfast",
-  "colorspace",
-  "stringi",
-  "ggplot2",
-  "patchwork",
-  "kohonen",
-  "GA",
-  "nloptr",
-  "memoise",
-  "Matrix",
-  "MatchIt",
-  "marginaleffects",
-  "sandwich",
-  "tweedie",
-  "devtools") |>
-install.packages()
+# Required for all scripts up to 3_*.R
+pkgs.cran <- c(
+  # utilities.R (sourced by all scripts)
+  "data.table", "GA", "ggplot2", "kohonen", "lwgeom", "Matrix", "memoise",
+  "mgcv", "mvnfast", "sf", "spdep", "stars", "stringi", "tweedie",
+  # matching and model checks
+  "DHARMa", "marginaleffects", "MatchIt"
+)
 
-install.packages(c("rstan", "brms"),
-                 repos = c("https://mc-stan.org/r-packages/", getOption("repos")))
+pkgs.installed <- rownames(installed.packages())
 
+pkgs.missing <- setdiff(pkgs.cran, pkgs.installed)
+if (length(pkgs.missing) > 0) install.packages(pkgs.missing)
+
+# Optional: only needed for the later scripts (4_*.R onwards) and .qmd files
+install.optional <- TRUE
+
+pkgs.optional <- c(
+  # parallel processing in 5_comparison_*.R and 5_performance_*.R
+  "doFuture", "foreach", "future", "progressr",
+  # 5_comp_*.qmd
+  "bayesplot",
+  # 6_plot_*.R and 6_table_*.R
+  "ggdist", "gt", "scico",
+  # rendering the .qmd files (also needs the Quarto CLI)
+  "knitr", "rmarkdown"
+)
+# 5_compare_brm*.R and 5_comparison_brm.R
+pkgs.optional.stan <- c("rstan", "brms")
+
+if (install.optional) {
+  pkgs.missing <- setdiff(pkgs.optional, pkgs.installed)
+  if (length(pkgs.missing) > 0) install.packages(pkgs.missing)
+
+  pkgs.missing <- setdiff(pkgs.optional.stan, pkgs.installed)
+  if (length(pkgs.missing) > 0) {
+    install.packages(pkgs.missing,
+                     repos = c("https://mc-stan.org/r-packages/",
+                               getOption("repos")))
+  }
+}
+
+# Installs the development version of data.table only if it is newer.
 data.table::update_dev_pkg()
 
-# install.packages("~/projects/pkgarchive/RandomFieldsUtils_1.2.5.tar.gz",
-#                  repos = NULL, type = "source")
-# install.packages("~/projects/pkgarchive/RandomFields_3.3.14.tar.gz",
-#                  repos = NULL, type = "source")
-
-devtools::install_github("cran/RandomFieldsUtils")
-devtools::install_github("cran/RandomFields")
-
-# On R 4.6 the archived CRAN sources fail to compile, and RFsimulate() segfaults
-# without a patch. Use this instead, run from the project root (tested with
-# R 4.6.1 and gcc 13.3):
-# system2("bash", "src/randomfields_install/install.sh")
+# RandomFields and RandomFieldsUtils are archived on CRAN. On R 4.6 their
+# sources fail to compile, and RFsimulate() segfaults without a patch, so they
+# are built by a script. Needs internet: on the cluster, run on a login node.
+# Skipped if RFsimulate() already works; tested in a separate R process, so an
+# unpatched install that segfaults does not take down this session.
+rf.ok <- system2("Rscript",
+                 c("-e", shQuote(paste("suppressMessages(library(RandomFields));",
+                                       "invisible(RFsimulate(RMexp(), x = 1:10))"))),
+                 stdout = FALSE, stderr = FALSE) == 0
+if (!rf.ok) {
+  rf.install <- c("randomfields_install/install.sh",
+                  "src/randomfields_install/install.sh")
+  rf.install <- rf.install[file.exists(rf.install)][1]
+  stopifnot("Run from the project root or src/" = !is.na(rf.install))
+  stopifnot("RandomFields installation failed" =
+              system2("bash", rf.install) == 0)
+}
