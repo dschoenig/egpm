@@ -1,8 +1,13 @@
 # Rerun after fixing the SOM neighbourhood function in egp_som().
 # Submit each block with rerun_block_<N>.sh once the previous block has left the queue.
 # Blocks stay under the per-user limit of 1000 queued jobs (each array task counts).
+# The four no-effect Tweedie/binary landscape scripts appear in blocks 1 and 3: their
+# block 1 runs failed because the no-effect Gaussian landscapes did not exist yet.
 
 # Block 1 (980 jobs): Tweedie/binary landscapes, first Gaussian models.
+# Needs only the existing Gaussian landscapes (imbalance_*). The four no-effect
+# Tweedie/binary landscape scripts fail here (no noeff_imbalance_* yet) and are
+# resubmitted in block 3.
 cc_1_landscapes_low_tweedie.sh
 cc_1_landscapes_high_tweedie.sh
 cc_1_landscapes_low_binary.sh
@@ -19,11 +24,12 @@ cc_2_models_high_egp_som25.sh
 cc_2_models_high_egp_som10.sh
 cc_2_models_high_egp_som50.sh
 
-# Block 2 (815 jobs): remaining Gaussian models, Tweedie low models,
-# landscape summaries, marginals for the Gaussian models of block 1.
+# Block 2 (631 jobs): no-effect Gaussian landscapes, remaining Gaussian
+# models with effect, Tweedie low models, Tweedie/binary landscape summaries,
+# marginals for the Gaussian models of block 1.
+cc_1_landscapes_noeff_low.sh
+cc_1_landscapes_noeff_high.sh
 cc_2_models_high_egp_som25_unequal.sh
-cc_2_models_noeff_low_egp_som25.sh
-cc_2_models_noeff_high_egp_som25.sh
 cc_2_models_tweedie_low_egp_som25.sh
 cc_2_models_tweedie_low_egp_som10.sh
 cc_2_models_tweedie_low_egp_som50.sh
@@ -32,10 +38,6 @@ cc_3_summary_tweedie_low.sh
 cc_3_summary_tweedie_high.sh
 cc_3_summary_binary_low.sh
 cc_3_summary_binary_high.sh
-cc_3_summary_noeff_tweedie_low.sh
-cc_3_summary_noeff_tweedie_high.sh
-cc_3_summary_noeff_binary_low.sh
-cc_3_summary_noeff_binary_high.sh
 cc_3_marginal_low_egp_som25.sh
 cc_3_marginal_low_egp_som10.sh
 cc_3_marginal_low_egp_som50.sh
@@ -44,38 +46,49 @@ cc_3_marginal_high_egp_som25.sh
 cc_3_marginal_high_egp_som10.sh
 cc_3_marginal_high_egp_som50.sh
 
-# Block 3 (707 jobs): Tweedie high and no-effect Tweedie models,
-# marginals for the models of block 2.
+# Block 3 (747 jobs): no-effect Tweedie/binary landscapes (resubmitted;
+# their block 1 runs lacked the no-effect Gaussian input), no-effect Gaussian models
+# and summaries, Tweedie high models, marginals for the models of block 2.
+cc_1_landscapes_noeff_low_tweedie.sh
+cc_1_landscapes_noeff_high_tweedie.sh
+cc_1_landscapes_noeff_low_binary.sh
+cc_1_landscapes_noeff_high_binary.sh
+cc_3_summary_noeff_low.sh
+cc_3_summary_noeff_high.sh
+cc_2_models_noeff_low_egp_som25.sh
+cc_2_models_noeff_high_egp_som25.sh
 cc_2_models_tweedie_high_egp_som25.sh
 cc_2_models_tweedie_high_egp_som10.sh
 cc_2_models_tweedie_high_egp_som50.sh
 cc_2_models_tweedie_high_egp_som25_unequal.sh
-cc_2_models_noeff_tweedie_low_egp_som25.sh
-cc_2_models_noeff_tweedie_high_egp_som25.sh
 cc_3_marginal_high_egp_som25_unequal.sh
-cc_3_marginal_noeff_low_egp_som25.sh
-cc_3_marginal_noeff_high_egp_som25.sh
 cc_3_marginal_tweedie_low_egp_som25.sh
 cc_3_marginal_tweedie_low_egp_som10.sh
 cc_3_marginal_tweedie_low_egp_som50.sh
 cc_3_marginal_tweedie_low_egp_som25_unequal.sh
 
-# Block 4 (706 jobs): binary low and no-effect binary models,
-# marginals for the models of block 3.
+# Block 4 (910 jobs): binary low models, no-effect Tweedie/binary models
+# and summaries, marginals for the models of block 3.
 cc_2_models_binary_low_egp_som25.sh
 cc_2_models_binary_low_egp_som10.sh
 cc_2_models_binary_low_egp_som50.sh
 cc_2_models_binary_low_egp_som25_unequal.sh
+cc_2_models_noeff_tweedie_low_egp_som25.sh
+cc_2_models_noeff_tweedie_high_egp_som25.sh
 cc_2_models_noeff_binary_low_egp_som25.sh
 cc_2_models_noeff_binary_high_egp_som25.sh
+cc_3_summary_noeff_tweedie_low.sh
+cc_3_summary_noeff_tweedie_high.sh
+cc_3_summary_noeff_binary_low.sh
+cc_3_summary_noeff_binary_high.sh
+cc_3_marginal_noeff_low_egp_som25.sh
+cc_3_marginal_noeff_high_egp_som25.sh
 cc_3_marginal_tweedie_high_egp_som25.sh
 cc_3_marginal_tweedie_high_egp_som10.sh
 cc_3_marginal_tweedie_high_egp_som50.sh
 cc_3_marginal_tweedie_high_egp_som25_unequal.sh
-cc_3_marginal_noeff_tweedie_low_egp_som25.sh
-cc_3_marginal_noeff_tweedie_high_egp_som25.sh
 
-# Block 5 (506 jobs): binary high models, marginals for the models of block 4.
+# Block 5 (508 jobs): binary high models, marginals for the models of block 4.
 cc_2_models_binary_high_egp_som25.sh
 cc_2_models_binary_high_egp_som10.sh
 cc_2_models_binary_high_egp_som50.sh
@@ -84,6 +97,8 @@ cc_3_marginal_binary_low_egp_som25.sh
 cc_3_marginal_binary_low_egp_som10.sh
 cc_3_marginal_binary_low_egp_som50.sh
 cc_3_marginal_binary_low_egp_som25_unequal.sh
+cc_3_marginal_noeff_tweedie_low_egp_som25.sh
+cc_3_marginal_noeff_tweedie_high_egp_som25.sh
 cc_3_marginal_noeff_binary_low_egp_som25.sh
 cc_3_marginal_noeff_binary_high_egp_som25.sh
 

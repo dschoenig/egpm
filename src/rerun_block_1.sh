@@ -1,6 +1,8 @@
 #!/bin/bash
 # Rerun block 1 of 6 (980 jobs): Tweedie/binary landscapes, first Gaussian models.
-# Needs only the existing Gaussian landscapes (imbalance_* and noeff_imbalance_*).
+# Needs only the existing Gaussian landscapes (imbalance_*). The four no-effect
+# Tweedie/binary landscape scripts fail here (no noeff_imbalance_* yet) and are
+# resubmitted in block 3.
 set -euo pipefail
 cd "$(dirname "$0")"
 source rerun_lib.sh

@@ -1,14 +1,15 @@
 #!/bin/bash
-# Rerun block 2 of 6 (815 jobs): remaining Gaussian models, Tweedie low models,
-# landscape summaries, marginals for the Gaussian models of block 1.
+# Rerun block 2 of 6 (631 jobs): no-effect Gaussian landscapes, remaining Gaussian
+# models with effect, Tweedie low models, Tweedie/binary landscape summaries,
+# marginals for the Gaussian models of block 1.
 set -euo pipefail
 cd "$(dirname "$0")"
 source rerun_lib.sh
 
 scripts=(
+  cc_1_landscapes_noeff_low.sh
+  cc_1_landscapes_noeff_high.sh
   cc_2_models_high_egp_som25_unequal.sh
-  cc_2_models_noeff_low_egp_som25.sh
-  cc_2_models_noeff_high_egp_som25.sh
   cc_2_models_tweedie_low_egp_som25.sh
   cc_2_models_tweedie_low_egp_som10.sh
   cc_2_models_tweedie_low_egp_som50.sh
@@ -17,10 +18,6 @@ scripts=(
   cc_3_summary_tweedie_high.sh
   cc_3_summary_binary_low.sh
   cc_3_summary_binary_high.sh
-  cc_3_summary_noeff_tweedie_low.sh
-  cc_3_summary_noeff_tweedie_high.sh
-  cc_3_summary_noeff_binary_low.sh
-  cc_3_summary_noeff_binary_high.sh
   cc_3_marginal_low_egp_som25.sh
   cc_3_marginal_low_egp_som10.sh
   cc_3_marginal_low_egp_som50.sh

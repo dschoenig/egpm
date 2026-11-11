@@ -19,6 +19,8 @@ prev_scripts=(
   cc_3_marginal_binary_low_egp_som10.sh
   cc_3_marginal_binary_low_egp_som50.sh
   cc_3_marginal_binary_low_egp_som25_unequal.sh
+  cc_3_marginal_noeff_tweedie_low_egp_som25.sh
+  cc_3_marginal_noeff_tweedie_high_egp_som25.sh
   cc_3_marginal_noeff_binary_low_egp_som25.sh
   cc_3_marginal_noeff_binary_high_egp_som25.sh
 )
