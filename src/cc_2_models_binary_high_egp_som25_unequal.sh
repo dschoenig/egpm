@@ -11,4 +11,4 @@ module load StdEnv/2026 gcc/15.3.0 gdal/3.13.3 geos/3.14.1 proj/9.9.0 udunits/2.
 
 Rscript 2_egp_unequal.R binary_imbalance_high egp_som25_unequal binary \
 	0.01 25 1000 250 250 TRUE \
-	$SLURM_CPUS_PER_TASK $SLURM_ARRAY_TASK_ID $SLURM_ARRAY_TASK_COUNT
+	$SLURM_CPUS_PER_TASK $SLURM_ARRAY_TASK_ID ${N_TASKS:-$SLURM_ARRAY_TASK_COUNT}
