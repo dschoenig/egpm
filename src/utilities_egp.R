@@ -1538,6 +1538,84 @@ chunk_seq <- function(from, to, size = to) {
 }
 
 
+# Estimate the Tweedie power p from a reduced GAM on a subsample.
+# bam() with tw() re-estimates p and the scale in every PIRLS iteration; on
+# some landscapes this diverges (errors in estimate.theta, Sl.fitChol, or the
+# convergence check) or stalls at the iteration limit, depending on mgcv
+# version and thread count. Fitting bam() with Tweedie(p) and p estimated
+# here avoids this. The subsample is drawn with a local seed and the caller's
+# RNG state is restored.
+egp_tweedie_power <- function(data,
+                              k.geo,
+                              max.knots.geo,
+                              k.som,
+                              max.knots.som,
+                              n = 2e3,
+                              k.frac = 0.1,
+                              seed = 1) {
+  if(!is.null(seed)) {
+    if(exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+      rng.old <- get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+      on.exit(assign(".Random.seed", rng.old, envir = .GlobalEnv), add = TRUE)
+    } else {
+      on.exit(rm(".Random.seed", envir = .GlobalEnv), add = TRUE)
+    }
+    set.seed(seed)
+  }
+  data <- as.data.table(data)
+  data.small <- data[sample(.N, min(n, .N))]
+  k.geo.small <- round(k.geo * k.frac)
+  max.knots.geo.small <- round(max.knots.geo * k.frac)
+  # gam() requires k <= number of unique SOM positions in the subsample
+  k.som.small <- min(round(k.som * k.frac),
+                     uniqueN(data.small[, .(som.x, som.y)]))
+  mod.small <-
+    gam(response ~
+        s(x, y, bs = "gp", k = k.geo.small,
+          xt = list(max.knots = max.knots.geo.small)) +
+        s(x, y, by = type, bs = "gp", k = k.geo.small,
+          xt = list(max.knots = max.knots.geo.small)) +
+        s(som.x, som.y, bs = "gp", k = k.som.small,
+          xt = list(max.knots = max.knots.som)),
+        family = tw(link = "log"),
+        data = data.small,
+        select = TRUE,
+        method = "REML",
+        optimizer = "efs")
+  return(mod.small$family$getTheta(TRUE))
+}
+
+
+# Tweedie power of a fitted family (Tweedie() or tw()); NULL for other families
+egp_tweedie_p <- function(family) {
+  if(inherits(family, "extended.family") && family$family == "Tweedie") {
+    return(family$getTheta(TRUE))
+  }
+  if(grepl("^Tweedie\\(", family$family)) {
+    return(get("p", envir = environment(family$variance)))
+  }
+  return(NULL)
+}
+
+
+# Random Tweedie draws (1 < p < 2), same distribution as mgcv::rTweedie().
+# A Tweedie variable is a Poisson(lambda) sum of Gamma(shape, scale) variables.
+# rTweedie() draws every Gamma term, so its cost grows with lambda (large for
+# large mu or small phi). The sum of N iid Gamma(shape, scale) variables is
+# Gamma(N * shape, scale), so one Gamma draw per observation suffices.
+rtweedie_sum <- function(mu, p, phi) {
+  n <- length(mu)
+  lambda <- mu^(2 - p) / ((2 - p) * phi)
+  shape <- (2 - p) / (p - 1)
+  scale <- phi * (p - 1) * mu^(p - 1)
+  N <- rpois(n, lambda)
+  y <- numeric(n)
+  pos <- N > 0
+  y[pos] <- rgamma(sum(pos), shape = N[pos] * shape, scale = rep_len(scale, n)[pos])
+  return(y)
+}
+
+
 egp_posterior_draw <- function(model,
                                n = 1000,
                                unconditional = TRUE,
@@ -1606,6 +1684,12 @@ egp_posterior_draw <- function(model,
   mod.fam <- fix.family.rd(model$family)
   if(is.null(fun.sim)) {
     fun.sim <- mod.fam$rd
+    # mgcv's Tweedie rd() is very slow for large mu or p near 1 or 2; use the
+    # equivalent rtweedie_sum(). Like mgcv's rd(), prior weights are ignored.
+    tw.p <- egp_tweedie_p(mod.fam)
+    if(!is.null(tw.p)) {
+      fun.sim <- function(mu, wt, scale) rtweedie_sum(mu, p = tw.p, phi = scale)
+    }
   }
   mod.scale <- model$sig2
   if(is.null(weights)) {

@@ -184,6 +184,17 @@ for(i in chunk) {
       }
 
       if(egp.approx) {
+         if(resp.type == "tweedie") {
+           # tw() in bam() is numerically unstable here; fix p instead (see
+           # egp_tweedie_power())
+           tw.p <- egp_tweedie_power(ls.fit,
+                                     k.geo = egp.k.geo,
+                                     max.knots.geo = egp.max.knots.geo,
+                                     k.som = egp.k.som,
+                                     max.knots.som = mod.para$egp.max.knots.som[j])
+           message(paste0("Estimated Tweedie power: ", round(tw.p, 3)))
+           mod.fam <- Tweedie(p = tw.p, link = "log")
+         }
          mod.egp <- bam(response ~
                         s(x, y, bs = "gp", k = egp.k.geo,
                           xt = list(max.knots = egp.max.knots.geo)) +
