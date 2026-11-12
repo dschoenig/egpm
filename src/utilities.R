@@ -1597,15 +1597,15 @@ segment_min_distance.old <- function(pw.dist,
          id.vars = "grid1",
          variable.name = "grid2", value.name = "dist",
          variable.factor = FALSE) |>
-    DT(, grid2 := as.integer(grid2)) |>
+    _[, grid2 := as.integer(grid2)] |>
     merge(grid.seg[, .(grid1 = grid, segment1 = segment)],
           by = "grid1") |>
     merge(grid.seg[, .(grid2 = grid, segment2 = segment)],
           by = "grid2") |>
-    DT(segment1 != segment2,
+    _[segment1 != segment2,
        .(dist.min = min(dist)),
-       by = c("segment1", "segment2")) |>
-    DT(order(segment1, segment2))
+       by = c("segment1", "segment2")] |>
+    _[order(segment1, segment2)]
   return(grid.dist.dt)
 }
 
@@ -1626,10 +1626,10 @@ segment_min_distance <- function(pw.dist,
                   on = "grid1"
                   ][grid.seg[, .(grid2, segment2)],
                     on = "grid2"] |>
-      DT(segment1 != segment2,
+      _[segment1 != segment2,
          .(dist.min = min(dist)),
-         by = c("segment1", "segment2")) |>
-      DT(order(segment1, segment2))
+         by = c("segment1", "segment2")] |>
+      _[order(segment1, segment2)]
   }
   if(is.matrix(pw.dist)) {
     grid.dist.dt <- as.data.table(pw.dist[grid.sel, grid.sel])
@@ -1640,15 +1640,15 @@ segment_min_distance <- function(pw.dist,
            id.vars = "grid1",
            variable.name = "grid2", value.name = "dist",
            variable.factor = FALSE) |>
-      DT(, grid2 := as.integer(grid2)) |>
+      _[, grid2 := as.integer(grid2)] |>
       merge(grid.seg[, .(grid1, segment1)],
             by = "grid1") |>
       merge(grid.seg[, .(grid2, segment2)],
             by = "grid2") |>
-      DT(segment1 != segment2,
+      _[segment1 != segment2,
          .(dist.min = min(dist)),
-         by = c("segment1", "segment2")) |>
-      DT(order(segment1, segment2))
+         by = c("segment1", "segment2")] |>
+      _[order(segment1, segment2)]
   }
   return(min.dist)
 }
@@ -2008,7 +2008,7 @@ generate_areas_poly <- function(x.dim,
           merge(res.grid.dt[.(trt.proposed$grid),
                             on = "grid"],
                 trt.proposed) |>
-          DT(, .(area = sum(area)), by = "segment")
+          _[, .(area = sum(area)), by = "segment"]
         # Any remaining segments without assigned grid polygons?
         seg.rem <- setdiff(1:seg.seed, trt.a$segment)
         if(length(seg.rem) > 0) {
@@ -2182,13 +2182,13 @@ generate_areas_poly <- function(x.dim,
   res.grid <-
     as.data.table(res.grid) |>
     merge(trt.proposed) |>
-    DT(segment != 0, selected := TRUE) |>
+    _[segment != 0, selected := TRUE] |>
     st_as_sf()
 
   res.grid.dt <-
     merge(res.grid.dt,
           trt.proposed) |>
-    DT(segment != 0, selected := TRUE)
+    _[segment != 0, selected := TRUE]
   setindex(res.grid.dt, grid)
   setindex(res.grid.dt, segment)
   setindex(res.grid.dt, selected)
@@ -4835,11 +4835,11 @@ get_nb <- function(x) {x$grid.nb}
           dist.ord[nc >= n.min,
                    .(n.min.u = min(nc)),
                    by = id.from]) |>
-    DT(nc <= n.min.u,
+    _[nc <= n.min.u,
        .(neighbourhood = list(id.to),
          n = unique(n.min.u),
          degree = max(deg)),
-       by = id.from)
+       by = id.from]
 
   return(as.list(nb.dt[, -"id.from"]))
 }
@@ -5115,7 +5115,7 @@ egp_define_counterfactual <-
       rbindlist(cf.ids.l, idcol = ".cfgrp") |>
       merge(comp[, -c(".n", ".nbh")], by = ".cfgrp") |>
       setcolorder(c(compare.by, unit.name, id.var)) |>
-      DT(, -".cfgrp")
+      _[, -".cfgrp"]
 
   }
 
@@ -5338,8 +5338,8 @@ egp_define_counterfactual <-
 
   weights.cf <-
     rbindlist(weights.cf.l) |>
-    DT(, .(.w = sum(.w)),
-       by = c(group.name, id.names[1]))
+    _[, .(.w = sum(.w)),
+       by = c(group.name, id.names[1])]
 
   weights.cf[, .w := .w/sum(.w), by = group.name]
 
@@ -6084,7 +6084,7 @@ egp_summarize_units <- function(predictions,
 
   unit.sum <-
     merge(units[, -id.var, with = FALSE], unit.sum, all.x = FALSE) |>
-    DT(, -".uid", with = FALSE)
+    _[, -".uid", with = FALSE]
   setindexv(unit.sum, ".draw")
   setorderv(unit.sum, c(compare.by, unit.var, ".draw"))
   return(unit.sum)
