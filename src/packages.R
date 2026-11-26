@@ -14,32 +14,19 @@ pkgs.installed <- rownames(installed.packages())
 pkgs.missing <- setdiff(pkgs.cran, pkgs.installed)
 if (length(pkgs.missing) > 0) install.packages(pkgs.missing)
 
-# Optional: only needed for the later scripts (4_*.R onwards) and .qmd files
+# Optional: only needed for the later scripts (4_*.R onwards)
 install.optional <- TRUE
 
 pkgs.optional <- c(
   # parallel processing in 5_comparison_*.R and 5_performance_*.R
   "doFuture", "foreach", "future", "progressr",
-  # 5_comp_*.qmd
-  "bayesplot",
   # 6_plot_*.R and 6_table_*.R
-  "ggdist", "gt", "scico",
-  # rendering the .qmd files (also needs the Quarto CLI)
-  "knitr", "rmarkdown"
+  "ggdist", "gt", "scico"
 )
-# 5_compare_brm*.R and 5_comparison_brm.R
-pkgs.optional.stan <- c("rstan", "brms")
 
 if (install.optional) {
   pkgs.missing <- setdiff(pkgs.optional, pkgs.installed)
   if (length(pkgs.missing) > 0) install.packages(pkgs.missing)
-
-  pkgs.missing <- setdiff(pkgs.optional.stan, pkgs.installed)
-  if (length(pkgs.missing) > 0) {
-    install.packages(pkgs.missing,
-                     repos = c("https://mc-stan.org/r-packages/",
-                               getOption("repos")))
-  }
 }
 
 # Installs the development version of data.table only if it is newer.
